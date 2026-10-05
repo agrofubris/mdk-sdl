@@ -11,7 +11,7 @@ Each layer talks only to the one below it.
 ```
  Mdk.App      command line ──► Viewer.Run
     │
- Mdk.Game     level, camera, collision (BSP), sound mixer, (later) scripts, Kurt
+ Mdk.Game     level, camera, collision (BSP), sound mixer, scripts and objects, Kurt
     │   └──────────────► Mdk.Formats  (parsers: DTI, MTO, MTI, SNI, FTI, BNI, models)
  Mdk.Engine   Render (Renderer: meshes, index textures, palettes, panorama)
     │         Audio (AudioDevice: software mixer of voices)
@@ -51,7 +51,10 @@ Each layer talks only to the one below it.
 6. 🟡 Kurt: walking, turning, jumping, chute, falls through the BSP (`damp_collide_move`,
    `damp_gravity`), follow camera, sprite. Still to do: sniper mode, ledges, sliding, firing,
    knock-down, camera clearance, updrafts.
-7. Script VM and objects (port of `script_vm.gd`, `script_runtime.gd`).
+7. 🟡 Script VM and objects (`Scripts/`: ports of `script_vm.gd`, `script_runtime.gd`,
+   `object_motion.gd`, `object_behaviors.gd`; 30 ticks per second, object moves are BSP box sweeps).
+   Effects, debris, sniper rounds, air strike, rides, items, fans, the end of a level, HUD messages
+   and the strike scene are stubs (`Scripts/Stubs/`, marked `TODO port`).
 8. Weapons, items, HUD, sniper mode.
 9. Menus, fonts, saves, videos (MVE, FLC).
 10. Fall, stream, bomber, snowboard sequences.

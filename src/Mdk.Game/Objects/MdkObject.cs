@@ -1,0 +1,474 @@
+using System.Numerics;
+using Mdk.Formats;
+
+namespace Mdk.Game.Objects;
+
+/// <summary>A scripted object (alien, door, pickup...) or an arena's script controller. State
+/// follows the original object structure (godot-mdk docs/scripts/notes_part1.md): MDK coordinates
+/// (Z up), degrees, yaw 0 = +X, 90 = +Y. A port of godot-mdk's <c>mdk_object.gd</c> without the
+/// drawing (see <see cref="ObjectView"/>) and the physics bodies (collisions go through the BSP).</summary>
+public sealed class MdkObject
+{
+    public const float AnimationFps = 30f;
+
+    // Flags (obj+0x148...obj+0x14b as one integer) used by the engine.
+    public const int FlagGravity = 0x2;
+    public const int FlagCollides = 0x4;
+    public const int FlagLoop = 0x8;
+    /// <summary>Kurt goes through the object (with 0x800).</summary>
+    public const int FlagNotSolid = 0x10;
+    /// <summary>The chain gun doesn't aim at the object.</summary>
+    public const int FlagNotTarget = 0x20;
+    public const int FlagRolling = 0x40;
+    public const int FlagNoBanking = 0x80;
+    public const int FlagPathOnce = 0x400;
+    public const int FlagNotSolid2 = 0x800;
+    /// <summary>Some parts take damage separately (set_weak_parts).</summary>
+    public const int FlagWeakParts = 0x2000;
+    public const int FlagNoTurning = 0x10000;
+    /// <summary>A pickup that has landed.</summary>
+    public const int FlagLanded = 0x20000;
+    /// <summary>A pickup Kurt has taken (it vanishes).</summary>
+    public const int FlagCollected = 0x40000;
+    public const int FlagDoor = 0x100000;
+    public const int FlagPickup = 0x200000;
+    /// <summary>Swings on a rope (jump_to, opcode 226).</summary>
+    public const int FlagSwinging = 0x400000;
+    /// <summary>Kurt can stand on it (set_targetable 2), and ride it if it's rideable.</summary>
+    public const int FlagStandable = 0x800000;
+    public const int FlagPathPushes = 0x8000000;
+    /// <summary>The path speed follows Kurt's distance ahead (opcode 164).</summary>
+    public const int FlagPathSpeedByKurt = 0x10000000;
+    public const int FlagBounces = 0x20000000;
+    /// <summary>The holy cow of SW_EWJ (0x440074).</summary>
+    public const int FlagCow = 0x40000000;
+
+    // Contact flags (obj+0x14c), set by the movement code each frame.
+    public const int ContactCollided = 0x1;
+    public const int ContactFloor = 0x2;
+    public const int ContactTouchedKurt = 0x4;
+    public const int ContactStuck = 0x8;
+
+    /// <summary>anim_end_frame meaning the animation has ended (obj+0x118 = 0xFF00).</summary>
+    public const int AnimationEnded = -256;
+    public const int NoHoldFrame = -1;
+
+    public string TypeName = "";
+    /// <summary>Instance number (obj+0x146).</summary>
+    public int InstanceId = -1;
+    /// <summary>The arena the object belongs to (e.g. HMO_1).</summary>
+    public string Arena = "";
+    public Model? Model;
+
+    /// <summary>Position; yaw obj+0x4c, pitch obj+0x13c, roll obj+0x54 (degrees).</summary>
+    public Vector3 Position;
+    public float Yaw;
+    public float Pitch;
+    public float Roll;
+    /// <summary>Model scale (obj+0x58).</summary>
+    public float Scale = 1f;
+    public Vector3 SpawnPosition;
+    /// <summary>Position at the end of the previous frame (obj+0x180).</summary>
+    public Vector3 PreviousPosition;
+
+    public int Health = 100;
+    /// <summary>The health set last by set_health (obj+0x2a2), the health bar's maximum.</summary>
+    public int MaxHealth;
+    public bool Indestructible;
+    public int Flags;
+    /// <summary>Script flag word obj+0x244.</summary>
+    public int ScriptFlags;
+    /// <summary>Contact flags (obj+0x14c).</summary>
+    public int ContactFlags;
+    /// <summary>Script variables (obj+0x234).</summary>
+    public float[] Variables = new float[4];
+    /// <summary>Linked object (obj+0x2b8, variable kind "other").</summary>
+    public MdkObject? Linked;
+    /// <summary>Leader / commanding object (obj+0x138).</summary>
+    public MdkObject? Leader;
+    public bool Dead;
+    /// <summary>Mask of hidden model parts (obj+0x2c8).</summary>
+    public int HiddenParts;
+    /// <summary>Parts blown off (obj+0x2cc, opcode 129): clear_parts_mask doesn't show them again.</summary>
+    public int LockedParts;
+    /// <summary>Frame of the object's animated textures, -1 = by the level's clock.</summary>
+    public int TextureFrame = -1;
+    /// <summary>Drawn (only the objects of the drawn arenas, and not hidden by a cutscene).</summary>
+    public bool Visible = true;
+    /// <summary>What the holy cow falls on (null: Kurt).</summary>
+    public MdkObject? CowTarget;
+
+    // Script state.
+    /// <summary>Restart point (absolute CMI offset, 0 = no script).</summary>
+    public int Restart;
+    public float WaitTime;
+    public int WaitResume;
+    public int DeathScript;
+    /// <summary>Script target last set by a command (obj+0x10c).</summary>
+    public int CommandTarget;
+    public List<int> GosubReturns = [];
+    public List<int> GosubRestarts = [];
+    /// <summary>Per gosub level tick counters, for if_timer.</summary>
+    public float[] LevelTimers = new float[5];
+    /// <summary>Hit event of this frame (obj+0x21e): > 0 part index + 1 (or a weak part destroyed),
+    /// -1 chain gun, -2 other hits, -3 blasts.</summary>
+    public int HitEvent;
+    /// <summary>Cause of the last hit (obj+0x21d: -1 chain gun, -2 super chain gun, 1-4 Kurt's
+    /// projectiles) and its direction (obj+0x224, degrees).</summary>
+    public int HitType;
+    public float HitDirection;
+    /// <summary>Weak parts (set_weak_parts): parts named prefix + digit take damage separately.</summary>
+    public string WeakPrefix = "";
+    public int WeakPrefixLength;
+    public int[] PartHealth = [];
+    public int[] PartMaxHealth = [];
+    /// <summary>Command priority and obey level (obj+0x11a, obj+0x11b).</summary>
+    public int Priority;
+    public int ObeyLevel;
+    /// <summary>Target mode (obj+7, opcode 251): 1 the aliens' target, 2 always targets Kurt.</summary>
+    public int TargetMode;
+    /// <summary>Values of opcodes 210 and 199 (obj+0x2c0, obj+0x104), not identified.</summary>
+    public float Value2c0;
+    public float Value104;
+
+    // Movement state.
+    /// <summary>Movement command (obj+0x11e): 0 idle, 1 formation, 6 chase, 43/78 go to the
+    /// destination, 61 projectile, 88 forward... and its parameter (obj+0x11f).</summary>
+    public int MoveCommand;
+    public int MoveParameter;
+    public Vector3 MoveDestination;
+    /// <summary>Stuck replans (obj+0x2a0), and the stuck window: ticks and distance (obj+0x2a1, obj+0x2a4).</summary>
+    public int StuckCount;
+    public float StuckTicks;
+    public Vector3 StuckMoved;
+    /// <summary>Yaw at the previous update, for the banking (obj+0x50).</summary>
+    public float BankingYaw;
+    /// <summary>Current waypoint (obj+0x12c, also the formation offset of command 1).</summary>
+    public Vector3 Waypoint;
+    /// <summary>Reference points: own (A) kept on the leader's (B) by attach_to.</summary>
+    public (int A, int B) AttachPoints;
+    /// <summary>Height offset added to targets (obj+0x5c).</summary>
+    public float HeightOffset;
+    public float Speed;
+    public float MaxSpeed = 50f;
+    public float Acceleration = 10f;
+    public float Deceleration = 15f;
+    /// <summary>Friction (obj+0x44) and gravity (obj+0x48), units/s².</summary>
+    public float Friction = 64f;
+    public float Gravity = 32f;
+    public Vector3 Velocity;
+    /// <summary>Velocity for this frame only (obj+0x294): walking, pushes.</summary>
+    public Vector3 Push;
+    /// <summary>Per kind parameter (obj+0x302): projectile lifetime, jump time... and its timer (obj+0x306).</summary>
+    public float Parameter;
+    public float ParameterTimer;
+
+    // Path state (obj+0xe6...obj+0x100).
+    public int Path;
+    public float PathTime;
+    public float PathSpeed = 1f;
+    /// <summary>path_speed_by_kurt (opcode 164): distance, speeds with Kurt far ahead, around, near.</summary>
+    public float[] PathSpeeds = new float[4];
+    public int PathStop = -1;
+    public Vector3 PathOrigin;
+    public float PathYawOffset;
+
+    /// <summary>Sound played when the animation reaches a frame (set_id_and_name: obj+0x140, obj+0x144).</summary>
+    public string FrameSound = "";
+    public int FrameSoundFrame;
+    /// <summary>Effects (explosions) last this many ticks, showing texture frame EffectTime.</summary>
+    public int EffectFrames;
+    public float EffectTime;
+    /// <summary>Kurt's thrown item (obj+0x30a) and its ticks left (obj+0x30e).</summary>
+    public int ThrownKind;
+    public int ItemTicks;
+    /// <summary>Blasts farther than this don't hurt the object (obj+0x2c4, opcode 177).</summary>
+    public float BlastRange = 1000f;
+    /// <summary>Part + 1 and point of the last sniper round hit (obj+0x21c, obj+0x210).</summary>
+    public int ShotPart;
+    public Vector3 ShotPoint;
+    /// <summary>Rolling (flag 0x40, opcode 85): the orientation, turned as it rolls, and the radius
+    /// (obj+0x326; 0 or less counts as 1).</summary>
+    public Matrix4x4 RollingBasis = Matrix4x4.Identity;
+    public float RollRadius;
+    /// <summary>Swinging (opcode 226): pivot (obj+0x1c), angular speed (obj+0x302), gain (obj+0x30a),
+    /// rope length (obj+0x306) and the yaw the swing plane turns to (obj+0x30e).</summary>
+    public Vector3 SwingPivot;
+    public float SwingSpeed;
+    public float SwingGain;
+    public float SwingLength;
+    public float SwingYaw;
+    /// <summary>Lines from the object (obj+0x2d0): colour, mask (0xFF: reference points 1-4 to the
+    /// points; else bits 0, 1: points 0-1 and 2-3).</summary>
+    public int RopeColor;
+    public int RopeMask;
+    public Vector3[] RopePoints = new Vector3[4];
+    /// <summary>Object carried along (a pickup's chute).</summary>
+    public MdkObject? Attached;
+
+    // Doors (obj+0x306...obj+0x32a, see ObjectBehaviors).
+    /// <summary>CMI offsets of the opening and closing animations.</summary>
+    public int[] DoorAnimations = new int[2];
+    public int DoorState;
+    /// <summary>Kurt opens the door when closer than this.</summary>
+    public float DoorDistance = 20f;
+    /// <summary>Sounds: starts opening, starts closing, open, closed.</summary>
+    public string[] DoorSounds = ["", "", "", ""];
+    /// <summary>Masks of the parts named LOCK and HC...</summary>
+    public int LockParts;
+    public int HatchParts;
+    /// <summary>Arena on the other side of a connector (spawn_connector).</summary>
+    public string Connects = "";
+
+    /// <summary>Sound tracked by if_own_sound (play_sound flag 4), and the looping sound (voices, 0 = none).</summary>
+    public string TrackedSound = "";
+    public int TrackedVoice;
+    public int LoopSound;
+    /// <summary>The looping sound's name, to start it again when the arena comes back (0x43f8e0).</summary>
+    public string LoopSoundName = "";
+    /// <summary>Strings of opcodes 25 and 26 (obj+0x154: explosion sound, obj+0x150: ricochet).</summary>
+    public string[] Labels = ["", ""];
+
+    // Animation state.
+    public ModelAnimation? Animation;
+    public float AnimationTime;
+    public int AnimationFrame;
+    /// <summary>Frames per second of the animation (obj+0xe0, anim_fps).</summary>
+    public float AnimationRate = AnimationFps;
+    /// <summary>Hold frame (obj+0x118): the animation stops there; <see cref="AnimationEnded"/> once a
+    /// non-looping animation has ended, <see cref="NoHoldFrame"/> = none.</summary>
+    public int AnimationEndFrame = AnimationEnded;
+
+    /// <summary>Shared by every object: an animation's poses per model, and part bounds per frame.</summary>
+    private static readonly Dictionary<(Model, ModelAnimation), Vector3[][][]> Baked = [];
+    private static readonly Dictionary<(Model, ModelAnimation?, int), Box?[]> BoundsCache = [];
+
+    /// <summary>The orientation: yaw turns around Z, pitch raises the nose (+X towards +Z), roll
+    /// turns around the forward axis.</summary>
+    public Matrix4x4 Rotation =>
+        Matrix4x4.CreateRotationX(float.DegreesToRadians(Roll))
+        * Matrix4x4.CreateRotationY(-float.DegreesToRadians(Pitch))
+        * Matrix4x4.CreateRotationZ(float.DegreesToRadians(Yaw));
+
+    /// <summary>Model space to the world (a rolling object turns by its rolling basis).</summary>
+    public Matrix4x4 Transform =>
+        Matrix4x4.CreateScale(Scale) * ((Flags & FlagRolling) != 0 ? RollingBasis : Rotation) * Matrix4x4.CreateTranslation(Position);
+
+    public enum Rolling { Off, On }
+
+    /// <summary>Starts or stops rolling (set_rolling, opcode 85).</summary>
+    public void SetRolling(Rolling rolling)
+    {
+        if (rolling == Rolling.Off)
+        {
+            Flags &= ~FlagRolling;
+            return;
+        }
+
+        if ((Flags & FlagRolling) == 0)
+        {
+            Flags |= FlagRolling;
+            RollingBasis = Rotation;
+        }
+    }
+
+    /// <summary>Starts an animation (anim_loop / anim_once). Restarting the current one does nothing
+    /// unless it has ended, as in the original.</summary>
+    public void PlayAnimation(ModelAnimation? animation, Looping looping)
+    {
+        if (looping == Looping.Loop)
+        {
+            Flags |= FlagLoop;
+        }
+        else
+        {
+            Flags &= ~FlagLoop;
+        }
+
+        if (animation == Animation && AnimationEndFrame != AnimationEnded)
+        {
+            if (AnimationEndFrame >= 0)
+            {
+                AnimationEndFrame = NoHoldFrame;
+            }
+
+            return;
+        }
+
+        Animation = animation;
+        AnimationTime = 0f;
+        AnimationFrame = 0;
+        AnimationEndFrame = animation != null ? NoHoldFrame : AnimationEnded;
+    }
+
+    public enum Looping { Once, Loop }
+
+    /// <summary>Starts an animation from its first frame, even if it's already playing.</summary>
+    public void RestartAnimation(ModelAnimation? animation, Looping looping)
+    {
+        Animation = null;
+        PlayAnimation(animation, looping);
+    }
+
+    public bool IsAnimationDone => Animation == null || AnimationEndFrame == AnimationEnded;
+
+    /// <summary>Advances the animation (object_anim_update), moving the object by its root motion.</summary>
+    public void AdvanceAnimation(float delta)
+    {
+        if (Animation == null || AnimationEndFrame == AnimationEnded)
+        {
+            return;
+        }
+
+        if (AnimationEndFrame >= 0 && AnimationFrame == AnimationEndFrame)
+        {
+            return;
+        }
+
+        var count = Animation.FrameCount;
+        AnimationTime += delta * AnimationRate * Animation.Speed;
+        if (AnimationEndFrame >= 0 && AnimationFrame < AnimationEndFrame && (int)MathF.Round(AnimationTime) >= AnimationEndFrame)
+        {
+            AnimationTime = AnimationEndFrame;
+        }
+
+        if (AnimationTime >= count - 1)
+        {
+            if ((Flags & FlagLoop) != 0)
+            {
+                if (AnimationTime >= count)
+                {
+                    AnimationTime -= count;
+                }
+            }
+            else
+            {
+                AnimationTime = count - 1;
+            }
+        }
+
+        var frame = (int)MathF.Round(AnimationTime) % count;
+        if (frame != AnimationFrame)
+        {
+            // Root motion: the object moves by each passed frame's motion (model space).
+            var step = frame > AnimationFrame ? frame - AnimationFrame : frame + count - AnimationFrame;
+            var turn = Matrix4x4.CreateRotationZ(float.DegreesToRadians(Yaw));
+            for (var i = 0; i < step; i++)
+            {
+                var f = (AnimationFrame + 1 + i) % count;
+                Position += Vector3.Transform(Animation.RootMotion[f], turn);
+            }
+
+            AnimationFrame = frame;
+        }
+
+        if (AnimationFrame == count - 1 && (Flags & FlagLoop) == 0 && AnimationFrame != AnimationEndFrame)
+        {
+            AnimationEndFrame = AnimationEnded;
+        }
+    }
+
+    /// <summary>The vertices of each part in the current pose (model space), hidden parts empty.</summary>
+    public Vector3[][] Pose()
+    {
+        if (Model == null)
+        {
+            return [];
+        }
+
+        var pose = Animation == null ? Model.PartList.Select(p => p.Vertices).ToArray() : Bake(Model, Animation)[AnimationFrame];
+        if (HiddenParts == 0)
+        {
+            return pose;
+        }
+
+        return pose.Select((vertices, i) => (HiddenParts & (1 << i)) != 0 ? [] : vertices).ToArray();
+    }
+
+    private static Vector3[][][] Bake(Model model, ModelAnimation animation)
+    {
+        lock (Baked)
+        {
+            if (!Baked.TryGetValue((model, animation), out var frames))
+            {
+                frames = Baked[(model, animation)] = animation.Bake(model);
+            }
+
+            return frames;
+        }
+    }
+
+    /// <summary>Bounds of each part in the current pose (model space), null for empty parts.</summary>
+    public Box?[] PartBounds()
+    {
+        if (Model == null)
+        {
+            return [];
+        }
+
+        var key = (Model, Animation, AnimationFrame);
+        if (BoundsCache.TryGetValue(key, out var cached))
+        {
+            return cached;
+        }
+
+        var pose = Animation == null ? Model.PartList.Select(p => p.Vertices).ToArray() : Bake(Model, Animation)[AnimationFrame];
+        var bounds = pose.Select(v => v.Length == 0 ? (Box?)null : new Box(v.Aggregate(Vector3.Min), v.Aggregate(Vector3.Max))).ToArray();
+        return BoundsCache[key] = bounds;
+    }
+
+    /// <summary>Bounds of the visible parts in the current pose (model space).</summary>
+    public Box PoseBounds()
+    {
+        Box? result = null;
+        var bounds = PartBounds();
+        for (var i = 0; i < bounds.Length; i++)
+        {
+            if ((HiddenParts & (1 << i)) != 0 || bounds[i] is not { } b)
+            {
+                continue;
+            }
+
+            result = result is { } r ? new Box(Vector3.Min(r.Min, b.Min), Vector3.Max(r.Max, b.Max)) : b;
+        }
+
+        return result ?? Model?.Bounds ?? default;
+    }
+
+    /// <summary>Index of the model part named <paramref name="name"/>, or -1.</summary>
+    public int FindPart(string name) =>
+        Model?.PartList.FindIndex(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase)) ?? -1;
+
+    /// <summary>World position of a model reference point (the attachment points obj+0x1b0).</summary>
+    public Vector3 ReferencePoint(int index)
+    {
+        if (Model == null || index >= Model.ReferencePoints.Count)
+        {
+            return Position;
+        }
+
+        return Position + Vector3.Transform(Model.ReferencePoints[index] * Scale, Matrix4x4.CreateRotationZ(float.DegreesToRadians(Yaw)));
+    }
+
+    /// <summary>World position of the centre of a model part (rest pose).</summary>
+    public Vector3 PartCenter(int part)
+    {
+        if (part < 0 || Model == null)
+        {
+            return Position;
+        }
+
+        var bounds = Model.PartList[part].Bounds;
+        var centre = (bounds.Min + bounds.Max) / 2f * Scale;
+        return Position + Vector3.Transform(centre, Matrix4x4.CreateRotationZ(float.DegreesToRadians(Yaw)));
+    }
+
+    public float DistanceTo(Vector3 point) => Vector3.Distance(Position, point);
+
+    /// <summary>Direction (degrees) from this object to a point.</summary>
+    public float YawTo(Vector3 point)
+    {
+        var degrees = float.RadiansToDegrees(MathF.Atan2(point.Y - Position.Y, point.X - Position.X));
+        return ((degrees % 360f) + 360f) % 360f;
+    }
+}

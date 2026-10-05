@@ -57,6 +57,9 @@ public sealed class SoundMixer(AudioDevice device, Func<string, SoundMixer.Entry
 
     public bool IsPlaying(string name) => _voices.Any(v => v.Name == name);
 
+    /// <summary>Whether a voice (as returned by the Play methods) still plays.</summary>
+    public bool IsVoicePlaying(int id) => id != 0 && _voices.Any(v => v.Id == id);
+
     public void Stop(string name)
     {
         foreach (var voice in _voices.Where(v => v.Name == name).ToList())

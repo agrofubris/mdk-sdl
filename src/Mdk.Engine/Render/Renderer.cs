@@ -88,7 +88,7 @@ public sealed unsafe class Renderer : IDisposable
     /// <summary>Whether a pipeline reads vertex buffers and the depth buffer (the sky does neither).</summary>
     private enum Geometry { Mesh, Screen }
 
-    private readonly record struct DrawCommand(int Mesh, int First, int Count, Material Material, int Frame);
+    private readonly record struct DrawCommand(int Mesh, int First, int Count, Material Material, int Frame, Matrix4x4 World);
 
     private readonly Window _window;
     private readonly SDL_GPUDevice* _device;
@@ -347,7 +347,11 @@ public sealed unsafe class Renderer : IDisposable
 
     /// <summary>Queues triangles of a mesh for the next frame; <paramref name="frame"/> picks an animated texture's frame.</summary>
     public void Draw(int mesh, int firstVertex, int vertexCount, Material material, int frame = 0) =>
-        _commands.Add(new DrawCommand(mesh, firstVertex, vertexCount, material, frame));
+        _commands.Add(new DrawCommand(mesh, firstVertex, vertexCount, material, frame, Matrix4x4.Identity));
+
+    /// <summary>Queues triangles of a mesh placed in the world by <paramref name="world"/> (models).</summary>
+    public void Draw(int mesh, int firstVertex, int vertexCount, Material material, int frame, Matrix4x4 world) =>
+        _commands.Add(new DrawCommand(mesh, firstVertex, vertexCount, material, frame, world));
 
     /// <summary>Draws the queued batches (opaque first, then blended) and shows them. With
     /// <paramref name="screenshot"/>, also saves the frame as a BMP.</summary>
@@ -406,8 +410,6 @@ public sealed unsafe class Renderer : IDisposable
             DrawSky(commands, pass, view, Panorama);
         }
 
-        var viewProjection = view.ViewProjection;
-        SDL_PushGPUVertexUniformData(commands, 0, (IntPtr)(&viewProjection), (uint)sizeof(Matrix4x4));
         foreach (var order in Enum.GetValues<Pass>())
         {
             foreach (var command in _commands.Where(c => c.Material.Pass == order))
@@ -457,6 +459,8 @@ public sealed unsafe class Renderer : IDisposable
 
         var binding = new SDL_GPUBufferBinding { buffer = (SDL_GPUBuffer*)_buffers[command.Mesh] };
         SDL_BindGPUVertexBuffers(pass, 0, &binding, 1);
+        var transform = command.World * view.ViewProjection;
+        SDL_PushGPUVertexUniformData(commands, 0, (IntPtr)(&transform), (uint)sizeof(Matrix4x4));
 
         // Mirrors show nothing without a panorama.
         if (material.Pass == Pass.Mirror)

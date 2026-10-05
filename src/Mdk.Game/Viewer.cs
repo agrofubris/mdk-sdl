@@ -9,6 +9,8 @@ using Mdk.Game.Audio;
 using Mdk.Game.Collision;
 using Mdk.Game.Kurt;
 using Mdk.Game.Level;
+using Mdk.Game.Objects;
+using Mdk.Game.Scripts;
 
 namespace Mdk.Game;
 
@@ -23,13 +25,15 @@ public sealed record ViewerOptions(int Level, Vector3? Position, float? Yaw, flo
     public float Walk { get; init; }
     public bool Jump { get; init; }
     public bool Fly { get; init; }
+    /// <summary>Print the scripted objects once per second of game time.</summary>
+    public bool Profile { get; init; }
 }
 
 public enum SoundMode { On, Muted }
 
-/// <summary>Plays a level: Kurt walks it (F1 switches to a flying camera).
+/// <summary>Plays a level: Kurt walks it (F1 switches to a flying camera), the scripts run.
 /// <code>
-///   input ──► Kurt (60 steps/s) ──► camera ──► level, sky, Kurt's sprite ──► frame
+///   input ──► Kurt (60 steps/s) ──► scripts (30 ticks/s) ──► camera ──► level, objects, sky, Kurt ──► frame
 ///                └── mixer (listener at the camera)
 /// </code></summary>
 public static class Viewer
@@ -50,9 +54,11 @@ public static class Viewer
         using var window = new Window($"MDK - level {options.Level}", WindowWidth, WindowHeight);
         using var renderer = new Renderer(window);
         using var audio = new AudioDevice(options.Sound == SoundMode.Muted ? Output.Muted : Output.Speakers);
-        var view = new LevelView(renderer, level, new TriangleGroups());
+        var groups = new TriangleGroups();
+        var view = new LevelView(renderer, level, groups);
         var mixer = new SoundMixer(audio, SoundBank.ForLevel(data, options.Level).Get);
-        PlayMusic(mixer, data, level);
+        var cmi = Cmi.Load(data.PathOf($"TRAVERSE/LEVEL{level.Number}/LEVEL{level.Number}.CMI"));
+        PlayMusic(mixer, cmi, level);
         renderer.Panorama = CreatePanorama(renderer, level.Dti);
 
         var space = new ArenaSpace();
@@ -61,12 +67,18 @@ public static class Viewer
             space.Add(arena);
         }
 
-        var sprite = new KurtSprite(renderer, Bni.Load(data.PathOf("TRAVERSE/TRAVSPRT.BNI")), level.Dti.Palette);
+        var sprites = Bni.Load(data.PathOf("TRAVERSE/TRAVSPRT.BNI"));
+        var sprite = new KurtSprite(renderer, sprites, level.Dti.Palette);
         var kurt = new Kurt.Kurt(space, mixer, sprite.FrameCount)
         {
             Feet = options.Position ?? level.Dti.StartPosition + new Vector3(0f, 0f, StartDrop),
             Yaw = options.Yaw ?? level.Dti.StartAngle,
         };
+        var scripts = new ScriptRuntime(level, cmi, sprites, space, groups, mixer);
+        scripts.Kurt.Teleported += (feet, yaw) => (kurt.Feet, kurt.Yaw) = (feet, yaw);
+        scripts.ArenaEntered += view.Enter;
+        var objects = new ObjectView(renderer, new MaterialResolver(renderer, level.Dti));
+        var looks = new Dictionary<string, ObjectView.Look>();
         var follow = new FollowCamera();
         var fly = new FreeCamera { Pitch = options.Pitch };
         var flying = options.Fly;
@@ -114,6 +126,12 @@ public static class Viewer
                 }
 
                 input.ClearMouse();
+                Feed(scripts.Kurt, kurt);
+                scripts.Update(Step);
+                if (options.Profile && MathF.Floor(time) > MathF.Floor(time - Step))
+                {
+                    Profile(scripts, time);
+                }
             }
 
             var camera = flying ? fly.View(renderer.AspectRatio) : follow.View(renderer.AspectRatio);
@@ -121,7 +139,9 @@ public static class Viewer
             mixer.ListenerRight = flying ? fly.Right : Vector3.Normalize(Vector3.Cross(follow.Forward, Vector3.UnitZ));
             mixer.Update(elapsed);
             audio.Update(elapsed);
+            scripts.Eye = camera.Position;
             view.Draw();
+            DrawObjects(objects, scripts, level, looks);
             sprite.Draw(kurt, camera.Position, flying ? fly.Forward : follow.Forward, flying ? Vector3.UnitZ : follow.Up,
                 flying ? FreeCamera.FieldOfView : FollowCamera.FieldOfView);
 
@@ -140,6 +160,63 @@ public static class Viewer
             }
         }
     }
+
+    /// <summary>What the scripts see of Kurt this step.</summary>
+    private static void Feed(KurtLink link, Kurt.Kurt kurt)
+    {
+        link.Position = kurt.Feet;
+        link.Yaw = kurt.Yaw;
+        link.OnFloor = kurt.OnFloor;
+        link.Velocity = kurt.Facing * kurt.ForwardSpeed + kurt.Right * kurt.StrafeSpeed + Vector3.UnitZ * kurt.VerticalSpeed;
+    }
+
+    /// <summary>The visible objects, each with its arena's palette and textures.</summary>
+    private static void DrawObjects(ObjectView view, ScriptRuntime scripts, LevelData level, Dictionary<string, ObjectView.Look> looks)
+    {
+        foreach (var obj in scripts.Objects)
+        {
+            if (!obj.Visible)
+            {
+                continue;
+            }
+
+            if (!looks.TryGetValue(obj.Arena, out var look))
+            {
+                var arena = level.Arenas.Find(a => a.Name == obj.Arena);
+                look = looks[obj.Arena] = arena != null
+                    ? new ObjectView.Look(level.PaletteOf(arena), level.ArchivesOf(arena))
+                    : new ObjectView.Look(level.Dti.Palette, [level.LevelTextures]);
+            }
+
+            view.Draw(obj, look);
+        }
+    }
+
+    /// <summary>For tests: the objects of Kurt's arena (like the Godot port's --profile).</summary>
+    private static void Profile(ScriptRuntime scripts, float time)
+    {
+        var second = scripts.SecondArena + (scripts.SecondActive ? " (active)" : "");
+        Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
+            $"Profile {time:0}s: objects {scripts.Objects.Count}, arena {scripts.CurrentArena}, second {second}"));
+        foreach (var obj in scripts.Objects.Where(o => o.Arena == scripts.CurrentArena))
+        {
+            var p = obj.Position;
+            var door = (obj.Flags & MdkObject.FlagDoor) != 0 ? $" door {obj.DoorState:x}" : "";
+            Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
+                $"  {obj.TypeName}_{obj.InstanceId} {obj.Arena} ({Rounded(p.X)}, {Rounded(p.Y)}, {Rounded(p.Z)}) yaw {(int)obj.Yaw} " +
+                $"move {obj.MoveCommand} path {obj.Path} anim {obj.Animation?.Name ?? "-"} frame {obj.AnimationFrame} " +
+                $"speed {obj.Speed:0.0} health {obj.Health} flags {obj.Flags:x}{door}"));
+        }
+
+        if (scripts.Vm.Unimplemented.Count != 0)
+        {
+            Console.WriteLine($"  unimplemented opcodes: {string.Join(", ", scripts.Vm.Unimplemented.Select(u => $"{u.Key}x{u.Value}"))}");
+        }
+    }
+
+    /// <summary>A coordinate rounded like Godot's Vector3.round().</summary>
+    private static string Rounded(float value) =>
+        (MathF.Round(value, MidpointRounding.AwayFromZero) + 0f).ToString("0.0", CultureInfo.InvariantCulture);
 
     /// <summary>The test's screenshot once its wait is over, or F12's.</summary>
     private static string? SavePath(ViewerOptions options, Input input, float time)
@@ -169,9 +246,8 @@ public static class Viewer
     }
 
     /// <summary>The starting arena's music (named by the level's CMI, in <c>LEVELnO.SNI</c>).</summary>
-    private static void PlayMusic(SoundMixer mixer, MdkData data, LevelData level)
+    private static void PlayMusic(SoundMixer mixer, Cmi cmi, LevelData level)
     {
-        var cmi = Cmi.Load(data.PathOf($"TRAVERSE/LEVEL{level.Number}/LEVEL{level.Number}.CMI"));
         var arena = level.Dti.Arenas[level.Dti.StartArena].Name;
         if (cmi.ArenaMusic.TryGetValue(arena, out var music) && mixer.Play(music) != 0)
         {

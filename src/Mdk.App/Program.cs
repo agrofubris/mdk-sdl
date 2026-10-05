@@ -15,6 +15,7 @@ using Mdk.Game;
 //   --wait=seconds          game time before the screenshot
 //   --walk=seconds          hold "forward" for this long (tests)
 //   --jump                  hold "jump" (tests)
+//   --profile               print the scripted objects once per second of game time (tests)
 
 const int DefaultLevel = 3;
 
@@ -50,5 +51,6 @@ Viewer.Run(data, new ViewerOptions(level, position, yaw, pitch, sound)
     Walk = Seconds("walk"),
     Jump = options.ContainsKey("jump"),
     Fly = options.ContainsKey("fly"),
+    Profile = options.ContainsKey("profile"),
 });
 return 0;
