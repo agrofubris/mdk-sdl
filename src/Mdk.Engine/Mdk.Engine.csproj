@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Mdk.Engine</RootNamespace>
+    <!-- dxc of the Windows SDK: HLSL to DXIL for SDL_GPU's Direct3D 12 backend. -->
+    <Dxc Condition="'$(Dxc)' == ''">C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\dxc.exe</Dxc>
+    <ShaderDir>$(MSBuildThisFileDirectory)..\..\shaders\</ShaderDir>
+    <ShaderOut>$(MSBuildThisFileDirectory)obj\shaders\</ShaderOut>
+  </PropertyGroup>
+  <PropertyGroup>
+    <Sdl3Version>2026.722.0</Sdl3Version>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- The native library is embedded instead (see Platform/NativeLibraries.cs): one exe. -->
+    <PackageReference Include="ppy.SDL3-CS" Version="$(Sdl3Version)" ExcludeAssets="native" GeneratePathProperty="true" />
+    <EmbeddedResource Include="$(PkgPpy_SDL3-CS)/runtimes/win-x64/native/SDL3.dll" LogicalName="native/SDL3.dll" WithCulture="false" />
+  </ItemGroup>
+  <ItemGroup>
+    <Shader Include="$(ShaderDir)*.hlsl" />
+    <ShaderInclude Include="$(ShaderDir)*.hlsli" />
+  </ItemGroup>
+
+  <!-- Each shader file gives a vertex (vs_main) and a fragment (ps_main) program, embedded as
+       (not as cultures: "ps" is Pashto)
+       shaders/<name>.vs.dxil and shaders/<name>.ps.dxil. -->
+  <Target Name="CompileShaders" Inputs="@(Shader);@(ShaderInclude)" Outputs="@(Shader->'$(ShaderOut)%(Filename).vs.dxil');@(Shader->'$(ShaderOut)%(Filename).ps.dxil')">
+    <MakeDir Directories="$(ShaderOut)" />
+    <Exec Command="&quot;$(Dxc)&quot; -nologo -T vs_6_0 -E vs_main -Fo &quot;$(ShaderOut)%(Shader.Filename).vs.dxil&quot; &quot;%(Shader.FullPath)&quot;" />
+    <Exec Command="&quot;$(Dxc)&quot; -nologo -T ps_6_0 -E ps_main -Fo &quot;$(ShaderOut)%(Shader.Filename).ps.dxil&quot; &quot;%(Shader.FullPath)&quot;" />
+  </Target>
+  <Target Name="EmbedShaders" DependsOnTargets="CompileShaders" BeforeTargets="BeforeBuild">
+    <ItemGroup>
+      <CompiledShader Include="$(ShaderOut)*.dxil" />
+      <EmbeddedResource Include="@(CompiledShader)" LogicalName="shaders/%(CompiledShader.Filename)%(CompiledShader.Extension)" WithCulture="false" />
+    </ItemGroup>
+  </Target>
+</Project>

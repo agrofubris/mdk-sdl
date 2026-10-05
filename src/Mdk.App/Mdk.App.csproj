@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Mdk.App</RootNamespace>
+    <AssemblyName>mdk</AssemblyName>
+    <!-- dotnet publish -c Release -r win-x64: one native exe (SDL3 and shaders embedded). -->
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <OptimizationPreference>Speed</OptimizationPreference>
+    <NativeDebugSymbols>false</NativeDebugSymbols>
+    <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Mdk.Game\Mdk.Game.csproj" />
+  </ItemGroup>
+</Project>
