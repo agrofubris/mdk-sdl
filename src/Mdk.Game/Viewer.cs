@@ -33,6 +33,14 @@ public sealed record ViewerOptions(int Level, Vector3? Position, float? Yaw, flo
     public bool Fly { get; init; }
     /// <summary>Print the scripted objects once per second of game time.</summary>
     public bool Profile { get; init; }
+    /// <summary>Sniper mode once Kurt stands, at this zoom (X) and pitch (Y); see <see cref="SniperTest"/>.</summary>
+    public Vector2? Sniper { get; init; }
+    /// <summary>Hold "zoom in" this many seconds in sniper mode.</summary>
+    public float Zoom { get; init; }
+    /// <summary>Fire one sniper round once the clip is loaded.</summary>
+    public bool SniperFire { get; init; }
+    /// <summary>Bones' full-screen strike after a second.</summary>
+    public StrikeScene.Plane? Strike { get; init; }
 }
 
 public enum SoundMode { On, Muted }
@@ -100,7 +108,10 @@ public static class Viewer
         }
         scripts.ArenaEntered += view.Enter;
         var objects = new ObjectView(renderer, new MaterialResolver(renderer, level.Dti));
+        var effects = new EffectsView(renderer, new MaterialResolver(renderer, level.Dti), level);
         var looks = new Dictionary<string, ObjectView.Look>();
+        var sniper = new SniperView(renderer, objects, level, hud);
+        var sniperTest = new SniperTest(options);
         var follow = new FollowCamera();
         var fly = new FreeCamera { Pitch = options.Pitch };
         var flying = options.Fly;
@@ -112,10 +123,27 @@ public static class Viewer
         var time = 0f;
         var pending = 0f;
         window.CaptureMouse(test ? Capture.Off : Capture.On);
-        while (window.PumpEvents(input) && !input.WasPressed(Key.Escape))
+        var strikeTime = 0f;
+        while (window.PumpEvents(input) && !(input.WasPressed(Key.Escape) && scripts.Strike is not { Active: true }))
         {
             var elapsed = test ? Step : (float)clock.Elapsed.TotalSeconds;
             clock.Restart();
+
+            // The full-screen strike: the game waits (Esc skips it); tests count its time.
+            var skip = input.WasPressed(Key.Escape) ? SniperView.StrikeSkip.Now : SniperView.StrikeSkip.No;
+            if (sniper.DrawStrike(scripts, skip, elapsed) is { } strikeView)
+            {
+                strikeTime += elapsed;
+                var shot = SavePath(options, input, time + strikeTime);
+                renderer.Present(strikeView, SkyColour(level.Dti), shot);
+                if (shot != null && test)
+                {
+                    Console.WriteLine($"Saved {shot} (strike)");
+                    return;
+                }
+
+                continue;
+            }
             if (input.WasPressed(Key.Fly))
             {
                 flying = !flying;
@@ -139,6 +167,7 @@ public static class Viewer
                 input.Hold(Key.Jump, options.Jump ? Input.State.Down : Input.State.Up);
                 input.Hold(Key.Fire, options.Fire ? Input.State.Down : Input.State.Up);
                 input.Hold(Key.UseItem, options.Use && time >= UseStart && time <= UseStart + UseTime ? Input.State.Down : Input.State.Up);
+                sniperTest.Step(kurt, scripts, input, time);
                 if (flying)
                 {
                     fly.Update(input, Step);
@@ -151,6 +180,7 @@ public static class Viewer
 
                 input.ClearMouse();
                 scripts.Update(Step);
+                space.SetSolid(scripts.SolidArenas);
                 if (MathF.Floor(time * Kurt.Kurt.Ticks) > MathF.Floor((time - Step) * Kurt.Kurt.Ticks))
                 {
                     hud.Tick(HudStateOf(kurt, scripts));
@@ -162,14 +192,21 @@ public static class Viewer
                 }
             }
 
-            var camera = flying ? fly.View(renderer.AspectRatio) : follow.View(renderer.AspectRatio);
+            var camera = flying ? fly.View(renderer.AspectRatio)
+                : kurt.Sniping ? FollowCamera.SniperView(kurt, renderer.AspectRatio) : follow.View(renderer.AspectRatio);
             mixer.ListenerPosition = camera.Position;
             mixer.ListenerRight = flying ? fly.Right : Vector3.Normalize(Vector3.Cross(follow.Forward, Vector3.UnitZ));
+            // In sniper mode the sounds are heard through the scope.
+            mixer.ScopeZoom = kurt.Sniping && !flying ? kurt.Scope.Zoom : 0f;
+            mixer.ListenerForward = kurt.SniperForward;
+            mixer.ListenerUp = FollowCamera.UpOf(kurt.SniperForward);
             mixer.Update(elapsed);
             audio.Update(elapsed);
             scripts.Eye = camera.Position;
-            view.Draw();
+            view.Draw(scripts.DrawnArenas);
             DrawObjects(objects, scripts, level, looks);
+            sniper.Draw(kurt, scripts, elapsed);
+            effects.Draw(scripts, camera);
             sprite.Draw(kurt, camera.Position, flying ? fly.Forward : follow.Forward, flying ? Vector3.UnitZ : follow.Up,
                 flying ? FreeCamera.FieldOfView : FollowCamera.FieldOfView);
 
@@ -239,6 +276,7 @@ public static class Viewer
         var second = scripts.SecondArena + (scripts.SecondActive ? " (active)" : "");
         Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
             $"Profile {time:0}s: objects {scripts.Objects.Count}, arena {scripts.CurrentArena}, second {second}"));
+        Console.WriteLine($"  effects {scripts.Effects.All.Count}, debris pieces {scripts.Debris.PieceCount()}, fans {scripts.Fans.Count}");
         foreach (var obj in scripts.Objects.Where(o => o.Arena == scripts.CurrentArena))
         {
             var p = obj.Position;

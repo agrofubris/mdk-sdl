@@ -19,6 +19,7 @@ public sealed class GameStats
     public int Shots;
     public int ShotHits;
     public int SniperShots;
+    public int SniperHits;
     public int HeadShots;
     public int Enemies;
     public int Kills;

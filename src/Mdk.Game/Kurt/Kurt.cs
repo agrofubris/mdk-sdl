@@ -130,6 +130,11 @@ public sealed partial class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.S
         FadeFlashes(delta);
         UpdateKnockDamage(delta);
         var turbo = input.IsDown(Key.Turbo);
+        if (UpdateSniper(input, turbo, delta))
+        {
+            return;
+        }
+
         UpdateTurning(input, turbo, delta);
 
         // Throwing or knocked down, he doesn't walk.
@@ -284,6 +289,7 @@ public sealed partial class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.S
             UpdateAir(jumpHeld, delta);
         }
 
+        UpdateUpdraft(delta);
         Fall(delta);
     }
 
@@ -301,7 +307,7 @@ public sealed partial class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.S
             ChuteOpen = true;
             mixer.Play("CHUTEOUT");
         }
-        else if (ChuteOpen && !jumpHeld)
+        else if (ChuteOpen && !jumpHeld && !InUpdraft)
         {
             ChuteOpen = false;
         }

@@ -52,13 +52,21 @@ public sealed unsafe class Window : IDisposable
                 case SDL_EventType.SDL_EVENT_MOUSE_MOTION:
                     input.AddMouseMotion(e.motion.xrel, e.motion.yrel);
                     break;
+                case SDL_EventType.SDL_EVENT_MOUSE_WHEEL:
+                    input.AddWheel(e.wheel.y);
+                    break;
             }
         }
 
         return true;
     }
 
-    private static MouseButton Button(byte button) => button == SDL_BUTTON_LEFT ? MouseButton.Left : MouseButton.Other;
+    private static MouseButton Button(byte button) => button switch
+    {
+        SDL_BUTTON_LEFT => MouseButton.Left,
+        SDL_BUTTON_RIGHT => MouseButton.Right,
+        _ => MouseButton.Other,
+    };
 
     public void Dispose()
     {

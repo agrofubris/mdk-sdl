@@ -47,7 +47,12 @@ public sealed class FollowCamera
     public void Update(Kurt kurt, float arenaPitch, Input input, float delta)
     {
         _arenaPitch = float.Lerp(arenaPitch, _arenaPitch, MathF.Pow(PitchEase, delta * Kurt.Ticks));
-        _lookOffset += input.MouseY * MouseDegrees;
+        // Through the scope the mouse turns the scope instead.
+        if (!kurt.Sniping)
+        {
+            _lookOffset += input.MouseY * MouseDegrees;
+        }
+
         if (kurt.OnFloor)
         {
             _airTime = 0f;
@@ -86,6 +91,14 @@ public sealed class FollowCamera
     }
 
     public View View(float aspect) => CameraMath.View(Position, Forward, Up, FieldOfView, aspect, Near, Far);
+
+    /// <summary>Sniper mode: the view from Kurt's eye through the scope.</summary>
+    public static View SniperView(Kurt kurt, float aspect) =>
+        CameraMath.ScopeView(kurt.SniperEye, kurt.SniperForward, kurt.Scope.Zoom, aspect, Near, Far);
+
+    /// <summary>The camera's up for a line of sight (no roll).</summary>
+    public static Vector3 UpOf(Vector3 forward) =>
+        Vector3.Normalize(Vector3.Cross(Vector3.Cross(forward, Vector3.UnitZ), forward));
 }
 
 /// <summary>View matrices for a camera (MDK coordinates, Z up).</summary>
@@ -100,5 +113,33 @@ public static class CameraMath
         var rotation = Matrix4x4.CreateLookAt(Vector3.Zero, forward, up);
         Matrix4x4.Invert(rotation * projection, out var clipToDirection);
         return new View(view * projection, clipToDirection, position);
+    }
+
+    /// <summary>Sniper mode's view (0x57428c): the focal length is 384 / zoom pixels of the 480-high
+    /// screen, and the frustum is shifted down so that the scope's centre (y 279) is on the line of
+    /// sight.
+    /// <code>
+    ///   y 0   ┌───────────┐  top    =  279 · near / focal
+    ///         │     +     │  ◄── line of sight, y 279
+    ///   y 480 └───────────┘  bottom = -201 · near / focal
+    /// </code></summary>
+    public static View ScopeView(Vector3 eye, Vector3 forward, float zoom, float aspect, float near, float far)
+    {
+        var up = FollowCamera.UpOf(forward);
+        var view = Matrix4x4.CreateLookAt(eye, eye + forward, up);
+        var projection = ScopeProjection(zoom, aspect, near, far);
+        var rotation = Matrix4x4.CreateLookAt(Vector3.Zero, forward, up);
+        Matrix4x4.Invert(rotation * projection, out var clipToDirection);
+        return new View(view * projection, clipToDirection, eye);
+    }
+
+    /// <summary>The scope's off-centre projection for a window of <paramref name="aspect"/>.</summary>
+    public static Matrix4x4 ScopeProjection(float zoom, float aspect, float near, float far)
+    {
+        var unit = near * zoom / Scope.Focal;
+        var halfWidth = Scope.ScreenHeight / 2f * aspect * unit;
+        var top = Scope.Centre.Y * unit;
+        var bottom = -(Scope.ScreenHeight - Scope.Centre.Y) * unit;
+        return Matrix4x4.CreatePerspectiveOffCenter(-halfWidth, halfWidth, bottom, top, near, far);
     }
 }

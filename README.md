@@ -1,7 +1,7 @@
 # MDK in C# and SDL3
 
 ![Status: work in progress](https://img.shields.io/badge/status-work%20in%20progress-orange)
-![Progress: about 45%](https://img.shields.io/badge/progress-~45%25-orange)
+![Progress: about 55%](https://img.shields.io/badge/progress-~55%25-yellow)
 ![.NET 10](https://img.shields.io/badge/.NET-10-512bd4?logo=dotnet&logoColor=white)
 ![SDL3](https://img.shields.io/badge/SDL-3-blue)
 
@@ -21,26 +21,27 @@ original's box sweeps.
 **Status: early work in progress.** Every level loads, Kurt walks it and the level scripts run:
 aliens spawn, walk and fly their paths, doors open, pickups fall on their chutes. Kurt fires his
 chain gun, throws his items, gets hurt, knocked down and dies, and the HUD shows his health,
-inventory, messages and the target's health bar. There are no explosions or debris, sniper mode,
-menus or saves yet: it's not a game yet. The [Godot port](https://github.com/nemo22/mdk-godot)
-is far more complete for now.
+inventory, messages and the target's health bar. Aliens blow up into pieces, sparks fly, slime
+bleeds and the fans lift Kurt. He snipes through the scope with every kind of round and calls
+Bones' air strike. Only Kurt's arena and the one behind an open door are drawn and solid, as in
+the original. There are no menus, saves, rides or level transitions yet: it's not a game yet. The [Godot port](https://github.com/nemo22/mdk-godot) is far more complete for now.
 
 ## Progress
 
 | Area | Done |
 | --- | --- |
 | Data formats: levels, textures, models, sprites, sounds, fonts, scripts, videos | █████████░ 90% |
-| Rendering: arenas, glass, sky, mirrors, Kurt's sprite | ██████░░░░ 60% |
+| Rendering: arenas, glass, sky, mirrors, Kurt's sprite, effects | ████████░░ 80% |
 | Collisions: the original's BSP | ████████░░ 80% |
 | Kurt: walking, turning, jumping, chute, camera, damage, death | ██████░░░░ 60% |
 | Sound mixer (the original's laws) and music | ██████░░░░ 60% |
-| Script VM, aliens, objects, doors | ██████░░░░ 60% |
-| Weapons, items, sniper mode | █████░░░░░ 50% |
+| Script VM, aliens, objects, doors, effects, fans | ███████░░░ 70% |
+| Weapons, items, sniper mode | ████████░░ 80% |
 | HUD (health, inventory, messages, health bar) | ███████░░░ 70% |
 | Menus, saves, level flow | ░░░░░░░░░░ 0% |
 | The fall and the stream between levels, rides | ░░░░░░░░░░ 0% |
 | Videos (decoders done, no player yet) | ███░░░░░░░ 30% |
-| **Overall** | **about 45%** |
+| **Overall** | **about 55%** |
 
 The plan is in [docs/architecture.md](docs/architecture.md#roadmap).
 
@@ -60,11 +61,14 @@ mdk.exe --level=3
 - `--mute`: no sound.
 - Tests: `--screenshot=file.bmp` (after `--wait=seconds` of game time, then quit),
   `--walk=seconds`, `--jump`, `--fire`, `--give=SW_HBOMB,...` (pickups to start with), `--use`
-  (uses the item after 1 second), `--profile` (prints the objects of Kurt's arena every second).
+  (uses the item after 1 second), `--profile` (prints the objects of Kurt's arena every second),
+  `--sniper[=zoom[,pitch]]` (sniper mode once Kurt stands), `--zoom=seconds` (zooms in),
+  `--sniper-fire` (one sniper round), `--strike[=dive]` (Bones' full-screen strike).
 
 Controls: W/S or Up/Down to run, A/D to strafe, the mouse or Left/Right to turn, Space to jump
 (hold it while falling to open the chute), Shift for turbo, Ctrl or the left mouse button to fire,
-Enter to use the item, Tab or [ ] to select it (or 1-5), F1 for the flying camera (E/Q to go up and
+Enter to use the item, Tab or [ ] to select it (or 1-5), the right mouse button for sniper mode
+(the mouse wheel or PageUp/PageDown zoom, Tab or [ ] select the ammo), F1 for the flying camera (E/Q to go up and
 down), F12 for a screenshot, Esc to quit.
 
 ## Building
@@ -90,6 +94,8 @@ sh tests/screenshot_test.sh
 sh tests/kurt_test.sh
 sh tests/combat_test.sh
 sh tests/scripts_test.sh
+sh tests/sniper_test.sh
+sh tests/effects_test.sh
 ```
 
 ## Layout

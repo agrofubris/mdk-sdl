@@ -16,18 +16,28 @@ internal static class NativeLibraries
     private const string FolderName = "mdk-sdl";
     private const int HashCharacters = 16;
 
+    private static readonly Lock Installing = new();
     private static bool _installed;
 
     /// <summary>Routes SDL3-CS's imports to the embedded library. Without the resource (other
-    /// platforms) the package's own native library is used.</summary>
+    /// platforms) the package's own native library is used. Callers racing to the first SDL use
+    /// wait until the route is set.</summary>
     public static void Install()
     {
-        if (_installed)
+        lock (Installing)
         {
-            return;
-        }
+            if (_installed)
+            {
+                return;
+            }
 
-        _installed = true;
+            Route();
+            _installed = true;
+        }
+    }
+
+    private static void Route()
+    {
         var path = Extract();
         if (path == null)
         {

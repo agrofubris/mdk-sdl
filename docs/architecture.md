@@ -37,6 +37,8 @@ Each layer talks only to the one below it.
 - Palette index 0 is transparent.
 - Glass (`GLASS1-4`) blends after the opaque surfaces; mirrors show the panorama where the sky
   behind them would be (shifted by MIRRLOW...MIRRHIGH).
+- Insets (`Renderer.Insets.cs`): 3D views in canvas rectangles, under or over the canvas (sniper
+  mode's round cameras and clip).
 - The sky is a screen-filling triangle drawn first, scrolled by yaw and pitch like the original's
   2D backdrop.
 
@@ -51,15 +53,23 @@ Each layer talks only to the one below it.
 6. 🟡 Kurt: walking, turning, jumping, chute, falls through the BSP (`damp_collide_move`,
    `damp_gravity`), solid objects and platforms (`Collision/Solids.cs`), follow camera, sprite,
    chain gun, muzzle flash, hits, knock-down, death, items (`Kurt/Kurt.Combat.cs`,
-   `Kurt/Inventory.cs`). Still to do: sniper mode, ledges, sliding, camera clearance, updrafts.
+   `Kurt/Inventory.cs`), the fans' updrafts (`Kurt/Kurt.Updraft.cs`), sniper mode
+   (`Kurt/Kurt.Sniper.cs`, `Kurt/Scope.cs`: look, zoom, clip, the scope's off-centre projection).
+   Still to do: ledges, sliding, camera clearance.
 7. 🟡 Script VM and objects (`Scripts/`: ports of `script_vm.gd`, `script_runtime.gd`,
    `object_motion.gd`, `object_behaviors.gd`; 30 ticks per second, object moves are BSP box sweeps).
-   Kurt's items and blasts are ported (`Items.cs`, `Twister.cs`; twisters aren't drawn). Effects,
-   debris, sniper rounds, air strike, rides, fans, the end of a level and the strike scene are
-   stubs (`Scripts/Stubs/`, marked `TODO port`).
+   Kurt's items and blasts are ported (`Items.cs`, `Twister.cs`; twisters aren't drawn), so are the
+   effects (`Effects.cs`: wounds, slime drops, bubbles, smoke trails), the flying pieces
+   (`Debris.cs`: sparks, shattered groups, break-ups) and the fans (`Fans.cs`), drawn by
+   `Objects/EffectsView.cs`, the sniper rounds, their target lock and `bomb_follow_path`
+   (`SniperRounds.cs`), Bones' air strike (`AirStrike.cs`) and the full-screen strike
+   (`StrikeScene.cs`). Rides and the end of a level are stubs (`Scripts/Stubs/`, marked
+   `TODO port`).
 8. 🟡 Weapons, items, HUD, sniper mode: the chain gun, the items and the HUD (`Hud/`: health panel,
    inventory, messages in the original fonts, health bar, flashes, drawn on the renderer's 2D
-   canvas) are done; sniper mode is not.
+   canvas) are done, and sniper mode's screen (`Hud/SniperOverlay.cs`; the round cameras and the
+   loaded rounds are renderer insets, `SniperView.cs`). Bullet holes on textures (`special_130`)
+   are not.
 9. Menus, fonts, saves, videos (MVE, FLC).
 10. Fall, stream, bomber, snowboard sequences.
 11. Enhanced look.

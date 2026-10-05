@@ -13,6 +13,8 @@ public enum Key
     Escape, Screenshot,
     /// <summary>Switches between Kurt and the flying camera.</summary>
     Fly,
+    /// <summary>Sniper mode on or off, and its zoom.</summary>
+    Sniper, ZoomIn, ZoomOut,
 }
 
 /// <summary>Keyboard and mouse state of the current frame.</summary>
@@ -49,6 +51,17 @@ public sealed class Input
         [SDL_Scancode.SDL_SCANCODE_ESCAPE] = Key.Escape,
         [SDL_Scancode.SDL_SCANCODE_F12] = Key.Screenshot,
         [SDL_Scancode.SDL_SCANCODE_F1] = Key.Fly,
+        [SDL_Scancode.SDL_SCANCODE_PAGEUP] = Key.ZoomIn,
+        [SDL_Scancode.SDL_SCANCODE_EQUALS] = Key.ZoomIn,
+        [SDL_Scancode.SDL_SCANCODE_PAGEDOWN] = Key.ZoomOut,
+        [SDL_Scancode.SDL_SCANCODE_MINUS] = Key.ZoomOut,
+    };
+
+    /// <summary>The keys of mouse buttons: the left one fires, the right one toggles sniper mode.</summary>
+    private static readonly Dictionary<MouseButton, Key> ButtonBindings = new()
+    {
+        [MouseButton.Left] = Key.Fire,
+        [MouseButton.Right] = Key.Sniper,
     };
 
     private readonly HashSet<Key> _down = [];
@@ -60,6 +73,8 @@ public sealed class Input
 
     public float MouseX { get; private set; }
     public float MouseY { get; private set; }
+    /// <summary>Mouse wheel notches since the last game step: positive away from the user.</summary>
+    public float Wheel { get; private set; }
 
     public bool IsDown(Key key) => _down.Contains(key) || _buttons.Contains(key) || _held.Contains(key);
 
@@ -85,6 +100,7 @@ public sealed class Input
     {
         MouseX = 0f;
         MouseY = 0f;
+        Wheel = 0f;
     }
 
     internal void SetKey(SDL_Scancode scancode, State state)
@@ -106,25 +122,27 @@ public sealed class Input
         }
     }
 
-    /// <summary>A mouse button: the left one fires.</summary>
+    /// <summary>A mouse button: see <see cref="ButtonBindings"/>.</summary>
     internal void SetButton(MouseButton button, State state)
     {
-        if (button != MouseButton.Left)
+        if (!ButtonBindings.TryGetValue(button, out var key))
         {
             return;
         }
 
         if (state == State.Up)
         {
-            _buttons.Remove(Key.Fire);
+            _buttons.Remove(key);
             return;
         }
 
-        if (_buttons.Add(Key.Fire))
+        if (_buttons.Add(key))
         {
-            _pressed.Add(Key.Fire);
+            _pressed.Add(key);
         }
     }
+
+    internal void AddWheel(float notches) => Wheel += notches;
 
     internal void AddMouseMotion(float x, float y)
     {
@@ -134,4 +152,4 @@ public sealed class Input
 }
 
 /// <summary>Mouse buttons, independent of SDL.</summary>
-internal enum MouseButton { Left, Other }
+internal enum MouseButton { Left, Right, Other }

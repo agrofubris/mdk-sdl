@@ -58,7 +58,7 @@ public readonly record struct View(Matrix4x4 ViewProjection, Matrix4x4 ClipToDir
 ///              │                    └─download──► screenshot (BMP)
 ///              └ meshes, index textures, palettes (GPU resources by id)
 /// </code></summary>
-public sealed unsafe class Renderer : IDisposable
+public sealed unsafe partial class Renderer : IDisposable
 {
     private const SDL_GPUTextureFormat ColourFormat = SDL_GPUTextureFormat.SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
     private const int BytesPerPixel = 4;
@@ -430,11 +430,11 @@ public sealed unsafe class Renderer : IDisposable
 
     /// <summary>Queues triangles of a mesh for the next frame; <paramref name="frame"/> picks an animated texture's frame.</summary>
     public void Draw(int mesh, int firstVertex, int vertexCount, Material material, int frame = 0) =>
-        _commands.Add(new DrawCommand(mesh, firstVertex, vertexCount, material, frame, Matrix4x4.Identity));
+        Queue.Add(new DrawCommand(mesh, firstVertex, vertexCount, material, frame, Matrix4x4.Identity));
 
     /// <summary>Queues triangles of a mesh placed in the world by <paramref name="world"/> (models).</summary>
     public void Draw(int mesh, int firstVertex, int vertexCount, Material material, int frame, Matrix4x4 world) =>
-        _commands.Add(new DrawCommand(mesh, firstVertex, vertexCount, material, frame, world));
+        Queue.Add(new DrawCommand(mesh, firstVertex, vertexCount, material, frame, world));
 
     /// <summary>Draws the queued batches (opaque first, then blended) and shows them. With
     /// <paramref name="screenshot"/>, also saves the frame as a BMP.</summary>
@@ -447,6 +447,7 @@ public sealed unsafe class Renderer : IDisposable
         {
             SDL_SubmitGPUCommandBuffer(commands);
             _commands.Clear();
+            ClearInsets();
             return;
         }
 
@@ -494,15 +495,21 @@ public sealed unsafe class Renderer : IDisposable
             DrawSky(commands, pass, view, Panorama);
         }
 
+        // With insets, the canvas waits for them (Renderer.Insets.cs).
+        var canvasNow = _insets.Count == 0;
         foreach (var order in Enum.GetValues<Pass>())
         {
-            foreach (var command in _commands.Where(c => c.Material.Pass == order))
+            foreach (var command in _commands.Where(c => c.Material.Pass == order && (canvasNow || order != Pass.Overlay)))
             {
                 DrawOne(commands, pass, command, view);
             }
         }
 
         SDL_EndGPURenderPass(pass);
+        if (!canvasNow)
+        {
+            RenderInsets(commands);
+        }
     }
 
     /// <summary>The panorama behind everything: one screen-filling triangle.</summary>

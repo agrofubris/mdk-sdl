@@ -33,6 +33,15 @@ public sealed class ArenaSpace
     private const float BoundsMargin = 2f;
 
     private readonly List<(Bsp Bsp, Vector3 Min, Vector3 Max, float Volume)> _arenas = [];
+    /// <summary>The arenas Kurt collides with, his first (empty: those around him by bounds).</summary>
+    private List<Bsp> _solid = [];
+
+    /// <summary>Kurt collides with his arena and the active second one only (0x465e34); rays and
+    /// objects still see every arena.</summary>
+    public void SetSolid(IReadOnlyList<string> arenas)
+    {
+        _solid = arenas.Select(name => _arenas.Find(a => a.Bsp.Arena.Name == name).Bsp).Where(b => b != null).ToList();
+    }
 
     public void Add(Arena arena)
     {
@@ -66,7 +75,7 @@ public sealed class ArenaSpace
     {
         var (box, lift) = motion == Motion.Walk ? (WalkBox, WalkLift) : (FallBox, FallLift);
         var a = feet + new Vector3(0f, 0f, box.Z + lift);
-        var arenas = At(feet).Union(At(feet + delta)).ToList();
+        var arenas = _solid.Count > 0 ? _solid : At(feet).Union(At(feet + delta)).ToList();
         if (arenas.Count == 0)
         {
             return new Result(feet + delta, Bsp.None, null, Bsp.None);

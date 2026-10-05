@@ -18,8 +18,6 @@ public sealed partial class Kurt
     public const int MaxHealth = Inventory.MaxHealth;
     /// <summary>Extra gravity of the wind zones in the air (kurt.gd SLIDE_GRAVITY, u/s²).</summary>
     public const float SlideGravity = 128f;
-    /// <summary>The sniper zoom's limit (sniper mode isn't ported).</summary>
-    public const float ZoomMin = 0.25f;
 
     /// <summary>Red flash after hits (0x573b70): +25 per damage point, kept within 75-180; flashes
     /// fade by 4 per tick. Once Kurt is dead it's the skull's fade, rising by 2 per tick to 255.</summary>
@@ -90,9 +88,8 @@ public sealed partial class Kurt
     public bool Visible = true;
     public Inventory Inventory { get; } = new();
 
-    // TODO port slides (kurt.gd damp_buttslide) and sniper mode.
+    // TODO port slides (kurt.gd damp_buttslide).
     public bool Sliding { get; private set; }
-    public float ZoomLimit = ZoomMin;
 
     /// <summary>The skull has faded in: the original loads the last saved game.</summary>
     public event Action? Died;
@@ -172,6 +169,7 @@ public sealed partial class Kurt
 
     public void StopFiring()
     {
+        LeaveSniper();
         Firing = false;
         mixer.StopVoice(_gunVoice);
         _gunVoice = 0;
@@ -245,6 +243,7 @@ public sealed partial class Kurt
         ForwardSpeed = 0f;
         StrafeSpeed = 0f;
         VerticalSpeed = OnFloor ? 0f : MathF.Max(VerticalSpeed - Gravity * delta, -MaxFallSpeed);
+        UpdateUpdraft(delta);
         Fall(delta);
         StateTime += delta;
         AnimationFrame = MathF.Min(AnimationFrame + Ticks * delta, frameCount(State.Dead) - 1);

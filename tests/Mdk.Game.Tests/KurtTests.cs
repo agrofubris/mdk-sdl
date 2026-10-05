@@ -132,4 +132,35 @@ public class KurtTests
         Run(kurt, new Input(), 5f);
         Assert.True(died);
     }
+
+    /// <summary>A fan's updraft of 10 u/s from z 0 to 20 (fans.gd type 6), Kurt in the air above no arena.</summary>
+    private static Kurt.Kurt InFan(Vector3 feet, Func<float, float, float> updraft) =>
+        new(new ArenaSpace(), new SoundMixer(Device, _ => null), _ => Frames) { Feet = feet, Updraft = updraft };
+
+    [Fact]
+    public void KurtRisesInAnUpdraft()
+    {
+        const float Lift = 10f;
+        const float Acceleration = 64f;
+        Kurt.Kurt? kurt = null;
+        kurt = InFan(new Vector3(0f, 0f, 5f), (vz, dt) => kurt!.Feet.Z < 20f ? MathF.Min(vz + (Lift + Acceleration) * dt, Lift) : float.NaN);
+
+        Run(kurt, new Input(), 1f);
+
+        Assert.True(kurt.InUpdraft);
+        Assert.True(kurt.ChuteOpen);
+        Assert.True(kurt.Feet.Z > 5f);
+    }
+
+    [Fact]
+    public void KurtLeavesAnUpdraftAtMost40()
+    {
+        var kurt = InFan(new Vector3(0f, 0f, 100f), (_, _) => float.NaN);
+        kurt.VerticalSpeed = 60f;
+
+        kurt.Update(new Input(), Step);
+
+        Assert.False(kurt.InUpdraft);
+        Assert.True(kurt.VerticalSpeed <= Kurt.Kurt.UpdraftExitSpeed);
+    }
 }

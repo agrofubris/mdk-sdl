@@ -221,6 +221,36 @@ public sealed class Inventory
         Selected = ((Selected + step) % _slots.Count + _slots.Count) % _slots.Count;
     }
 
+    /// <summary>Selects a sniper round type (0 normal bullets, 1-5).</summary>
+    public void SelectAmmo(int type) => SelectedAmmo = Math.Clamp(type, 0, AmmoTypes);
+
+    /// <summary>A sniper round of <paramref name="type"/> was fired; normal bullets never run out.</summary>
+    public void UseAmmo(int type)
+    {
+        if (type > 0)
+        {
+            _ammo[type - 1] = Math.Max(_ammo[type - 1] - 1, 0);
+        }
+    }
+
+    /// <summary>The next (<paramref name="step"/> 1) or previous (-1) round type with rounds,
+    /// wrapping around; normal bullets always have some (0x46c900).</summary>
+    public int NextAmmo(int step)
+    {
+        const int Types = AmmoTypes + 1;
+        var type = SelectedAmmo;
+        for (var i = 0; i < Types; i++)
+        {
+            type = ((type + step) % Types + Types) % Types;
+            if (type == 0 || _ammo[type - 1] > 0)
+            {
+                break;
+            }
+        }
+
+        return type;
+    }
+
     /// <summary>One of the selected item is used up; an empty slot goes.</summary>
     public void Consume()
     {

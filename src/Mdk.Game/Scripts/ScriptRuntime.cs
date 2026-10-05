@@ -166,15 +166,17 @@ public sealed class ScriptRuntime
     public readonly ScriptVm Vm;
     public readonly ObjectMotion Motion;
     public readonly ObjectBehaviors Behaviors;
-    public readonly Effects Effects = new();
-    public readonly Debris Debris = new();
+    public readonly Effects Effects;
+    public readonly Debris Debris;
     /// <summary>Sniper rounds, and the object locked in the scope (0x573a8c).</summary>
-    public readonly SniperRounds SniperRounds = new();
+    public readonly SniperRounds SniperRounds;
     public MdkObject? SniperTarget;
-    public readonly AirStrike AirStrike = new();
+    public readonly AirStrike AirStrike;
+    /// <summary>The full-screen strike playing, if any (the game waits meanwhile).</summary>
+    public StrikeScene? Strike { get; private set; }
     public readonly Rides Rides = new();
     public readonly Items Items;
-    public readonly Fans Fans = new();
+    public readonly Fans Fans;
     public readonly GameStats Stats = new();
     /// <summary>The end of the level's tornado, once it started.</summary>
     public EndLevel? EndLevel;
@@ -255,6 +257,9 @@ public sealed class ScriptRuntime
     /// <summary>The arenas drawn (Kurt's and the active second) last tick.</summary>
     // TODO the level view still draws every reachable arena (level.gd show_arenas, set_solid_arenas)
     public IReadOnlyList<string> DrawnArenas => _drawnArenas;
+
+    /// <summary>The arenas Kurt collides with: the drawn ones, not the second on the snowboard (0x465e34).</summary>
+    public IReadOnlyList<string> SolidArenas => Rides.OnBoard() ? _drawnArenas.Take(1).ToList() : _drawnArenas;
     public readonly List<MdkObject> Objects = [];
     /// <summary>camera_track (opcode 203): the camera pitch the scripts want (0x573918), for this
     /// many more ticks (0x5739b0).</summary>
@@ -270,6 +275,7 @@ public sealed class ScriptRuntime
     private readonly Dictionary<string, List<string>> _connections = [];
     private readonly Dictionary<string, ArenaState> _arenas = [];
     private readonly Dictionary<int, ModelAnimation> _animations = [];
+    private readonly List<MdkObject> _boxes = [];
     private List<string> _loadedArenas = [];
     private List<string> _drawnArenas = [];
     private int _nextInstance = 1000;
@@ -282,10 +288,23 @@ public sealed class ScriptRuntime
     {
         Kurt = kurt;
         Items = new Items(this, sprites);
+        SniperRounds = new SniperRounds(this);
+        AirStrike = new AirStrike(this);
+        kurt.SniperFire = FireSniper;
         kurt.ItemUsed += Items.UseItem;
         kurt.BombTriggered += Items.TriggerBomb;
         kurt.CanUseItem = Items.CanUse;
         kurt.SolidsWithin = SolidsWithin;
+        Effects = new Effects(Rng) { FrameCount = TextureFrames, Ray = RayIn };
+        Fans = new Fans(level.Dti.Arenas, Rng) { Spark = FanSpark, IsLive = IsLiveArena };
+        Debris = new Debris(Rng)
+        {
+            Ray = RayIn,
+            Trail = Effects.SpawnTrail,
+            Updraft = (arena, point, vz, dt) => Fans.Query(arena, point, vz, Fans.MaskEffects, dt),
+            GroupFacets = GroupFacets,
+        };
+        kurt.Updraft = (vz, dt) => Fans.Query(CurrentArena, kurt.Feet, vz, Fans.MaskKurt, dt);
         Level = level;
         Cmi = cmi;
         Mixer = mixer;
@@ -922,13 +941,76 @@ public sealed class ScriptRuntime
         return Level.Dti.Arenas.FirstOrDefault(a => a.Name == name)?.Pitch ?? DefaultCameraPitch;
     }
 
-    /// <summary>The scope's target lock (0x43b65c): the nearest object whose screen box overlaps the
-    /// crosshair's square, for homing rounds and the zoom limit.</summary>
-    // TODO port with sniper mode (needs the camera's projection)
+    /// <summary>The scope's target lock (during projection in the original, 0x43b65c): the nearest
+    /// object whose screen box overlaps a 64-pixel square around the crosshair (640x480 pixels), not
+    /// flagged 0x30. Homing rounds chase it, and the zoom goes down to 0.375 x its height / distance
+    /// (0x4678b0) instead of 0.25.</summary>
     private void UpdateSniperTarget()
     {
+        const int Untargetable = MdkObject.FlagNotSolid | MdkObject.FlagNotTarget;
+        const int Corners = 8;
         SniperTarget = null;
-        Kurt.ZoomLimit = Mdk.Game.Kurt.Kurt.ZoomMin;
+        Kurt.Scope.ZoomLimit = Mdk.Game.Kurt.Scope.ZoomMin;
+        if (!Kurt.Sniping)
+        {
+            return;
+        }
+
+        var eye = Kurt.SniperEye;
+        var forward = Kurt.SniperForward;
+        var zoom = Kurt.Scope.Zoom;
+        var bestDepth = float.MaxValue;
+        foreach (var obj in Objects)
+        {
+            if (obj.Dead || obj.Arena != CurrentArena || obj.Model == null || (obj.Flags & Untargetable) != 0)
+            {
+                continue;
+            }
+
+            var bounds = GetWorldBounds(obj);
+            if (Mdk.Game.Kurt.Scope.ToScreen(eye, forward, zoom, bounds.Center()) is not { } centre)
+            {
+                continue;
+            }
+
+            var (min, max) = (centre, centre);
+            for (var i = 0; i < Corners; i++)
+            {
+                var corner = new Vector3((i & 1) != 0 ? bounds.Max.X : bounds.Min.X, (i & 2) != 0 ? bounds.Max.Y : bounds.Min.Y, (i & 4) != 0 ? bounds.Max.Z : bounds.Min.Z);
+                if (Mdk.Game.Kurt.Scope.ToScreen(eye, forward, zoom, corner) is { } p)
+                {
+                    (min, max) = (Vector2.Min(min, p), Vector2.Max(max, p));
+                }
+            }
+
+            var depth = Vector3.Distance(eye, bounds.Center());
+            if (Mdk.Game.Kurt.Scope.Locks(min, max) && depth < bestDepth)
+            {
+                bestDepth = depth;
+                SniperTarget = obj;
+            }
+        }
+
+        if (SniperTarget != null)
+        {
+            var bounds = GetWorldBounds(SniperTarget);
+            Kurt.Scope.ZoomLimit = Mdk.Game.Kurt.Scope.LockLimit(bounds.Size().Z, Vector3.Distance(KurtPosition, bounds.Center()));
+        }
+    }
+
+    /// <summary>Kurt fires from the scope: a round of <paramref name="type"/>, or Bones' air strike.
+    /// Returns false when nothing went (no free round slot, no strike).</summary>
+    private bool FireSniper(int type)
+    {
+        var fired = type == Mdk.Game.Kurt.Scope.Strike
+            ? AirStrike.Call(Kurt.SniperEye, Kurt.SniperForward)
+            : SniperRounds.Fire(type, Kurt.SniperEye, Wrap360(Kurt.Yaw), Kurt.Scope.Pitch, SniperTarget);
+        if (fired)
+        {
+            Stats.SniperShots++;
+        }
+
+        return fired;
     }
 
     /// <summary>special_130 (0x45d140): a bullet hole on the texture a sniper round hit.</summary>
@@ -1192,7 +1274,6 @@ public sealed class ScriptRuntime
     /// <summary>spawn_box (opcode 159): an object whose model is a box of <paramref name="size"/>
     /// (model_create_box 0x404188, 8 corners, 12 triangles) showing a texture as an animated sprite
     /// (FIRE, PULSE). The triangles themselves aren't drawn.</summary>
-    // TODO the sprite isn't drawn yet
     public MdkObject SpawnBox(MdkObject parent, Vector3 position, Vector3 size, string texture, int script)
     {
         const int NoMaterial = -256;
@@ -1226,8 +1307,13 @@ public sealed class ScriptRuntime
             Restart = script,
         };
         Objects.Add(obj);
+        _boxes.RemoveAll(b => b.Dead);
+        _boxes.Add(obj);
         return obj;
     }
+
+    /// <summary>The objects made by spawn_box: their model's name is the texture their sprite shows.</summary>
+    public IEnumerable<MdkObject> Boxes => _boxes.Where(b => !b.Dead);
 
     public void Remove(MdkObject obj)
     {
@@ -1269,6 +1355,7 @@ public sealed class ScriptRuntime
     public void PlayStrikeScene(StrikeScene.Kind kind, StrikeScene.Plane plane)
     {
         var scene = new StrikeScene();
+        Strike = scene;
         scene.Finished += () => StrikeSceneChanged?.Invoke(StrikeState.Ended);
         StrikeSceneChanged?.Invoke(StrikeState.Started);
         scene.Play(this, kind, plane);
@@ -1744,6 +1831,49 @@ public sealed class ScriptRuntime
     {
         var (colour, range) = SparkColours[(int)Spark.Fire];
         Debris.Spark(arena, point, FireSparks, 1f, colour, range);
+    }
+
+    /// <summary>A fan's fire spark (0x414230): half a unit big, still, for the updraft to lift.</summary>
+    private void FanSpark(string arena, Vector3 point)
+    {
+        var (colour, range) = SparkColours[(int)Spark.Fire];
+        Debris.Spark(arena, point, 1, SparkSize, colour, range, 1f, Debris.Launch.Still);
+    }
+
+    /// <summary>The frame count of an arena's (or the level's) texture, 0 without one.</summary>
+    private int TextureFrames(string arena, string name) => FindTexture(arena, name)?.FrameCount ?? 0;
+
+    /// <summary>The nearest solid triangle of one arena along a segment (effects and pieces).</summary>
+    private RayHit? RayIn(string arena, Vector3 from, Vector3 to)
+    {
+        if (!_bsps.TryGetValue(arena, out var bsp))
+        {
+            return null;
+        }
+
+        var triangle = bsp.Segment(from, to, Bsp.SegmentMode.Any, out var point);
+        return triangle == Bsp.None ? null : new RayHit(point, TriangleNormal(bsp.Arena, triangle), arena, TriangleGroup(bsp.Arena, triangle));
+    }
+
+    /// <summary>The triangles of an arena's group with their current material, for shattering.</summary>
+    private Debris.Group? GroupFacets(string arena, int number)
+    {
+        var data = Level.Arenas.Find(a => a.Name == arena);
+        var group = _groups.Get(arena, number);
+        if (data == null || group == null || number == 0)
+        {
+            return null;
+        }
+
+        var facets = new List<Debris.Facet>();
+        foreach (var t in group.Triangles)
+        {
+            Vector3 Corner(int k) => data.Vertices[data.TriangleIndices[t * 3 + k]];
+            Vector2 Uv(int k) => data.TriangleUvs[t * 3 + k];
+            facets.Add(new Debris.Facet(Corner(0), Corner(1), Corner(2), Uv(0), Uv(1), Uv(2), group.Material ?? data.TriangleMaterials[t]));
+        }
+
+        return new Debris.Group(data.Materials, facets);
     }
 
     /// <summary>Starts the object's looping sound (set_loop_sound), stopping the previous one; an

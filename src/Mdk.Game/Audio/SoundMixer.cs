@@ -8,6 +8,7 @@ namespace Mdk.Game.Audio;
 /// <list type="bullet">
 /// <item>Volume is linear in decibels over 25 dB: <c>dB = -25 + 25 * volume / 0x7FFF</c> (never silent).</item>
 /// <item>3D voices: full volume up to 20 units, linear to 0 at 250; Doppler at 1100 u/s (0.25-3).</item>
+/// <item>In sniper mode the scope listens: sounds near the crosshair are loud, those behind silent (0x403750).</item>
 /// <item>A new sound is dropped when all voices are busy.</item>
 /// </list>
 /// <code>
@@ -31,6 +32,11 @@ public sealed class SoundMixer(AudioDevice device, Func<string, SoundMixer.Entry
     private const float SpeedOfSound = 1100f;
     private const float PitchMin = 0.25f;
     private const float PitchMax = 3f;
+    // Scope listening (0x403750): the scope is 384 x 280 pixels, its focal length 384 / zoom.
+    private const float ScopeAxis = 2f;
+    private const float ScopeRatio = 384f / 280f;
+    private const float ScopeDepth = 300f;
+    private const float ScopeEdge = 1.3f;
 
     private sealed class Voice(int id, string name, int volume, Func<Vector3>? position)
     {
@@ -49,6 +55,11 @@ public sealed class SoundMixer(AudioDevice device, Func<string, SoundMixer.Entry
     /// <summary>The listener: position and right (MDK coordinates).</summary>
     public Vector3 ListenerPosition;
     public Vector3 ListenerRight = Vector3.UnitX;
+    /// <summary>The listener's line of sight and up, for the scope.</summary>
+    public Vector3 ListenerForward = Vector3.UnitY;
+    public Vector3 ListenerUp = Vector3.UnitZ;
+    /// <summary>The sniper scope's zoom (1 to 0.25) while Kurt snipes, else 0.</summary>
+    public float ScopeZoom;
 
     /// <summary>Plays a sound without position. Returns the voice, or 0.</summary>
     public int Play(string name, Start start = Start.New) => Launch(name, start, null);
@@ -160,6 +171,30 @@ public sealed class SoundMixer(AudioDevice device, Func<string, SoundMixer.Entry
         return looped;
     }
 
+    /// <summary>The gain of a sound through the scope (0x403750), from its place seen from the
+    /// listener (<paramref name="local"/>: right, up, depth): its offset from the line of sight (in
+    /// scope half-widths, beyond 2 units) and its depth; behind the listener it's 0.</summary>
+    public static float ScopeGain(Vector3 local, float zoom)
+    {
+        var depth = local.Z;
+        if (depth <= 0f)
+        {
+            return 0f;
+        }
+
+        var offset = new Vector2(local.X, local.Y);
+        var r = offset.Length();
+        var screen = Vector2.Zero;
+        if (r > ScopeAxis)
+        {
+            offset -= offset * ScopeAxis / r;
+            screen = new Vector2(offset.X * 2f / zoom, offset.Y * 2f * ScopeRatio / zoom);
+        }
+
+        var gain = MathF.Min(1f, ScopeDepth / (zoom * depth));
+        return Math.Clamp(gain * (ScopeEdge - screen.Length() / depth), 0f, 1f);
+    }
+
     /// <summary>Volume, pan and pitch of a 3D voice from its place relative to the listener (0x40347c).</summary>
     private void Update3D(Voice voice, float delta)
     {
@@ -174,7 +209,9 @@ public sealed class SoundMixer(AudioDevice device, Func<string, SoundMixer.Entry
         }
 
         voice.Distance = distance;
-        var gain = Math.Clamp((Far - distance) / (Far - Near), 0f, 1f);
+        var gain = ScopeZoom > 0f
+            ? ScopeGain(new Vector3(Vector3.Dot(offset, ListenerRight), Vector3.Dot(offset, ListenerUp), Vector3.Dot(offset, ListenerForward)), ScopeZoom)
+            : Math.Clamp((Far - distance) / (Far - Near), 0f, 1f);
         var side = Vector3.Dot(offset, ListenerRight) / distance;
         device.Set(voice.Id, Gain(voice.Volume * gain), pitch, side);
     }

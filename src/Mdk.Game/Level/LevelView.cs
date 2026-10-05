@@ -62,10 +62,12 @@ public sealed class LevelView
         }
     }
 
-    /// <summary>Queues every visible group.</summary>
-    public void Draw()
+    /// <summary>Queues the visible groups of <paramref name="arenas"/> (the original draws Kurt's
+    /// arena and the active second one, 0x41e344), or of every reachable arena when empty.</summary>
+    public void Draw(IReadOnlyCollection<string> arenas)
     {
-        foreach (var view in _arenas.Values.Where(a => a.Reachable))
+        var shown = arenas.Count == 0 ? _arenas.Values.Where(a => a.Reachable) : arenas.Where(_arenas.ContainsKey).Select(a => _arenas[a]);
+        foreach (var view in shown)
         {
             foreach (var (number, mesh) in view.Groups)
             {

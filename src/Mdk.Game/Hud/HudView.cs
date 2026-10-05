@@ -75,6 +75,8 @@ public sealed class HudView
     private string _lastInventory = "";
 
     public Messages Messages { get; }
+    /// <summary>Sniper mode's screen, which replaces the HUD while it shows.</summary>
+    public SniperOverlay Sniper { get; }
 
     public HudView(Renderer renderer, Bni sprites, Palette palette, Fti fti)
     {
@@ -98,6 +100,7 @@ public sealed class HudView
         var big = new FontView(renderer, Font.Parse(fti.GetBytes("FONTBIG"), FontSpace.Big), system);
         var small = new FontView(renderer, Font.Parse(fti.GetBytes("FONTSML"), FontSpace.Small), system);
         Messages = new Messages(fti, big, small);
+        Sniper = new SniperOverlay(renderer, sprites, palette, _palette);
     }
 
     /// <summary>Spaces of the fonts' missing characters.</summary>
@@ -134,6 +137,14 @@ public sealed class HudView
         var width = _renderer.CanvasWidth;
         var height = Renderer.CanvasHeight;
         DrawFlashes(state, width, height);
+        if (Sniper.Visible)
+        {
+            var blink = state.Health > LowHealth || _blink < BlinkOn ? Blink.Shown : Blink.Hidden;
+            var panelAt = new Vector2(SniperScreen.ViewWidth - (_panel.Size.X + PanelRight), SniperScreen.ViewHeight - (_panel.Size.Y + PanelBottom));
+            Sniper.Draw(width, state.Health, blink, panelAt, _panel.Size);
+            Messages.Draw(width);
+            return;
+        }
 
         // Health panel at the bottom right; the number blinks when health is low.
         var panel = new Vector2(width - (_panel.Size.X + PanelRight), height - (_panel.Size.Y + PanelBottom));

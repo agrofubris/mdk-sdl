@@ -75,7 +75,7 @@ public sealed class KurtSprite
     {
         // World units per sprite pixel at the feet's depth.
         var depth = Vector3.Dot(kurt.Feet - eye, forward);
-        if (!kurt.Visible || depth <= 0f)
+        if (!kurt.Visible || kurt.Sniping || depth <= 0f)
         {
             return;
         }
