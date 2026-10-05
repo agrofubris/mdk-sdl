@@ -1064,7 +1064,7 @@ public sealed class ObjectMotion(ScriptRuntime runtime)
     private static readonly Box DefaultBounds = new(new Vector3(-1f, -1f, 0f), new Vector3(1f, 1f, 4f));
 
     /// <summary>Sweeps the object's collision box by the motion through its arena's BSP (0x45fec4),
-    /// sliding along what it hits. Returns the plane normal of the hit, or null.
+    /// sliding along what it hits. Returns the plane normal of the first hit, or null.
     /// <code>
     ///   box: half extents = world bounds × 0.25 across, half the origin-to-top height,
     ///        bottom 0.05 above the origin when moving vertically (0.5 otherwise)
@@ -1091,13 +1091,12 @@ public sealed class ObjectMotion(ScriptRuntime runtime)
         var center = RotatedZ(bounds.Center(), obj.Yaw) * obj.Scale;
         center.Z = half.Z + (motion.Z != 0f ? VerticalLift : Lift);
         var a = obj.Position + center;
-        var triangle = bsp.SweepBox(a, a + motion, half, SweepIterations, SweepSlide, out var end, out var node);
-        obj.Position += end - a;
-        if (triangle == Bsp.None)
-        {
-            return null;
-        }
 
-        return node >= 0 ? bsp.Arena.Nodes[node].Normal : Vector3.UnitZ;
+        // The first contact counts, even if the box slid off it and ended free.
+        Vector3? first = null;
+        bsp.SweepBox(a, a + motion, half, SweepIterations, SweepSlide, out var end, out _,
+            contact => first ??= contact.Node >= 0 ? bsp.Arena.Nodes[contact.Node].Normal : Vector3.UnitZ);
+        obj.Position += end - a;
+        return first;
     }
 }

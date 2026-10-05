@@ -43,6 +43,12 @@ public sealed unsafe class Window : IDisposable
                 case SDL_EventType.SDL_EVENT_KEY_UP:
                     input.SetKey(e.key.scancode, Input.State.Up);
                     break;
+                case SDL_EventType.SDL_EVENT_MOUSE_BUTTON_DOWN:
+                    input.SetButton(Button(e.button.button), Input.State.Down);
+                    break;
+                case SDL_EventType.SDL_EVENT_MOUSE_BUTTON_UP:
+                    input.SetButton(Button(e.button.button), Input.State.Up);
+                    break;
                 case SDL_EventType.SDL_EVENT_MOUSE_MOTION:
                     input.AddMouseMotion(e.motion.xrel, e.motion.yrel);
                     break;
@@ -51,6 +57,8 @@ public sealed unsafe class Window : IDisposable
 
         return true;
     }
+
+    private static MouseButton Button(byte button) => button == SDL_BUTTON_LEFT ? MouseButton.Left : MouseButton.Other;
 
     public void Dispose()
     {

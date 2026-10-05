@@ -3,8 +3,9 @@ using System.Numerics;
 using Mdk.Formats;
 using Mdk.Game;
 
-// MDK in C# and SDL3: Kurt walks a level (WASD/arrows, mouse, Space jumps, Shift runs, F1 flying
-// camera with E/Q up and down, F12 screenshot, Esc quits).
+// MDK in C# and SDL3: Kurt walks a level (WASD/arrows, mouse, Space jumps, Shift runs, Ctrl or the
+// left mouse button fires, Enter uses the item, Tab/[/] and 1-5 select it, F1 flying camera with E/Q
+// up and down, F12 screenshot, Esc quits).
 //
 //   --level=N               level 3-8 (default 3)
 //   --at=x,y,z[,yaw]        Kurt's feet (MDK coordinates) and yaw in degrees
@@ -15,6 +16,9 @@ using Mdk.Game;
 //   --wait=seconds          game time before the screenshot
 //   --walk=seconds          hold "forward" for this long (tests)
 //   --jump                  hold "jump" (tests)
+//   --fire                  hold "fire" (tests)
+//   --give=SW_HBOMB,...     pickups Kurt starts with (tests)
+//   --use                   press "use" after 1 second (tests)
 //   --profile               print the scripted objects once per second of game time (tests)
 
 const int DefaultLevel = 3;
@@ -50,6 +54,9 @@ Viewer.Run(data, new ViewerOptions(level, position, yaw, pitch, sound)
     Wait = Seconds("wait"),
     Walk = Seconds("walk"),
     Jump = options.ContainsKey("jump"),
+    Fire = options.ContainsKey("fire"),
+    Give = options.TryGetValue("give", out var give) ? give.Split(',') : [],
+    Use = options.ContainsKey("use"),
     Fly = options.ContainsKey("fly"),
     Profile = options.ContainsKey("profile"),
 });

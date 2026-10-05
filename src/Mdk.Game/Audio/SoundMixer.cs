@@ -43,6 +43,8 @@ public sealed class SoundMixer(AudioDevice device, Func<string, SoundMixer.Entry
     }
 
     private readonly List<Voice> _voices = [];
+    /// <summary>Looping copies of sounds that don't loop by themselves.</summary>
+    private readonly Dictionary<string, Sound> _looped = [];
 
     /// <summary>The listener: position and right (MDK coordinates).</summary>
     public Vector3 ListenerPosition;
@@ -54,6 +56,12 @@ public sealed class SoundMixer(AudioDevice device, Func<string, SoundMixer.Entry
     public int PlayAt(string name, Vector3 point, Start start = Start.New) => Launch(name, start, () => point);
 
     public int PlayOn(string name, Func<Vector3> position, Start start = Start.New) => Launch(name, start, position);
+
+    /// <summary>Plays a sound without position, looping even if its SNI entry doesn't (Kurt's chain gun).</summary>
+    public int PlayLooped(string name) => Launch(name, Start.New, null, Repeat.Forever);
+
+    /// <summary>A sound loops as its SNI entry says, or always.</summary>
+    private enum Repeat { AsStored, Forever }
 
     public bool IsPlaying(string name) => _voices.Any(v => v.Name == name);
 
@@ -107,7 +115,7 @@ public sealed class SoundMixer(AudioDevice device, Func<string, SoundMixer.Entry
         }
     }
 
-    private int Launch(string name, Start start, Func<Vector3>? position)
+    private int Launch(string name, Start start, Func<Vector3>? position, Repeat repeat = Repeat.AsStored)
     {
         var entry = sounds(name);
         if (entry == null || (start == Start.Once && IsPlaying(name)))
@@ -120,7 +128,8 @@ public sealed class SoundMixer(AudioDevice device, Func<string, SoundMixer.Entry
             Stop(name);
         }
 
-        var id = device.Play(entry.Sound, Gain(entry.Volume));
+        var sound = repeat == Repeat.Forever ? Looped(name, entry.Sound) : entry.Sound;
+        var id = device.Play(sound, Gain(entry.Volume));
         if (id == 0)
         {
             return 0;
@@ -134,6 +143,21 @@ public sealed class SoundMixer(AudioDevice device, Func<string, SoundMixer.Entry
         }
 
         return id;
+    }
+
+    private Sound Looped(string name, Sound sound)
+    {
+        if (sound.Looping == Looping.Forever)
+        {
+            return sound;
+        }
+
+        if (!_looped.TryGetValue(name, out var looped))
+        {
+            looped = _looped[name] = new Sound(sound.Samples, sound.Channels, sound.SampleRate, Looping.Forever);
+        }
+
+        return looped;
     }
 
     /// <summary>Volume, pan and pitch of a 3D voice from its place relative to the listener (0x40347c).</summary>

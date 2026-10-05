@@ -161,7 +161,7 @@ public sealed class ScriptRuntime
 
     public readonly LevelData Level;
     public readonly Cmi Cmi;
-    public readonly KurtLink Kurt = new();
+    public readonly Mdk.Game.Kurt.Kurt Kurt;
     public readonly SoundMixer Mixer;
     public readonly ScriptVm Vm;
     public readonly ObjectMotion Motion;
@@ -179,7 +179,7 @@ public sealed class ScriptRuntime
     /// <summary>The end of the level's tornado, once it started.</summary>
     public EndLevel? EndLevel;
     /// <summary>On-screen messages (hud_message), set by the game.</summary>
-    public HudMessages? Messages;
+    public Hud.Messages? Messages;
     public readonly Random Rng = new();
 
     /// <summary>The point and direction of the last shatter_group (0x4d5374, 0x4d5358).</summary>
@@ -277,9 +277,15 @@ public sealed class ScriptRuntime
     private float _time;
     private int _tickCount;
 
-    public ScriptRuntime(LevelData level, Cmi cmi, Bni sprites, ArenaSpace space, TriangleGroups groups, SoundMixer mixer)
+    public ScriptRuntime(LevelData level, Cmi cmi, Bni sprites, ArenaSpace space, TriangleGroups groups, SoundMixer mixer,
+        Mdk.Game.Kurt.Kurt kurt)
     {
-        Items = new Items(sprites);
+        Kurt = kurt;
+        Items = new Items(this, sprites);
+        kurt.ItemUsed += Items.UseItem;
+        kurt.BombTriggered += Items.TriggerBomb;
+        kurt.CanUseItem = Items.CanUse;
+        kurt.SolidsWithin = SolidsWithin;
         Level = level;
         Cmi = cmi;
         Mixer = mixer;
@@ -299,7 +305,7 @@ public sealed class ScriptRuntime
         // No town to save in the last level.
         if (GameStats.IndexOf(level.Number) != LastLevelIndex)
         {
-            TownTicks = TownTicksByDifficulty[Kurt.Inventory.Difficulty];
+            TownTicks = TownTicksByDifficulty[(int)Kurt.Inventory.Difficulty];
         }
     }
 
@@ -590,7 +596,7 @@ public sealed class ScriptRuntime
 
     private void RunTick()
     {
-        KurtPosition = Kurt.Position;
+        KurtPosition = Kurt.Feet;
         TargetPosition = KurtPosition;
         TargetYaw = Wrap360(Kurt.Yaw);
         KurtYaw = TargetYaw;
@@ -682,10 +688,17 @@ public sealed class ScriptRuntime
                 Behaviors.UpdateDoor(obj);
             }
 
+            var (position, yaw) = (obj.Position, obj.Yaw);
             Vm.Run(obj);
             if (!obj.Dead)
             {
                 Motion.Update(obj);
+            }
+
+            // Kurt moves and turns with the platform he stands on.
+            if (obj == Kurt.Platform && !obj.Dead && Kurt.OnFloor)
+            {
+                Kurt.Carry(position, obj.Position, obj.Yaw - yaw);
             }
         }
     }
@@ -915,7 +928,7 @@ public sealed class ScriptRuntime
     private void UpdateSniperTarget()
     {
         SniperTarget = null;
-        Kurt.ZoomLimit = KurtLink.ZoomMin;
+        Kurt.ZoomLimit = Mdk.Game.Kurt.Kurt.ZoomMin;
     }
 
     /// <summary>special_130 (0x45d140): a bullet hole on the texture a sniper round hit.</summary>
@@ -1517,6 +1530,23 @@ public sealed class ScriptRuntime
         return result | ScriptRan;
     }
 
+    /// <summary>The centres of a group's triangles, none while the group isn't solid (blasts).</summary>
+    public IEnumerable<Vector3> GroupCenters(string arena, int group)
+    {
+        var data = Level.Arenas.Find(a => a.Name == arena);
+        var triangles = _groups.Get(arena, group);
+        if (data == null || triangles == null || (triangles.State & TriangleGroups.State.NotSolid) != 0)
+        {
+            yield break;
+        }
+
+        foreach (var t in triangles.Triangles)
+        {
+            var i = t * 3;
+            yield return (data.Vertices[data.TriangleIndices[i]] + data.Vertices[data.TriangleIndices[i + 1]] + data.Vertices[data.TriangleIndices[i + 2]]) / 3f;
+        }
+    }
+
     /// <summary>group_set_state on a group of an arena.</summary>
     public void SetGroupState(string arena, int group, int operation) => _groups.SetState(arena, group, operation);
 
@@ -1648,7 +1678,7 @@ public sealed class ScriptRuntime
             GlobalFlags |= FlagTownFlattened;
         }
 
-        Messages?.Push(text, HudMessages.FlagZoom | HudMessages.FlagFront, TownMessageSeconds);
+        Messages?.Push(text, Hud.Messages.FlagZoom | Hud.Messages.FlagFront, TownMessageSeconds);
     }
 
     /// <summary>Shows the health bar with these values for a second (the arena's own object, boss_bar).</summary>
@@ -1709,6 +1739,13 @@ public sealed class ScriptRuntime
         Debris.Spark(CurrentArena, point, count, SparkSize, colour, range, kind == Spark.Hard ? SparkSlow : 1f);
     }
 
+    /// <summary>A burst of fire sparks (the nuke's blast).</summary>
+    public void SparkFire(string arena, Vector3 point)
+    {
+        var (colour, range) = SparkColours[(int)Spark.Fire];
+        Debris.Spark(arena, point, FireSparks, 1f, colour, range);
+    }
+
     /// <summary>Starts the object's looping sound (set_loop_sound), stopping the previous one; an
     /// empty name just stops it.</summary>
     public void SetLoopSound(MdkObject obj, string name)
@@ -1753,7 +1790,7 @@ public sealed class ScriptRuntime
             }
             else
             {
-                Kurt.AddVerticalSpeed(-KurtLink.SlideGravity * Tick);
+                Kurt.AddVerticalSpeed(-Mdk.Game.Kurt.Kurt.SlideGravity * Tick);
             }
 
             return;
@@ -2001,7 +2038,7 @@ public sealed class ScriptRuntime
                 continue;
             }
 
-            var sound = Kurt.Inventory.Collect(obj.TypeName);
+            var sound = Kurt.Collect(obj.TypeName);
             if (sound.Length == 0)
             {
                 continue;
@@ -2129,8 +2166,39 @@ public sealed class ScriptRuntime
     }
 
     /// <summary>The object Kurt stands on (0x573b84), if any.</summary>
-    // TODO Kurt doesn't collide with objects yet (mdk_object.gd update_body)
-    public MdkObject? GetKurtPlatform() => null;
+    public MdkObject? GetKurtPlatform() => Kurt.OnFloor ? Kurt.Platform as MdkObject : null;
+
+    /// <summary>What Kurt collides with (damp_collide_move): the visible parts of the objects of his
+    /// arena that are alive and solid (no flags 0x10, 0x800), but the one he rides and doors' LOCK
+    /// parts; platforms (0x100, 0x800000) are stood on.</summary>
+    private IReadOnlyList<Solids.Solid> SolidsWithin(Box region)
+    {
+        const int Passable = MdkObject.FlagNotSolid | MdkObject.FlagNotSolid2;
+        const int Platforms = 0x100 | MdkObject.FlagStandable;
+        var solids = new List<Solids.Solid>();
+        foreach (var obj in Objects)
+        {
+            if (obj.Dead || obj.Arena != CurrentArena || obj.Health == 0 || obj.Model == null || (obj.Flags & Passable) != 0
+                || obj == Rides.Ridden || !GetWorldBounds(obj).Intersects(region))
+            {
+                continue;
+            }
+
+            var footing = (obj.Flags & Platforms) != 0 ? Solids.Footing.Platform : Solids.Footing.Wall;
+            var parts = obj.PartBounds();
+            for (var i = 0; i < parts.Length; i++)
+            {
+                if (((obj.HiddenParts | obj.LockParts) & (1 << i)) != 0 || parts[i] is not { } part)
+                {
+                    continue;
+                }
+
+                solids.Add(new Solids.Solid(GetWorldBounds(obj, part), obj, footing));
+            }
+        }
+
+        return solids;
+    }
 
     /// <summary>Contact damage (touch_damage 0x45cf60): targets 1 hurts Kurt once per visible part
     /// touching him, 2 hurts the other objects touching its box (hit event -3, hit type -4). With

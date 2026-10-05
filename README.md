@@ -1,7 +1,7 @@
 # MDK in C# and SDL3
 
 ![Status: work in progress](https://img.shields.io/badge/status-work%20in%20progress-orange)
-![Progress: about 25%](https://img.shields.io/badge/progress-~35%25-orange)
+![Progress: about 45%](https://img.shields.io/badge/progress-~45%25-orange)
 ![.NET 10](https://img.shields.io/badge/.NET-10-512bd4?logo=dotnet&logoColor=white)
 ![SDL3](https://img.shields.io/badge/SDL-3-blue)
 
@@ -19,8 +19,10 @@ original's box sweeps.
 > port won't run.
 
 **Status: early work in progress.** Every level loads, Kurt walks it and the level scripts run:
-aliens spawn, walk and fly their paths, doors open, pickups fall on their chutes. There are no
-weapons, HUD or menus yet, and Kurt can't be hurt: it's not a game yet. The [Godot port](https://github.com/nemo22/mdk-godot)
+aliens spawn, walk and fly their paths, doors open, pickups fall on their chutes. Kurt fires his
+chain gun, throws his items, gets hurt, knocked down and dies, and the HUD shows his health,
+inventory, messages and the target's health bar. There are no explosions or debris, sniper mode,
+menus or saves yet: it's not a game yet. The [Godot port](https://github.com/nemo22/mdk-godot)
 is far more complete for now.
 
 ## Progress
@@ -30,14 +32,15 @@ is far more complete for now.
 | Data formats: levels, textures, models, sprites, sounds, fonts, scripts, videos | █████████░ 90% |
 | Rendering: arenas, glass, sky, mirrors, Kurt's sprite | ██████░░░░ 60% |
 | Collisions: the original's BSP | ████████░░ 80% |
-| Kurt: walking, turning, jumping, chute, camera | █████░░░░░ 50% |
+| Kurt: walking, turning, jumping, chute, camera, damage, death | ██████░░░░ 60% |
 | Sound mixer (the original's laws) and music | ██████░░░░ 60% |
 | Script VM, aliens, objects, doors | ██████░░░░ 60% |
-| Weapons, items, sniper mode | ░░░░░░░░░░ 0% |
-| HUD, menus, saves, level flow | ░░░░░░░░░░ 0% |
+| Weapons, items, sniper mode | █████░░░░░ 50% |
+| HUD (health, inventory, messages, health bar) | ███████░░░ 70% |
+| Menus, saves, level flow | ░░░░░░░░░░ 0% |
 | The fall and the stream between levels, rides | ░░░░░░░░░░ 0% |
 | Videos (decoders done, no player yet) | ███░░░░░░░ 30% |
-| **Overall** | **about 35%** |
+| **Overall** | **about 45%** |
 
 The plan is in [docs/architecture.md](docs/architecture.md#roadmap).
 
@@ -56,11 +59,13 @@ mdk.exe --level=3
 - `--fly`: start with the flying camera.
 - `--mute`: no sound.
 - Tests: `--screenshot=file.bmp` (after `--wait=seconds` of game time, then quit),
-  `--walk=seconds`, `--jump`, `--profile` (prints the objects of Kurt's arena every second).
+  `--walk=seconds`, `--jump`, `--fire`, `--give=SW_HBOMB,...` (pickups to start with), `--use`
+  (uses the item after 1 second), `--profile` (prints the objects of Kurt's arena every second).
 
 Controls: W/S or Up/Down to run, A/D to strafe, the mouse or Left/Right to turn, Space to jump
-(hold it while falling to open the chute), Shift for turbo, F1 for the flying camera (E/Q to go
-up and down), F12 for a screenshot, Esc to quit.
+(hold it while falling to open the chute), Shift for turbo, Ctrl or the left mouse button to fire,
+Enter to use the item, Tab or [ ] to select it (or 1-5), F1 for the flying camera (E/Q to go up and
+down), F12 for a screenshot, Esc to quit.
 
 ## Building
 
@@ -83,6 +88,7 @@ With the game data installed:
 dotnet test
 sh tests/screenshot_test.sh
 sh tests/kurt_test.sh
+sh tests/combat_test.sh
 sh tests/scripts_test.sh
 ```
 

@@ -49,13 +49,17 @@ Each layer talks only to the one below it.
 4. ✅ Sound mixer (SDL audio stream, the original's volume, distance, Doppler and pan laws).
 5. ✅ Script decoder (every script of the game decodes like the reference disassembler).
 6. 🟡 Kurt: walking, turning, jumping, chute, falls through the BSP (`damp_collide_move`,
-   `damp_gravity`), follow camera, sprite. Still to do: sniper mode, ledges, sliding, firing,
-   knock-down, camera clearance, updrafts.
+   `damp_gravity`), solid objects and platforms (`Collision/Solids.cs`), follow camera, sprite,
+   chain gun, muzzle flash, hits, knock-down, death, items (`Kurt/Kurt.Combat.cs`,
+   `Kurt/Inventory.cs`). Still to do: sniper mode, ledges, sliding, camera clearance, updrafts.
 7. 🟡 Script VM and objects (`Scripts/`: ports of `script_vm.gd`, `script_runtime.gd`,
    `object_motion.gd`, `object_behaviors.gd`; 30 ticks per second, object moves are BSP box sweeps).
-   Effects, debris, sniper rounds, air strike, rides, items, fans, the end of a level, HUD messages
-   and the strike scene are stubs (`Scripts/Stubs/`, marked `TODO port`).
-8. Weapons, items, HUD, sniper mode.
+   Kurt's items and blasts are ported (`Items.cs`, `Twister.cs`; twisters aren't drawn). Effects,
+   debris, sniper rounds, air strike, rides, fans, the end of a level and the strike scene are
+   stubs (`Scripts/Stubs/`, marked `TODO port`).
+8. 🟡 Weapons, items, HUD, sniper mode: the chain gun, the items and the HUD (`Hud/`: health panel,
+   inventory, messages in the original fonts, health bar, flashes, drawn on the renderer's 2D
+   canvas) are done; sniper mode is not.
 9. Menus, fonts, saves, videos (MVE, FLC).
 10. Fall, stream, bomber, snowboard sequences.
 11. Enhanced look.

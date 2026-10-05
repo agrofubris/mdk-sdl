@@ -20,6 +20,19 @@ public sealed class Fti
 
     public byte[] GetBytes(string name) => _index.GetBytes(name);
 
+    /// <summary>A text entry as bytes (the fonts' character set, <c>\n</c> escapes kept), or empty.</summary>
+    public byte[] GetTextBytes(string name)
+    {
+        if (!_index.Entries.TryGetValue(name, out var entry))
+        {
+            return [];
+        }
+
+        var span = Bytes.AsSpan(entry.Offset, entry.Size);
+        var end = span.IndexOf((byte)0);
+        return (end < 0 ? span : span[..end]).ToArray();
+    }
+
     /// <summary>A text entry, or <paramref name="fallback"/>.</summary>
     public string GetText(string name, string fallback = "")
     {

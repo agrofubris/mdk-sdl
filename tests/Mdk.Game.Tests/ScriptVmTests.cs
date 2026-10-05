@@ -40,7 +40,9 @@ public class ScriptVmTests
         var level = new LevelData(Data, Level);
         var cmi = Cmi.Load(Data.PathOf($"TRAVERSE/LEVEL{Level}/LEVEL{Level}.CMI"));
         var sprites = Bni.Load(Data.PathOf("TRAVERSE/TRAVSPRT.BNI"));
-        return new ScriptRuntime(level, cmi, sprites, new ArenaSpace(), new TriangleGroups(), new SoundMixer(Device, _ => null));
+        var space = new ArenaSpace();
+        var mixer = new SoundMixer(Device, _ => null);
+        return new ScriptRuntime(level, cmi, sprites, space, new TriangleGroups(), mixer, new Kurt.Kurt(space, mixer, _ => 1));
     }
 
     /// <summary>A program's bytes: code starts after a gap (offset 0 means "no target"), targets are

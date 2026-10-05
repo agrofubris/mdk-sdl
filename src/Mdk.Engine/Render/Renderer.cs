@@ -1,3 +1,4 @@
+using System.Drawing;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Mdk.Engine.Platform;
@@ -26,6 +27,8 @@ public enum Pass
     Mirror,
     /// <summary>Blended by alpha, both faces, after the opaque ones (glass).</summary>
     Blended,
+    /// <summary>The 2D canvas over the scene (HUD, menus): blended, no depth.</summary>
+    Overlay,
 }
 
 /// <summary>A surface: an index texture through a palette, a flat colour, or a mirror showing the
@@ -90,6 +93,15 @@ public sealed unsafe class Renderer : IDisposable
 
     private readonly record struct DrawCommand(int Mesh, int First, int Count, Material Material, int Frame, Matrix4x4 World);
 
+    /// <summary>The 2D canvas: <see cref="CanvasHeight"/> units high like the original's view, as
+    /// wide as the window's aspect makes it; quads collected each frame into one dynamic mesh.</summary>
+    public const float CanvasHeight = 360f;
+    private const int CanvasQuads = 4096;
+    private const int QuadVertices = 6;
+    private readonly int _canvasMesh;
+    private readonly List<Vertex> _canvasVertices = [];
+    private readonly List<(int First, int Count, Material Material)> _canvasCommands = [];
+
     private readonly Window _window;
     private readonly SDL_GPUDevice* _device;
     private readonly SDL_GPUTextureFormat _depthFormat;
@@ -130,6 +142,59 @@ public sealed unsafe class Renderer : IDisposable
         }
 
         _skyPipeline = CreatePipeline("sky", Pass.DoubleSided, Geometry.Screen);
+        _canvasMesh = CreateDynamicMesh(CanvasQuads * QuadVertices);
+    }
+
+    /// <summary>The canvas's width for the window's aspect.</summary>
+    public float CanvasWidth => CanvasHeight * AspectRatio;
+
+    /// <summary>Draws part of an index texture (<paramref name="source"/> in its pixels) on the canvas,
+    /// tinted (alpha fades it); palette index 0 stays transparent.</summary>
+    public void DrawImage(int texture, int palette, Vector2 textureSize, RectangleF source, RectangleF target, Vector4 tint)
+    {
+        var uv0 = new Vector2(source.Left, source.Top) / textureSize;
+        var uv1 = new Vector2(source.Right, source.Bottom) / textureSize;
+        AddQuad(target, uv0, uv1, new Material(texture, palette, tint, 1, Pass.Overlay));
+    }
+
+    /// <summary>Fills a rectangle of the canvas with a colour (alpha blends it).</summary>
+    public void FillRect(RectangleF target, Vector4 colour) =>
+        AddQuad(target, Vector2.Zero, Vector2.Zero, Material.Flat(colour, Pass.Overlay));
+
+    /// <summary>A rectangle's outline, <paramref name="width"/> units thick, inside it.</summary>
+    public void FrameRect(RectangleF target, float width, Vector4 colour)
+    {
+        FillRect(new RectangleF(target.Left, target.Top, target.Width, width), colour);
+        FillRect(new RectangleF(target.Left, target.Bottom - width, target.Width, width), colour);
+        FillRect(new RectangleF(target.Left, target.Top + width, width, target.Height - 2 * width), colour);
+        FillRect(new RectangleF(target.Right - width, target.Top + width, width, target.Height - 2 * width), colour);
+    }
+
+    private void AddQuad(RectangleF target, Vector2 uv0, Vector2 uv1, Material material)
+    {
+        if (_canvasVertices.Count >= CanvasQuads * QuadVertices)
+        {
+            return;
+        }
+
+        var first = _canvasVertices.Count;
+        Vertex Corner(float x, float y, float u, float v) => new(new Vector3(x, y, 0f), new Vector2(u, v));
+        _canvasVertices.Add(Corner(target.Left, target.Top, uv0.X, uv0.Y));
+        _canvasVertices.Add(Corner(target.Right, target.Top, uv1.X, uv0.Y));
+        _canvasVertices.Add(Corner(target.Right, target.Bottom, uv1.X, uv1.Y));
+        _canvasVertices.Add(Corner(target.Left, target.Top, uv0.X, uv0.Y));
+        _canvasVertices.Add(Corner(target.Right, target.Bottom, uv1.X, uv1.Y));
+        _canvasVertices.Add(Corner(target.Left, target.Bottom, uv0.X, uv1.Y));
+
+        // Neighbouring quads of one material draw together.
+        if (_canvasCommands.Count > 0 && _canvasCommands[^1].Material == material)
+        {
+            var last = _canvasCommands[^1];
+            _canvasCommands[^1] = (last.First, last.Count + QuadVertices, material);
+            return;
+        }
+
+        _canvasCommands.Add((first, QuadVertices, material));
     }
 
     /// <summary>The sky and mirrors' panorama; without one the screen is cleared to a colour.</summary>
@@ -197,7 +262,7 @@ public sealed unsafe class Renderer : IDisposable
         attributes[0] = new SDL_GPUVertexAttribute { location = 0, format = SDL_GPUVertexElementFormat.SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3, offset = 0 };
         attributes[1] = new SDL_GPUVertexAttribute { location = 1, format = SDL_GPUVertexElementFormat.SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2, offset = (uint)sizeof(Vector3) };
 
-        var blended = pass == Pass.Blended;
+        var blended = pass is Pass.Blended or Pass.Overlay;
         var colourTarget = new SDL_GPUColorTargetDescription
         {
             format = ColourFormat,
@@ -235,7 +300,7 @@ public sealed unsafe class Renderer : IDisposable
             depth_stencil_state = new SDL_GPUDepthStencilState
             {
                 compare_op = SDL_GPUCompareOp.SDL_GPU_COMPAREOP_LESS_OR_EQUAL,
-                enable_depth_test = geometry == Geometry.Mesh,
+                enable_depth_test = geometry == Geometry.Mesh && pass != Pass.Overlay,
                 enable_depth_write = geometry == Geometry.Mesh && !blended,
             },
             target_info = new SDL_GPUGraphicsPipelineTargetInfo
@@ -324,6 +389,24 @@ public sealed unsafe class Renderer : IDisposable
         _dynamic[mesh] = (transfer, (uint)bytes.Length);
     }
 
+    /// <summary>The canvas's quads become draws in screen space, after the scene.</summary>
+    private void QueueCanvas()
+    {
+        if (_canvasVertices.Count > 0)
+        {
+            UpdateMesh(_canvasMesh, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_canvasVertices));
+        }
+
+        var screen = Matrix4x4.CreateOrthographicOffCenter(0f, CanvasWidth, CanvasHeight, 0f, 0f, 1f);
+        foreach (var (first, count, material) in _canvasCommands)
+        {
+            _commands.Add(new DrawCommand(_canvasMesh, first, count, material, 0, screen));
+        }
+
+        _canvasVertices.Clear();
+        _canvasCommands.Clear();
+    }
+
     /// <summary>Copies the pending dynamic meshes into their buffers.</summary>
     private void UploadDynamic(SDL_GPUCommandBuffer* commands)
     {
@@ -368,6 +451,7 @@ public sealed unsafe class Renderer : IDisposable
         }
 
         EnsureTargets(width, height);
+        QueueCanvas();
         UploadDynamic(commands);
         RenderScene(commands, view, clearColour);
         Blit(commands, swapchain, width, height);
@@ -459,7 +543,9 @@ public sealed unsafe class Renderer : IDisposable
 
         var binding = new SDL_GPUBufferBinding { buffer = (SDL_GPUBuffer*)_buffers[command.Mesh] };
         SDL_BindGPUVertexBuffers(pass, 0, &binding, 1);
-        var transform = command.World * view.ViewProjection;
+
+        // The canvas is already in clip space; the rest goes through the camera.
+        var transform = material.Pass == Pass.Overlay ? command.World : command.World * view.ViewProjection;
         SDL_PushGPUVertexUniformData(commands, 0, (IntPtr)(&transform), (uint)sizeof(Matrix4x4));
 
         // Mirrors show nothing without a panorama.

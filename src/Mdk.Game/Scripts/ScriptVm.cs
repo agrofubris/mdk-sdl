@@ -850,14 +850,14 @@ public sealed class ScriptVm(ScriptRuntime runtime, ScriptDecoder decoder)
             }
             case 175: // if_inventory: how many items of a type Kurt has
             {
-                var count = runtime.Kurt.Inventory.Slots.Where(slot => slot.Item == I(o[0])).Sum(slot => slot.Count);
+                var count = runtime.Kurt.Inventory.Slots.Where(slot => (int)slot.Item == I(o[0])).Sum(slot => slot.Count);
                 return Branch(obj, ins, Compare(count, [o[1], o[2], o[3] ?? 0f]));
             }
             case 174: // if_ammo: 0 the super chain gun's ticks, 1-5 sniper ammo
             {
                 var inventory = runtime.Kurt.Inventory;
                 var kind = I(o[0]);
-                var amount = kind == 0 ? inventory.SuperChainGun : kind <= inventory.Ammo.Length ? inventory.Ammo[kind - 1] : 0;
+                var amount = kind == 0 ? inventory.SuperChainGun : kind <= inventory.Ammo.Count ? inventory.Ammo[kind - 1] : 0;
                 return Branch(obj, ins, Compare(amount, [o[1], o[2], o[3] ?? 0f]));
             }
             case 29: // spawn_chain: links that hang off this object, nearest one first

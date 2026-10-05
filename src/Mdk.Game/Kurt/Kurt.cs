@@ -1,5 +1,6 @@
 using System.Numerics;
 using Mdk.Engine.Platform;
+using Mdk.Formats;
 using Mdk.Game.Audio;
 using Mdk.Game.Collision;
 
@@ -11,11 +12,12 @@ namespace Mdk.Game.Kurt;
 /// <code>
 ///   input ──► speeds (vel_accel, vel_friction) ──► walk move (slide 0.75)
 ///                                              └─► fall move (slide 0.5) ──► on the floor?
-///                                                                         └─► state ──► sprite
+///   items, chain gun, knock-down (Kurt.Combat.cs) ◄────────────────────────┘
+///                                              └─► state ──► sprite
 /// </code></summary>
-public sealed class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.State, int> frameCount)
+public sealed partial class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.State, int> frameCount)
 {
-    public enum State { Still, Idle, Run, Side, Turn, Jump, RunJump, Fall, Chute, Land }
+    public enum State { Still, Idle, Run, Side, Turn, Jump, RunJump, Fall, Chute, Land, Shot, RunFire, Throw, Knocked, GetUp, Dead }
 
     public const float Ticks = 30f;
 
@@ -59,6 +61,11 @@ public sealed class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.State, in
     private const float CreepSpeed = 0.35f * Ticks;
     /// <summary>Downhill glue: on floors flatter than this the feet follow the slope down.</summary>
     private const float GlueNz = 0.25f;
+    /// <summary>Falling onto a platform first goes to 0.05 above its top (damp_gravity).</summary>
+    private const float PlatformLift = 0.05f;
+    /// <summary>Objects this far around a move (and Kurt's height above it) may stop it.</summary>
+    private static readonly Vector3 NearbyMargin = new(1f, 1f, Solids.PlatformReach);
+    private const float KurtHeight = 5f;
 
     private const float IdleDelay = 6f;
     private const float MovingSpeed = 1f;
@@ -67,6 +74,9 @@ public sealed class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.State, in
     /// <summary>Footsteps on these run frames, alternating two pairs of sounds (FOOT3/4 first).</summary>
     private const int LeftStep = 0;
     private const int RightStep = 13;
+    /// <summary>The same while running and firing (K_RUNFIR).</summary>
+    private const int FireLeftStep = 4;
+    private const int FireRightStep = 17;
 
     public Vector3 Feet;
     /// <summary>Degrees; 90 faces +Y (MDK).</summary>
@@ -78,6 +88,10 @@ public sealed class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.State, in
     public bool OnFloor;
     public bool ChuteOpen;
     public State Current = State.Still;
+    /// <summary>The solid object boxes of Kurt's arena within a region (set by the scripts runtime).</summary>
+    public Func<Box, IReadOnlyList<Solids.Solid>>? SolidsWithin;
+    /// <summary>The object Kurt stands on (0x573b84), or null.</summary>
+    public object? Platform { get; private set; }
     public float StateTime;
     /// <summary>Animation position in frames.</summary>
     public float AnimationFrame;
@@ -91,26 +105,106 @@ public sealed class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.State, in
 
     public Vector3 Right => new(Facing.Y, -Facing.X, 0f);
 
+    /// <summary>Velocity (u/s): walking, the push of a knock-down, falling.</summary>
+    public Vector3 Velocity => Facing * ForwardSpeed + Right * StrafeSpeed + new Vector3(_push, VerticalSpeed);
+
     /// <summary>One step of <paramref name="delta"/> seconds.</summary>
     public void Update(Input input, float delta)
     {
+        Invulnerable = MathF.Max(Invulnerable - delta, 0f);
+        if (Frozen)
+        {
+            // Cutscenes: he stands still.
+            ForwardSpeed = 0f;
+            StrafeSpeed = 0f;
+            VerticalSpeed = 0f;
+            return;
+        }
+
+        if (Current == State.Dead)
+        {
+            UpdateDeath(delta);
+            return;
+        }
+
+        FadeFlashes(delta);
+        UpdateKnockDamage(delta);
         var turbo = input.IsDown(Key.Turbo);
         UpdateTurning(input, turbo, delta);
 
+        // Throwing or knocked down, he doesn't walk.
         var forward = Axis(input, Key.Forward, Key.Back);
         var strafe = Axis(input, Key.StrafeRight, Key.StrafeLeft);
+        if (Current is State.Throw or State.Knocked or State.GetUp)
+        {
+            forward = 0f;
+            strafe = 0f;
+        }
+
         var air = OnFloor ? 1f : AirControl;
         ForwardSpeed = Accelerate(ForwardSpeed, forward, turbo, 1f, air, delta);
         StrafeSpeed = Accelerate(StrafeSpeed, strafe, turbo, air, air, delta);
 
-        var move = (Facing * ForwardSpeed + Right * StrafeSpeed) * delta;
+        var move = (Facing * ForwardSpeed + Right * StrafeSpeed + new Vector3(_push, 0f)) * delta;
+        DrainPush(delta);
         if (move != Vector3.Zero)
         {
-            Feet = space.Move(Feet, move, ArenaSpace.Motion.Walk, WalkSlide).Feet;
+            Feet = space.Move(Feet, move, ArenaSpace.Motion.Walk, WalkSlide, Nearby(Feet + move)).Feet;
         }
 
         UpdateVertical(input, move, delta);
+        UpdateItems(input);
+        UpdateFiring(input);
         UpdateState(forward, strafe, delta);
+        UpdateMuzzle(delta);
+    }
+
+    /// <summary>Moves Kurt (a script's teleport): he stops.</summary>
+    public void Teleport(Vector3 feet, float yaw)
+    {
+        Feet = feet;
+        Yaw = yaw;
+        ForwardSpeed = 0f;
+        StrafeSpeed = 0f;
+        VerticalSpeed = 0f;
+    }
+
+    /// <summary>Kurt's vertical speed changes (wind zones, push_kurt).</summary>
+    public void AddVerticalSpeed(float speed) => VerticalSpeed += speed;
+
+    /// <summary>The platform Kurt stands on moved from <paramref name="from"/> to <paramref name="to"/>
+    /// and turned by <paramref name="turn"/> degrees: he moves and turns with it.</summary>
+    public void Carry(Vector3 from, Vector3 to, float turn)
+    {
+        var offset = Vector3.Transform(Feet - from, Matrix4x4.CreateRotationZ(float.DegreesToRadians(turn)));
+        Feet = to + offset;
+        Yaw += turn;
+    }
+
+    /// <summary>The solid object boxes around Kurt and the point <paramref name="to"/>.</summary>
+    private IReadOnlyList<Solids.Solid> Nearby(Vector3 to)
+    {
+        if (SolidsWithin == null)
+        {
+            return [];
+        }
+
+        var min = Vector3.Min(Feet, to) - NearbyMargin;
+        var max = Vector3.Max(Feet, to) + NearbyMargin + new Vector3(0f, 0f, KurtHeight);
+        return SolidsWithin(new Box(min, max));
+    }
+
+    /// <summary>A platform the fall of <paramref name="dz"/> reaches (damp_platform_floor), or null.</summary>
+    private (float Top, object Owner)? FindPlatform(float dz)
+    {
+        if (VerticalSpeed > 0f)
+        {
+            return null;
+        }
+
+        var bottom = Feet.Z + dz;
+        var platform = Solids.Platform(Feet, bottom, Nearby(Feet with { Z = bottom }));
+        return platform is { } p && bottom <= p.Top ? p : null;
     }
 
     private static float Axis(Input input, Key positive, Key negative) =>
@@ -238,12 +332,29 @@ public sealed class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.State, in
         VerticalSpeed = MathF.Max(VerticalSpeed - Gravity * delta, -MaxFallSpeed);
     }
 
-    /// <summary>The fall move: a hit going down lands, going up bumps the head.</summary>
+    /// <summary>The fall move: a hit going down lands, going up bumps the head. A platform under the
+    /// feet stops the fall at its top (damp_gravity 0x469efc).</summary>
     private void Fall(float delta)
     {
         var before = Feet;
-        var result = space.Move(Feet, new Vector3(0f, 0f, VerticalSpeed * delta), ArenaSpace.Motion.Fall, FallSlide);
+        var dz = VerticalSpeed * delta;
+        var platform = FindPlatform(dz);
+        if (platform is { } below)
+        {
+            dz = below.Top + PlatformLift - Feet.Z;
+        }
+
+        var result = space.Move(Feet, new Vector3(0f, 0f, dz), ArenaSpace.Motion.Fall, FallSlide);
         Feet = result.Feet;
+        Platform = null;
+        if (!result.Hit && platform is { } on)
+        {
+            Feet = Feet with { Z = on.Top };
+            Platform = on.Owner;
+            Land(before, Vector3.UnitZ, delta);
+            return;
+        }
+
         if (!result.Hit)
         {
             // Sliding down a steep face: the real fall rate.
@@ -263,6 +374,11 @@ public sealed class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.State, in
             return;
         }
 
+        Land(before, result.Normal, delta);
+    }
+
+    private void Land(Vector3 before, Vector3 normal, float delta)
+    {
         // No creeping on a landing.
         if (Vector3.DistanceSquared(Feet, before) < CreepSpeed * delta * (CreepSpeed * delta))
         {
@@ -271,12 +387,17 @@ public sealed class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.State, in
 
         VerticalSpeed = 0f;
         OnFloor = true;
-        _floorNormal = result.Normal;
+        _floorNormal = normal;
     }
 
     private void UpdateState(float forward, float strafe, float delta)
     {
         StateTime += delta;
+        if (UpdateCombatState(delta))
+        {
+            return;
+        }
+
         var done = AnimationFrame >= frameCount(Current) - 1;
         if (!OnFloor)
         {
@@ -303,7 +424,7 @@ public sealed class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.State, in
         }
         else if (forward != 0f || MathF.Abs(ForwardSpeed) > MovingSpeed)
         {
-            SetState(State.Run);
+            SetState(Firing ? State.RunFire : State.Run);
         }
         else if (strafe != 0f || MathF.Abs(StrafeSpeed) > MovingSpeed)
         {
@@ -312,6 +433,10 @@ public sealed class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.State, in
         else if (MathF.Abs(TurnRate) > MovingSpeed)
         {
             SetState(State.Turn);
+        }
+        else if (Firing)
+        {
+            SetState(State.Shot);
         }
         else if (Current == State.Idle && !done)
         {
@@ -332,8 +457,8 @@ public sealed class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.State, in
     {
         switch (Current)
         {
-            case State.Run:
-                var count = frameCount(State.Run);
+            case State.Run or State.RunFire:
+                var count = frameCount(Current);
                 var previous = Wrap((int)MathF.Floor(AnimationFrame), count);
                 AnimationFrame += RunRate() * Ticks * delta;
                 var current = Wrap((int)MathF.Floor(AnimationFrame), count);
@@ -357,11 +482,12 @@ public sealed class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.State, in
             return;
         }
 
-        if (current == LeftStep)
+        var (left, right) = Current == State.RunFire ? (FireLeftStep, FireRightStep) : (LeftStep, RightStep);
+        if (current == left)
         {
             mixer.Play(_footstepPair ? "FOOT3" : "FOOT1");
         }
-        else if (current == RightStep)
+        else if (current == right)
         {
             mixer.Play(_footstepPair ? "FOOT4" : "FOOT2");
             _footstepPair = !_footstepPair;

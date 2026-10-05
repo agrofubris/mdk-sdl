@@ -7,6 +7,7 @@ using Mdk.Engine.Render;
 using Mdk.Formats;
 using Mdk.Game.Audio;
 using Mdk.Game.Collision;
+using Mdk.Game.Hud;
 using Mdk.Game.Kurt;
 using Mdk.Game.Level;
 using Mdk.Game.Objects;
@@ -24,6 +25,11 @@ public sealed record ViewerOptions(int Level, Vector3? Position, float? Yaw, flo
     /// <summary>Hold "forward" this many seconds from the start.</summary>
     public float Walk { get; init; }
     public bool Jump { get; init; }
+    /// <summary>Hold "fire".</summary>
+    public bool Fire { get; init; }
+    /// <summary>Pickups Kurt starts with (SW_HBOMB...), and press "use" once he has landed.</summary>
+    public IReadOnlyList<string> Give { get; init; } = [];
+    public bool Use { get; init; }
     public bool Fly { get; init; }
     /// <summary>Print the scripted objects once per second of game time.</summary>
     public bool Profile { get; init; }
@@ -46,6 +52,11 @@ public static class Viewer
     private const int MaxSteps = 10;
     /// <summary>The start is slightly below the landing pad (the original lands Kurt by chute).</summary>
     private const float StartDrop = 3f;
+    /// <summary>A pickup's name stays this long.</summary>
+    private const float PickupMessageSeconds = 2f;
+    /// <summary>The test's "use" is held from 1 second on, for 0.1 (game time).</summary>
+    private const float UseStart = 1f;
+    private const float UseTime = 0.1f;
 
     public static void Run(MdkData data, ViewerOptions options)
     {
@@ -74,8 +85,19 @@ public static class Viewer
             Feet = options.Position ?? level.Dti.StartPosition + new Vector3(0f, 0f, StartDrop),
             Yaw = options.Yaw ?? level.Dti.StartAngle,
         };
-        var scripts = new ScriptRuntime(level, cmi, sprites, space, groups, mixer);
-        scripts.Kurt.Teleported += (feet, yaw) => (kurt.Feet, kurt.Yaw) = (feet, yaw);
+        var scripts = new ScriptRuntime(level, cmi, sprites, space, groups, mixer, kurt);
+        var start = (kurt.Feet, kurt.Yaw);
+        kurt.Died += () => Respawn(kurt, scripts, space, start);
+
+        // The HUD; pickups show their names (0x46c448).
+        var hud = new HudView(renderer, sprites, level.Dti.Palette, Fti.Load(data.PathOf("MISC/MDKFONT.FTI")));
+        scripts.Messages = hud.Messages;
+        kurt.Inventory.PickedUp += name => hud.Messages.Push(name, Messages.FlagZoom, PickupMessageSeconds);
+
+        foreach (var pickup in options.Give)
+        {
+            kurt.Collect(pickup);
+        }
         scripts.ArenaEntered += view.Enter;
         var objects = new ObjectView(renderer, new MaterialResolver(renderer, level.Dti));
         var looks = new Dictionary<string, ObjectView.Look>();
@@ -115,6 +137,8 @@ public static class Viewer
                 time += Step;
                 input.Hold(Key.Forward, time <= options.Walk ? Input.State.Down : Input.State.Up);
                 input.Hold(Key.Jump, options.Jump ? Input.State.Down : Input.State.Up);
+                input.Hold(Key.Fire, options.Fire ? Input.State.Down : Input.State.Up);
+                input.Hold(Key.UseItem, options.Use && time >= UseStart && time <= UseStart + UseTime ? Input.State.Down : Input.State.Up);
                 if (flying)
                 {
                     fly.Update(input, Step);
@@ -126,8 +150,12 @@ public static class Viewer
                 }
 
                 input.ClearMouse();
-                Feed(scripts.Kurt, kurt);
                 scripts.Update(Step);
+                if (MathF.Floor(time * Kurt.Kurt.Ticks) > MathF.Floor((time - Step) * Kurt.Kurt.Ticks))
+                {
+                    hud.Tick(HudStateOf(kurt, scripts));
+                }
+
                 if (options.Profile && MathF.Floor(time) > MathF.Floor(time - Step))
                 {
                     Profile(scripts, time);
@@ -145,6 +173,9 @@ public static class Viewer
             sprite.Draw(kurt, camera.Position, flying ? fly.Forward : follow.Forward, flying ? Vector3.UnitZ : follow.Up,
                 flying ? FreeCamera.FieldOfView : FollowCamera.FieldOfView);
 
+            hud.Messages.Update(elapsed);
+            hud.Draw(HudStateOf(kurt, scripts));
+
             var save = SavePath(options, input, time);
             renderer.Present(camera, SkyColour(level.Dti), save);
             if (save == null)
@@ -161,13 +192,23 @@ public static class Viewer
         }
     }
 
-    /// <summary>What the scripts see of Kurt this step.</summary>
-    private static void Feed(KurtLink link, Kurt.Kurt kurt)
+    /// <summary>What the HUD shows of Kurt and the object he shoots at.</summary>
+    private static HudState HudStateOf(Kurt.Kurt kurt, ScriptRuntime scripts)
     {
-        link.Position = kurt.Feet;
-        link.Yaw = kurt.Yaw;
-        link.OnFloor = kurt.OnFloor;
-        link.Velocity = kurt.Facing * kurt.ForwardSpeed + kurt.Right * kurt.StrafeSpeed + Vector3.UnitZ * kurt.VerticalSpeed;
+        var inventory = kurt.Inventory;
+        var slots = inventory.Slots.Select(s => ((int)s.Item, s.Count)).ToList();
+        var (barHealth, barMax) = scripts.GetBar();
+        return new HudState(kurt.Health, kurt.HurtFlash, kurt.WhiteFlash, kurt.Current == Kurt.Kurt.State.Dead,
+            slots, inventory.Selected, inventory.SuperChainGun, barHealth, barMax);
+    }
+
+    /// <summary>Kurt died: he starts again where the level started.</summary>
+    // TODO load the last saved game (LASTGAME) like the original, once saves are ported
+    private static void Respawn(Kurt.Kurt kurt, ScriptRuntime scripts, ArenaSpace space, (Vector3 Feet, float Yaw) start)
+    {
+        Console.WriteLine("Kurt died");
+        kurt.Revive();
+        scripts.TeleportKurt(space.ArenaAt(start.Feet) ?? "", start.Feet, start.Yaw);
     }
 
     /// <summary>The visible objects, each with its arena's palette and textures.</summary>
@@ -234,7 +275,7 @@ public static class Viewer
     {
         var f = kurt.Feet;
         Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
-            $"Kurt at {f.X:0.00} {f.Y:0.00} {f.Z:0.00} yaw {kurt.Yaw:0} {kurt.Current} floor {kurt.OnFloor} arena {space.ArenaAt(f)}"));
+            $"Kurt at {f.X:0.00} {f.Y:0.00} {f.Z:0.00} yaw {kurt.Yaw:0} {kurt.Current} floor {kurt.OnFloor} arena {space.ArenaAt(f)} health {kurt.Health}"));
     }
 
     /// <summary>The camera pitch of the arena around the feet (DTI, degrees).</summary>

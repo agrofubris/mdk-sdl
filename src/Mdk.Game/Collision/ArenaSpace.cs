@@ -89,6 +89,22 @@ public sealed class ArenaSpace
         return new Result(feet + (end - a), triangle, triangle == Bsp.None ? null : hit, node);
     }
 
+    /// <summary>The same move, then against the solid objects around (damp_collide_move's object
+    /// pass): they change only the XY, and the BSP is swept again to the new end.</summary>
+    public Result Move(Vector3 feet, Vector3 delta, Motion motion, float slideK, IReadOnlyList<Solids.Solid> solids)
+    {
+        var result = Move(feet, delta, motion, slideK);
+        var (box, lift) = motion == Motion.Walk ? (WalkBox, WalkLift) : (FallBox, FallLift);
+        var a = feet + new Vector3(0f, 0f, box.Z + lift);
+        if (solids.Count == 0 || Solids.Walk(a, a + (result.Feet - feet), box, solids) is not { } end)
+        {
+            return result;
+        }
+
+        var again = Move(feet, new Vector3(end.X - a.X, end.Y - a.Y, 0f), motion, slideK);
+        return again with { Feet = new Vector3(again.Feet.X, again.Feet.Y, result.Feet.Z) };
+    }
+
     /// <summary>The nearest floor a segment crosses (0x421708), in any arena around its ends.</summary>
     public bool Floor(Vector3 from, Vector3 to, out Vector3 point)
     {
