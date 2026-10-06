@@ -27,7 +27,9 @@ public class KurtMovesTests
     /// (the Godot port's Kurt ends at (93, 446, 145) too).</summary>
     private static readonly Vector3 BelowLedge = new(67.6f, 441.8f, 133.5f);
 
-    private static readonly MdkData Data = MdkData.Find() ?? throw new InvalidOperationException("MDK data not found");
+    /// <summary>Read on first use: the tests without the game's files run on CI too.</summary>
+    private static readonly Lazy<MdkData> GameFiles = new(() => MdkData.Find() ?? throw new InvalidOperationException("MDK data not found"));
+    private static MdkData Data => GameFiles.Value;
     private static readonly AudioDevice Device = new(Output.Muted);
 
     /// <summary>A level's arena (its start arena by default), Kurt's only solid one.</summary>
