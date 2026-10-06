@@ -112,6 +112,16 @@ public sealed class SoundMixer(AudioDevice device, Func<string, SoundMixer.Entry
         }
     }
 
+    /// <summary>A 2D voice's pitch (1: the sound's rate), e.g. BUTSLIDE at 15000 Hz instead of 11025.</summary>
+    public void SetPitch(int id, float pitch)
+    {
+        var voice = _voices.Find(v => v.Id == id);
+        if (voice != null && voice.Position == null)
+        {
+            device.Set(id, Gain(voice.Volume), pitch, 0f);
+        }
+    }
+
     /// <summary>Decibels to a linear gain, for a volume (0-0x7FFF): linear over 25 dB.</summary>
     public static float Gain(float volume)
     {

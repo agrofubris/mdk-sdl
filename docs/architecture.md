@@ -108,8 +108,10 @@ picks the next screen. A screen's textures and meshes are freed when it ends (`R
    (`Kurt/Kurt.Sniper.cs`, `Kurt/Scope.cs`: look, zoom, clip, the scope's off-centre projection).
    The camera's climb term (−40 × the smoothed rise per tick), the rides (`Scripts/Rides.cs`,
    `Snowboard.cs`, `Bomber.cs`, `Kurt/Kurt.Ride.cs`, `Hud/BomberOverlay.cs`; Kurt's moves report
-   the objects and triangle groups they touch). Still to do: ledges, sliding, camera clearance,
-   the camera's roll.
+   the objects and triangle groups they touch). Ledges (`Kurt/Kurt.Ledge.cs`), sliding in the
+   wind tunnels (`Kurt/Kurt.Slide.cs`), hard landings and falling out of the arena, the camera's
+   roll (`Kurt/CameraRoll.cs`), clearance and shake (`Kurt/FollowCamera.cs`,
+   `Collision/ArenaSpace.Probes.cs`).
 7. 🟡 Script VM and objects (`Scripts/`: ports of `script_vm.gd`, `script_runtime.gd`,
    `object_motion.gd`, `object_behaviors.gd`; 30 ticks per second, object moves are BSP box sweeps).
    Kurt's items and blasts are ported (`Items.cs`, `Twister.cs`; twisters drawn as ribbons, `Ribbon.cs`), so are the

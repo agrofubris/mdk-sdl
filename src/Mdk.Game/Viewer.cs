@@ -116,7 +116,7 @@ public sealed class Viewer : IScreen
     private readonly SoakTest? _soak;
     /// <summary>F2's name prompt, while it's open.</summary>
     private SavePrompt? _snapshotPrompt;
-    private readonly FollowCamera _follow = new();
+    private readonly FollowCamera _follow;
     private readonly CutsceneCamera _cutscene = new();
     private readonly FreeCamera _fly;
     private readonly PauseMenu _pause;
@@ -181,6 +181,8 @@ public sealed class Viewer : IScreen
             Option = ui.Settings.Gore ? 1 : 0,
         };
         _scripts.AirStrike.UsedUp = state.StrikeUsed;
+        _follow = new FollowCamera(_space) { ClipView = _scripts.ClipView };
+        _scripts.ShakeRaised += _follow.RaiseShake;
         _kurt.Died += OnDied;
         _scripts.LevelEnded += over => _ending = over == ScriptRuntime.GameOver.Yes ? (Event.GameOver, GameOverDelay) : (Event.LevelEnded, EndDelay);
         _scripts.GameFinished += () => _next = Event.GameFinished;

@@ -46,12 +46,19 @@ public sealed class KurtSprite
         [Kurt.State.Knocked] = ("K_BANG", Repeat.Once),
         [Kurt.State.GetUp] = ("K_BFLIP", Repeat.Once),
         [Kurt.State.Dead] = ("K_BANG", Repeat.Once),
+        [Kurt.State.Slip] = ("K_SLIP", Repeat.Once),
+        [Kurt.State.Slide] = ("K_SLIDE", Repeat.Loop),
+        [Kurt.State.SlideFast] = ("K_FSLIDE", Repeat.Loop),
+        [Kurt.State.SlideBrake] = ("K_BSLIDE", Repeat.Loop),
+        [Kurt.State.Hang] = ("K_HANG", Repeat.Once),
+        [Kurt.State.HardLand] = ("K_CRASHL", Repeat.Once),
     };
 
     private enum Repeat { Once, Loop }
 
-    /// <summary>Kurt's frames kept in the level's archives: the snowboard's (LEVEL4S.SNI).</summary>
-    public static readonly string[] LevelAnimations = ["K_SURF", "K_SURFJ"];
+    /// <summary>Kurt's frames kept in the level's archives: the snowboard's (LEVEL4S.SNI), the
+    /// slide's (LEVEL6S.SNI).</summary>
+    public static readonly string[] LevelAnimations = ["K_SURF", "K_SURFJ", "K_SLIP", "K_SLIDE", "K_FSLIDE", "K_BSLIDE"];
 
     private readonly Renderer _renderer;
     private readonly Bni _sprites;
@@ -71,7 +78,7 @@ public sealed class KurtSprite
         _muzzleMesh = renderer.CreateDynamicMesh(QuadVertices);
     }
 
-    public int FrameCount(Kurt.State state) => _sprites.GetAnimation(Animations[state].Name).FrameCount;
+    public int FrameCount(Kurt.State state) => FrameCount(Animations[state].Name);
 
     /// <summary>Adds an animation of the level's (null: none there).</summary>
     public void Add(SpriteAnimation? animation)
@@ -148,7 +155,7 @@ public sealed class KurtSprite
         }
 
         var (name, repeat) = Animations[kurt.Current];
-        var count = _sprites.GetAnimation(name).FrameCount;
+        var count = Animation(name).FrameCount;
         var frame = (int)MathF.Floor(kurt.AnimationFrame);
         if (kurt.Current == Kurt.State.Chute && frame >= ChuteOpenedFrame)
         {

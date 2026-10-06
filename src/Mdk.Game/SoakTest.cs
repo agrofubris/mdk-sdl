@@ -128,8 +128,15 @@ public sealed class SoakTest
             _floor = kurt.Feet;
         }
 
-        // Standing outside every arena (in the air: a jump, a fan, a pit, checked below).
-        var outside = space.ArenaAt(kurt.Feet) == null && kurt.OnFloor;
+        // Standing outside every arena (in the air: a jump, a fan, a pit, checked below; dead: he
+        // fell 50 below his arena, damp_gravity).
+        var dead = kurt.Current == Kurt.Kurt.State.Dead;
+        var outside = space.ArenaAt(kurt.Feet) == null && kurt.OnFloor && !dead;
+        if (dead && space.ArenaAt(kurt.Feet) == null)
+        {
+            Note(arena, "Kurt fell out of the arena", Where(kurt));
+        }
+
         _lost = outside ? _lost + Viewer.Step : 0f;
         if (_lost >= LostTime)
         {

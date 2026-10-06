@@ -213,8 +213,9 @@ public sealed partial class ScriptRuntime
     /// <summary>Gore (if_option, 0x5742dc): 1 on, 0 off.</summary>
     public int Option = 1;
     /// <summary>The strongest screen shake asked this tick (raise_573aa8).</summary>
-    // TODO the follow camera doesn't shake yet
     public float Shake;
+    /// <summary>A screen shake was asked (the follow camera shakes).</summary>
+    public event Action<float>? ShakeRaised;
     /// <summary>Frames of arena textures set by arena_texture_frame (opcode 133).</summary>
     public readonly AnimatedTextures AnimatedTextures;
 
@@ -1737,7 +1738,45 @@ public sealed partial class ScriptRuntime
     public void SetGroupTexture(string arena, int group, int value) => _groups.SetMaterial(arena, group, value);
 
     /// <summary>Shakes the screen at least this much (0x467f7c).</summary>
-    public void RaiseShake(float amount) => Shake = MathF.Max(Shake, amount);
+    public void RaiseShake(float amount)
+    {
+        Shake = MathF.Max(Shake, amount);
+        ShakeRaised?.Invoke(amount);
+    }
+
+    /// <summary>The camera's line of sight from <paramref name="from"/> to <paramref name="to"/> against
+    /// the objects of Kurt's arena that block it (camera_clearance 0x417ee8: flag 0x1000000, not
+    /// 0x810): where it first meets one of their parts, or its end.</summary>
+    public Vector3 ClipView(Vector3 from, Vector3 to)
+    {
+        const int Blocks = 0x1000000;
+        const int Ignored = MdkObject.FlagNotSolid | MdkObject.FlagNotSolid2;
+        var end = to;
+        foreach (var obj in Objects)
+        {
+            if (obj.Dead || obj.Health == 0 || obj.Arena != CurrentArena || obj.Model == null || (obj.Flags & Blocks) == 0
+                || (obj.Flags & Ignored) != 0)
+            {
+                continue;
+            }
+
+            foreach (var part in obj.PartBounds())
+            {
+                // A part the head is in doesn't count (0x45f588 returns 2).
+                if (part is not { } bounds || GetWorldBounds(obj, bounds) is var box && box.Contains(from))
+                {
+                    continue;
+                }
+
+                if (box.SegmentEntry(from, end) is { } entry)
+                {
+                    end = entry;
+                }
+            }
+        }
+
+        return end;
+    }
 
     /// <summary>Aim test of the chain gun (0x41ab2c): a box is a target when it's within its size +
     /// 140 units of the origin, inside a cone around Kurt's yaw that is wider for big and close boxes,

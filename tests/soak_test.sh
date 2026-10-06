@@ -10,8 +10,9 @@
 export MDK_HIDDEN=1
 MDK=src/Mdk.App/bin/Debug/net10.0/mdk.exe
 OUT_DIR=${TMPDIR:-/tmp}
-SHOT=$OUT_DIR/mdk_soak.bmp
-LOG=$OUT_DIR/mdk_soak.log
+# Per run: soaks running at the same time must not share these files.
+SHOT=$OUT_DIR/mdk_soak_$$.bmp
+LOG=$OUT_DIR/mdk_soak_$$.log
 MDK_USER_DIR=$OUT_DIR/mdk_soak_user
 export MDK_USER_DIR
 LEVELS="3 4 5 6 7 8"
