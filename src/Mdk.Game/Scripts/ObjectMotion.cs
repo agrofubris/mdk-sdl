@@ -404,7 +404,18 @@ public sealed class ObjectMotion(ScriptRuntime runtime)
 
         var radius = obj.RollRadius > 0f ? obj.RollRadius : 1f;
         var axis = new Vector3(-moved.Y, moved.X, 0f) / distance;
-        obj.RollingBasis *= Matrix4x4.CreateFromAxisAngle(axis, distance / radius);
+        obj.RollingBasis = Orthonormal(obj.RollingBasis * Matrix4x4.CreateFromAxisAngle(axis, distance / radius));
+    }
+
+    /// <summary>A rotation's axes made unit and perpendicular again (Gram-Schmidt): float products
+    /// drift, skewing and scaling a long-rolling model.</summary>
+    private static Matrix4x4 Orthonormal(Matrix4x4 m)
+    {
+        var x = Vector3.Normalize(new Vector3(m.M11, m.M12, m.M13));
+        var y = new Vector3(m.M21, m.M22, m.M23);
+        y = Vector3.Normalize(y - Vector3.Dot(y, x) * x);
+        var z = Vector3.Cross(x, y);
+        return new Matrix4x4(x.X, x.Y, x.Z, 0f, y.X, y.Y, y.Z, 0f, z.X, z.Y, z.Z, 0f, 0f, 0f, 0f, 1f);
     }
 
     /// <summary>turn_and_jump_to_dest (opcode 229, 0x460d24): turns towards the destination by at most

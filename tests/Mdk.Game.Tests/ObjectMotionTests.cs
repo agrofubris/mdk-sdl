@@ -52,4 +52,37 @@ public class ObjectMotionTests
         Assert.True(obj.Position.X > OnTheFloor.X);
         Assert.NotEqual(0, obj.ContactFlags & MdkObject.ContactFloor);
     }
+
+    /// <summary>A rolling object's basis stays a rotation however long it rolls (object_motion.gd
+    /// orthonormalises it each tick): no drift skews or scales the model.</summary>
+    [DataFact]
+    public void RollingStaysOrthonormal()
+    {
+        const int RollTicks = 20000;
+        const float Tolerance = 1e-5f;
+        var runtime = CreateRuntime();
+        var obj = runtime.Spawn(runtime.GetArenaState(Arena).Controller, Model, OnTheFloor, 0f, -1, 0, ScriptRuntime.Spawning.Plain);
+        Assert.NotNull(obj);
+        obj.Flags = MdkObject.FlagRolling;
+        obj.Friction = 0f;
+        obj.RollRadius = 0.37f;
+
+        for (var i = 0; i < RollTicks; i++)
+        {
+            // Turning, so the axis changes.
+            obj.Velocity = new Vector3(MathF.Cos(i * 0.01f), MathF.Sin(i * 0.01f), 0f) * 30f;
+            runtime.Motion.Update(obj);
+        }
+
+        var b = obj.RollingBasis;
+        Vector3[] rows = [new(b.M11, b.M12, b.M13), new(b.M21, b.M22, b.M23), new(b.M31, b.M32, b.M33)];
+        foreach (var row in rows)
+        {
+            Assert.Equal(1f, row.Length(), Tolerance);
+        }
+
+        Assert.Equal(0f, Vector3.Dot(rows[0], rows[1]), Tolerance);
+        Assert.Equal(0f, Vector3.Dot(rows[1], rows[2]), Tolerance);
+        Assert.Equal(0f, Vector3.Dot(rows[0], rows[2]), Tolerance);
+    }
 }
