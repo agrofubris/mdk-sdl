@@ -91,6 +91,15 @@ public sealed class MaterialResolver(Renderer renderer, Dti dti)
         return null;
     }
 
+    /// <summary>Uploads a texture's pixels again if it's on the GPU (a bullet hole changed them).</summary>
+    public void Refresh(Texture texture)
+    {
+        if (_textures.TryGetValue(texture, out var id))
+        {
+            renderer.UpdateTexture(id, texture.Width, texture.Height * texture.FrameCount, texture.Indices);
+        }
+    }
+
     private int TextureId(Texture texture)
     {
         if (!_textures.TryGetValue(texture, out var id))

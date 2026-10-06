@@ -100,6 +100,7 @@ public sealed class Viewer : IScreen
     private readonly LevelData _level;
     private readonly LevelView _view;
     private readonly SoundMixer _mixer;
+    private readonly LevelMusic _music;
     private readonly ArenaSpace _space;
     private readonly KurtSprite _sprite;
     private readonly Kurt.Kurt _kurt;
@@ -107,6 +108,7 @@ public sealed class Viewer : IScreen
     private readonly HudView _hud;
     private readonly ObjectView _objects;
     private readonly EffectsView _effects;
+    private readonly RopeView _ropes;
     private readonly Dictionary<string, ObjectView.Look> _looks = [];
     private readonly SniperView _sniper;
     private readonly SniperTest _sniperTest;
@@ -115,6 +117,7 @@ public sealed class Viewer : IScreen
     /// <summary>F2's name prompt, while it's open.</summary>
     private SavePrompt? _snapshotPrompt;
     private readonly FollowCamera _follow = new();
+    private readonly CutsceneCamera _cutscene = new();
     private readonly FreeCamera _fly;
     private readonly PauseMenu _pause;
     private readonly bool _test;
@@ -144,7 +147,7 @@ public sealed class Viewer : IScreen
         var bank = SoundBank.ForLevel(data, options.Level);
         _mixer = new SoundMixer(_audio, bank.Get);
         var cmi = Cmi.Load(data.PathOf($"TRAVERSE/LEVEL{level.Number}/LEVEL{level.Number}.CMI"));
-        PlayMusic(_mixer, cmi, level);
+        _music = new LevelMusic(_mixer, cmi.ArenaMusic);
         renderer.Panorama = CreatePanorama(renderer, level.Dti);
 
         _space = new ArenaSpace();
@@ -165,6 +168,11 @@ public sealed class Viewer : IScreen
             Feet = options.Position ?? level.Dti.StartPosition + new Vector3(0f, 0f, StartDrop),
             Yaw = options.Yaw ?? level.Dti.StartAngle,
         };
+
+        // The level starts in Kurt's arena, its music at once (0x41ba68: BSPShow(Kurt's)): the
+        // DTI's start arena, or where a test put him.
+        var start = level.Dti.Arenas[level.Dti.StartArena].Name;
+        _music.Enter(options.Position is { } at ? _space.ArenaAt(at) ?? start : start);
 
         // The difficulty decides the town's timer: before the scripts.
         _kurt.Inventory.Difficulty = ui.Settings.Difficulty;
@@ -189,8 +197,17 @@ public sealed class Viewer : IScreen
             _kurt.Collect(pickup);
         }
         _scripts.ArenaEntered += _view.Enter;
-        _objects = new ObjectView(renderer, new MaterialResolver(renderer, level.Dti));
-        _effects = new EffectsView(renderer, new MaterialResolver(renderer, level.Dti), level);
+        var objectLook = new MaterialResolver(renderer, level.Dti);
+        var effectsLook = new MaterialResolver(renderer, level.Dti);
+        _objects = new ObjectView(renderer, objectLook);
+        _effects = new EffectsView(renderer, effectsLook, level);
+        _scripts.TextureStamped += texture =>
+        {
+            _view.Refresh(texture);
+            objectLook.Refresh(texture);
+            effectsLook.Refresh(texture);
+        };
+        _ropes = new RopeView(renderer, level);
         _sniper = new SniperView(renderer, _objects, level, _hud);
         _sniperTest = new SniperTest(options);
         _rideTest = new RideTest(options);
@@ -198,7 +215,7 @@ public sealed class Viewer : IScreen
         _fly = new FreeCamera { Pitch = options.Pitch };
         _flying = options.Fly;
         _pause = new PauseMenu(ui);
-        Console.WriteLine($"Level {options.Level}: {level.Arenas.Count} arenas, {_view.TriangleCount} triangles, loaded in {loading.ElapsedMilliseconds} ms");
+        Console.WriteLine($"Level {options.Level}: {level.Arenas.Count} arenas, {_view.TriangleCount} triangles, {_view.OutlineCount} outlines, loaded in {loading.ElapsedMilliseconds} ms");
 
         _test = options.Screenshot != null;
         ui.Window.CaptureMouse(_test ? Capture.Off : Capture.On);
@@ -243,7 +260,7 @@ public sealed class Viewer : IScreen
         {
             DrawScene(elapsed);
             var paused = _pause.Update(elapsed);
-            _renderer.Present(SceneView(), SkyColour(_level.Dti), screenshot);
+            _renderer.Present(SceneView(), Background(), screenshot);
             CaptureMouse();
             return paused;
         }
@@ -261,7 +278,7 @@ public sealed class Viewer : IScreen
         {
             _strikeTime += elapsed;
             var shot = SavePath(_options, input, _time + _strikeTime) ?? screenshot;
-            _renderer.Present(strikeView, SkyColour(_level.Dti), shot);
+            _renderer.Present(strikeView, Background(), shot);
             if (shot != null && _test)
             {
                 Console.WriteLine($"Saved {shot} (strike)");
@@ -302,7 +319,7 @@ public sealed class Viewer : IScreen
 
         var camera = DrawScene(elapsed);
         var save = SavePath(_options, input, _time) ?? screenshot;
-        _renderer.Present(camera, SkyColour(_level.Dti), save);
+        _renderer.Present(camera, Background(), save);
         if (save == null)
         {
             return _next;
@@ -348,11 +365,20 @@ public sealed class Viewer : IScreen
             else
             {
                 _kurt.Update(input, Step);
-                _follow.Update(_kurt, ArenaPitch(_level, _scripts.CurrentArena), input, Step);
+                _follow.Update(_kurt, PitchGoal(), input, Step);
             }
 
             input.ClearMouse();
             _scripts.Update(Step);
+
+            // The music follows Kurt's arena, which the scripts set (BSPShow).
+            _music.Enter(_scripts.CurrentArena);
+            _music.Update(Step);
+            if (CutsceneCamera.Active(_scripts))
+            {
+                _cutscene.Update(_scripts);
+            }
+
             _space.SetSolid(_scripts.SolidArenas);
             _soak?.Step(_kurt, _scripts, _space, _time);
             if (MathF.Floor(_time * Kurt.Kurt.Ticks) > MathF.Floor((_time - Step) * Kurt.Kurt.Ticks))
@@ -363,6 +389,8 @@ public sealed class Viewer : IScreen
             if (options.Profile && MathF.Floor(_time) > MathF.Floor(_time - Step))
             {
                 Profile(_scripts, _time);
+                Console.WriteLine($"  sky {_scripts.SkyMode} ({_renderer.Backdrop})");
+                Console.WriteLine($"  music {_music.Playing} {Decibels(_music.Volume)}dB, fading {_music.Fading ?? "-"}");
             }
         }
     }
@@ -401,29 +429,61 @@ public sealed class Viewer : IScreen
     private View DrawScene(float elapsed)
     {
         var camera = SceneView();
+        var eye = Eye();
         _mixer.ListenerPosition = camera.Position;
-        _mixer.ListenerRight = _flying ? _fly.Right : _follow.Right;
+        _mixer.ListenerRight = eye.Right;
         // In sniper mode the sounds are heard through the scope.
         _mixer.ScopeZoom = _kurt.Sniping && !_flying ? _kurt.Scope.Zoom : 0f;
         _mixer.ListenerForward = _kurt.SniperForward;
         _mixer.ListenerUp = FollowCamera.UpOf(_kurt.SniperForward);
         _mixer.Update(elapsed);
         _scripts.Eye = camera.Position;
-        _view.Draw(_scripts.DrawnArenas);
+        _view.Draw(_scripts.DrawnArenas, _scripts.AnimatedTextures);
         _view.DrawEnd(_scripts.EndLevel);
         DrawObjects(_objects, _scripts, _level, _looks);
+        _ropes.Draw(_scripts.Objects);
         _sniper.Draw(_kurt, _scripts, elapsed);
         _effects.Draw(_scripts, camera);
-        _sprite.Draw(_kurt, camera.Position, _flying ? _fly.Forward : _follow.Forward, _flying ? Vector3.UnitZ : _follow.Up,
-            _flying ? FreeCamera.FieldOfView : FollowCamera.FieldOfView);
+        _sprite.Draw(_kurt, camera.Position, eye.Forward, eye.Up, eye.FieldOfView);
 
         _hud.Messages.Update(elapsed);
         _hud.Draw(HudStateOf(_kurt, _scripts));
         return camera;
     }
 
-    private View SceneView() => _flying ? _fly.View(_renderer.AspectRatio)
-        : _kurt.Sniping ? FollowCamera.SniperView(_kurt, _renderer.AspectRatio) : _follow.View(_renderer.AspectRatio);
+    private View SceneView()
+    {
+        var aspect = _renderer.AspectRatio;
+        if (_flying)
+        {
+            return _fly.View(aspect);
+        }
+
+        if (_kurt.Sniping)
+        {
+            return FollowCamera.SniperView(_kurt, aspect);
+        }
+
+        return CutsceneCamera.Active(_scripts) ? _cutscene.View(aspect) : _follow.View(aspect);
+    }
+
+    /// <summary>The camera's axes and field of view outside sniper mode: flying, a cutscene's or Kurt's.</summary>
+    private (Vector3 Forward, Vector3 Up, Vector3 Right, float FieldOfView) Eye()
+    {
+        if (_flying)
+        {
+            return (_fly.Forward, Vector3.UnitZ, _fly.Right, FreeCamera.FieldOfView);
+        }
+
+        return CutsceneCamera.Active(_scripts)
+            ? (_cutscene.Forward, _cutscene.Up, _cutscene.Right, FollowCamera.FieldOfView)
+            : (_follow.Forward, _follow.Up, _follow.Right, FollowCamera.FieldOfView);
+    }
+
+    /// <summary>The pitch the follow camera eases to: camera_track's (opcode 203) while a script
+    /// asks for it, else the arena's.</summary>
+    private float PitchGoal() =>
+        _scripts.CameraTrackTicks > 0 ? _scripts.CameraTrackPitch : ArenaPitch(_level, _scripts.CurrentArena);
 
     /// <summary>A full save being loaded: the level and Kurt as they were.</summary>
     private void RestoreSnapshot(GameState state)
@@ -526,6 +586,7 @@ public sealed class Viewer : IScreen
     public void Dispose()
     {
         _audio.StopAll();
+        _renderer.Backdrop = Backdrop.Sky;
         _ui.Window.CaptureMouse(Capture.Off);
     }
 
@@ -578,6 +639,28 @@ public sealed class Viewer : IScreen
                 $"speed {obj.Speed:0.0} health {obj.Health} flags {obj.Flags:x}{door}"));
         }
 
+        if (CutsceneCamera.Active(scripts))
+        {
+            var c = scripts.CameraPoint;
+            Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
+                $"  cutscene {scripts.Cutscene:x} shot {scripts.CameraMode} camera ({Rounded(c.X)}, {Rounded(c.Y)}, {Rounded(c.Z)}) yaw {scripts.CameraYaw:0} pitch {scripts.CameraPitch:0}"));
+        }
+
+        if (scripts.Items.Twisters.Count != 0)
+        {
+            Console.WriteLine($"  twisters {scripts.Items.Twisters.Count}, ribbon triangles {scripts.Items.Twisters.Sum(t => t.Ribbon.Triangles().Count / 3)}");
+        }
+
+        foreach (var obj in scripts.Objects.Where(o => o.RopeMask != 0 && !o.Dead))
+        {
+            Console.WriteLine($"  rope {obj.TypeName}_{obj.InstanceId} lines {RopeView.LinesOf(obj).Count / 2} colour {obj.RopeColor}");
+        }
+
+        foreach (var ((arena, texture), frame) in scripts.AnimatedTextures.Frames)
+        {
+            Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"  texture {arena} {texture} frame {frame:0.00}"));
+        }
+
         RideTest.Report(scripts);
         if (scripts.EndLevel is { } end)
         {
@@ -589,6 +672,10 @@ public sealed class Viewer : IScreen
             Console.WriteLine($"  unimplemented opcodes: {string.Join(", ", scripts.Vm.Unimplemented.Select(u => $"{u.Key}x{u.Value}"))}");
         }
     }
+
+    /// <summary>A music volume (0-0x7FFF) in whole decibels, as the Godot port's profile prints it.</summary>
+    private static int Decibels(float volume) =>
+        (int)MathF.Round(20f * MathF.Log10(SoundMixer.Gain(volume)));
 
     /// <summary>A coordinate rounded like Godot's Vector3.round().</summary>
     private static string Rounded(float value) =>
@@ -620,16 +707,6 @@ public sealed class Viewer : IScreen
         return level.Dti.Arenas.FirstOrDefault(a => a.Name == name)?.Pitch ?? DefaultPitch;
     }
 
-    /// <summary>The starting arena's music (named by the level's CMI, in <c>LEVELnO.SNI</c>).</summary>
-    private static void PlayMusic(SoundMixer mixer, Cmi cmi, LevelData level)
-    {
-        var arena = level.Dti.Arenas[level.Dti.StartArena].Name;
-        if (cmi.ArenaMusic.TryGetValue(arena, out var music) && mixer.PlayMusic(music) != 0)
-        {
-            Console.WriteLine($"Music: {music}");
-        }
-    }
-
     /// <summary>The level's sky and the panorama its mirrors show, through the level's palette.</summary>
     private static Panorama CreatePanorama(Renderer renderer, Dti dti)
     {
@@ -638,6 +715,13 @@ public sealed class Viewer : IScreen
         var palette = renderer.CreatePalette(dti.Palette.Rgba);
         return new Panorama(sky, mirrorSky, palette, dti.SkyWrapWidth, dti.SkyHorizonRow, dti.SkyOffset, dti.Sky.Height,
             dti.SkyTopColor, dti.SkyBottomColor);
+    }
+
+    /// <summary>The background the scripts want (sky, black or the last frame) and its clear colour.</summary>
+    private Vector4 Background()
+    {
+        _renderer.Backdrop = SkyModes.BackdropOf(_scripts.SkyMode);
+        return SkyModes.ClearOf(_scripts.SkyMode, SkyColour(_level.Dti));
     }
 
     /// <summary>The colour above the sky panorama.</summary>

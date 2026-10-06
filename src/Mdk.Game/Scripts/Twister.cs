@@ -7,11 +7,10 @@ namespace Mdk.Game.Scripts;
 /// <summary>A twister of the tornado item (0x40741c): it spirals out of the tornado for 2 seconds,
 /// then splits into one twister per object of the arena (0x407774), each chasing its object
 /// (0x407974) for 5 seconds, bouncing off walls and hurting whatever it's inside by 2 health per
-/// tick. A port of godot-mdk's <c>twister.gd</c>.
+/// tick. A port of godot-mdk's <c>twister.gd</c>; drawn as a <see cref="Scripts.Ribbon"/> along its last positions.
 /// <code>
 ///   spiral (720°/s, 15 out and up at 1440°) ──► split ──► chase: v = 0.9 v + 20 towards the target
 /// </code></summary>
-// TODO draw the twisters (the original draws a ribbon along their last positions, 0x439690)
 public sealed class Twister(ScriptRuntime runtime, string arena, Vector3 origin, float yaw)
 {
     private const float SpiralRate = 720f;
@@ -29,6 +28,8 @@ public sealed class Twister(ScriptRuntime runtime, string arena, Vector3 origin,
 
     public string Arena { get; } = arena;
     public Vector3 Position { get; private set; } = origin;
+    /// <summary>The ribbon along its last positions (0x439690).</summary>
+    public Ribbon Ribbon { get; } = new();
 
     private readonly Vector3 _origin = origin;
     private float _angle;
@@ -56,6 +57,7 @@ public sealed class Twister(ScriptRuntime runtime, string arena, Vector3 origin,
         }
 
         Position = next;
+        Ribbon.Push(Position);
         HurtObjects();
         _life--;
         if (_life <= 0)
@@ -82,6 +84,7 @@ public sealed class Twister(ScriptRuntime runtime, string arena, Vector3 origin,
         var r = _angle / SpiralEnd;
         var direction = FromAngle(_angle + yaw);
         MoveTo(_origin + new Vector3(direction, 1f) * SpiralSize * r);
+        Ribbon.Push(Position);
         _velocity = new Vector3(direction.Y, -direction.X, 0f) * SpiralSpeed;
         if (_angle <= SpiralEnd)
         {

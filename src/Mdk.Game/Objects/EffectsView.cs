@@ -13,7 +13,8 @@ namespace Mdk.Game.Objects;
 /// camera-facing quads showing one frame of their animated texture.
 /// <code>
 ///   Debris.Pieces ──► textured triangles │ spark triangles ─┐
-///   Effects.All, ScriptRuntime.Boxes ──► billboard quads ───┴─► dynamic mesh ──► renderer
+///   Effects.All, ScriptRuntime.Boxes ──► billboard quads ───┤
+///   twisters' ribbons ──► WMIBTEX triangles ────────────────┴─► dynamic mesh ──► renderer
 /// </code></summary>
 public sealed class EffectsView(Renderer renderer, MaterialResolver resolver, LevelData level)
 {
@@ -63,6 +64,11 @@ public sealed class EffectsView(Renderer renderer, MaterialResolver resolver, Le
             var size = box.Model.Bounds.Size();
             var texel = MathF.Max(size.X, size.Z) / Math.Max(s.Texture!.Width, 1);
             AddQuad(box.Position, right * texel, billboardUp * texel, s, scripts.TickCount % s.Material.FrameCount);
+        }
+
+        foreach (var twister in scripts.Items.Twisters)
+        {
+            AddRibbon(twister);
         }
 
         if (_vertices.Count == 0)
@@ -159,6 +165,20 @@ public sealed class EffectsView(Renderer renderer, MaterialResolver resolver, Le
         Vertex Corner(float x, float y) => new(center + halfWidth * (x * 2f - 1f) + halfHeight * (1f - y * 2f), new Vector2(x, y));
         _draws.Add((_vertices.Count, QuadVertices, sprite.Material, frame));
         _vertices.AddRange([Corner(0, 0), Corner(1, 0), Corner(1, 1), Corner(0, 0), Corner(1, 1), Corner(0, 1)]);
+    }
+
+    /// <summary>A twister's ribbon, textured with <c>WMIBTEX</c> (UVs in its texels).</summary>
+    private void AddRibbon(Twister twister)
+    {
+        var corners = twister.Ribbon.Triangles();
+        if (corners.Count == 0 || _vertices.Count + corners.Count > MaxVertices || Sprite(twister.Arena, Ribbon.Texture) is not { } s)
+        {
+            return;
+        }
+
+        var scale = new Vector2(1f / s.Texture!.Width, 1f / s.Texture.Height);
+        _draws.Add((_vertices.Count, corners.Count, s.Material, 0));
+        _vertices.AddRange(corners.Select(c => new Vertex(c.Position, c.Uv * scale)));
     }
 
     /// <summary>The palette and textures an arena's effects draw with.</summary>

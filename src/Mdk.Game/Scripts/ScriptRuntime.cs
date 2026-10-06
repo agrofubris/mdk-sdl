@@ -208,20 +208,18 @@ public sealed partial class ScriptRuntime
     public MdkObject? AlienTarget;
     /// <summary>Ticks the alarm keeps sounding (0x573aec), set by objects with movement command 15.</summary>
     public int AlarmTicks;
-    /// <summary>How the sky is drawn (0x574304, opcode 202): 0 normally, 1 black, -1 not drawn.</summary>
-    // TODO the sky isn't switched yet (level.gd show_sky)
+    /// <summary>How the sky is drawn (0x574304, opcode 202): 0 normally, 1 black, -1 not drawn (<see cref="Level.SkyModes"/>).</summary>
     public int SkyMode;
     /// <summary>Gore (if_option, 0x5742dc): 1 on, 0 off.</summary>
     public int Option = 1;
     /// <summary>The strongest screen shake asked this tick (raise_573aa8).</summary>
     // TODO the follow camera doesn't shake yet
     public float Shake;
-    /// <summary>Frames per second of arena textures set by arena_texture_frame (opcode 133), by arena and texture.</summary>
-    // TODO animated textures aren't drawn by their rate yet
-    public readonly Dictionary<(string Arena, string Texture), float> TextureRates = [];
+    /// <summary>Frames of arena textures set by arena_texture_frame (opcode 133).</summary>
+    public readonly AnimatedTextures AnimatedTextures;
 
-    /// <summary>The health bar (0x573c74 seconds left, 0x41e3c8): its object (0x573c78), or values.</summary>
-    // TODO the bar isn't drawn yet (hud)
+    /// <summary>The health bar (0x573c74 seconds left, 0x41e3c8): its object (0x573c78), or values;
+    /// drawn by Hud/HudView.</summary>
     public float BarTime;
     public MdkObject? BarObject;
     public int BarHealth;
@@ -230,8 +228,8 @@ public sealed partial class ScriptRuntime
     public int Cutscene;
     public MdkObject? CutsceneTarget;
     /// <summary>The cutscene camera (0x599920...0x599940): shot, yaw (90° - heading), pitch, distance
-    /// to the target, stored position and the blend timer in ticks.</summary>
-    // TODO the game doesn't look through the cutscene camera yet
+    /// to the target, stored position and the blend timer in ticks; the game looks from
+    /// <see cref="CameraPoint"/> (<see cref="CutsceneCamera"/>).</summary>
     public int CameraMode;
     public float CameraYaw;
     public float CameraPitch;
@@ -260,7 +258,6 @@ public sealed partial class ScriptRuntime
     public string SecondArena = "";
     public bool SecondActive;
     /// <summary>The arenas drawn (Kurt's and the active second) last tick.</summary>
-    // TODO the level view still draws every reachable arena (level.gd show_arenas, set_solid_arenas)
     public IReadOnlyList<string> DrawnArenas => _drawnArenas;
 
     /// <summary>The arenas Kurt collides with: the drawn ones, not the second on the snowboard (0x465e34).</summary>
@@ -306,6 +303,7 @@ public sealed partial class ScriptRuntime
         kurt.CanUseItem = Items.CanUse;
         kurt.SolidsWithin = SolidsWithin;
         Effects = new Effects(Rng) { FrameCount = TextureFrames, Ray = RayIn };
+        AnimatedTextures = new AnimatedTextures(TextureFrames);
         Fans = new Fans(level.Dti.Arenas, Rng) { Spark = FanSpark, IsLive = IsLiveArena };
         Debris = new Debris(Rng)
         {
@@ -1075,10 +1073,46 @@ public sealed partial class ScriptRuntime
         return fired;
     }
 
-    /// <summary>special_130 (0x45d140): a bullet hole on the texture a sniper round hit.</summary>
-    // TODO port with sniper rounds (needs texture updates on the GPU)
+    /// <summary>special_130 (0x45d140): a bullet hole on the texture of the part a sniper round hit
+    /// last (<see cref="BulletHoles"/>); <see cref="TextureStamped"/> tells the drawing.</summary>
     public void StampBulletHole(MdkObject obj)
     {
+        if (obj.Model is not { } model || obj.ShotPart <= 0 || obj.ShotPart > model.PartList.Count)
+        {
+            return;
+        }
+
+        var part = model.PartList[obj.ShotPart - 1];
+        var vertices = obj.Pose()[obj.ShotPart - 1];
+        if (vertices.Length == 0)
+        {
+            return;
+        }
+
+        // The hit in the model's frame.
+        var local = Vector3.Transform(obj.ShotPoint - obj.Position, Matrix4x4.CreateRotationZ(-float.DegreesToRadians(obj.Yaw))) / obj.Scale;
+        Texture? TextureOf(int value) => value >= 0 && value < model.Materials.Count ? ArenaTexture(obj.Arena, model.Materials[value]) : null;
+        if (BulletHoles.Nearest(part, vertices, local, v => TextureOf(v) != null) is not { } face)
+        {
+            return;
+        }
+
+        var texture = TextureOf(part.TriangleMaterials[face.Triangle])!;
+        var w = face.Weights;
+        var uv = part.TriangleUvs[face.Triangle * 3] * w.X + part.TriangleUvs[face.Triangle * 3 + 1] * w.Y + part.TriangleUvs[face.Triangle * 3 + 2] * w.Z;
+        BulletHoles.Stamp(texture, uv, _sprites.GetImage(Option != 0 ? BulletHoles.Hole : BulletHoles.GorelessHole));
+        TextureStamped?.Invoke(texture);
+    }
+
+    /// <summary>A bullet hole changed a texture's pixels.</summary>
+    public event Action<Texture>? TextureStamped;
+
+    /// <summary>A texture as an arena's objects find it (their archives, see <see cref="LevelData.ArchivesOf"/>).</summary>
+    private Texture? ArenaTexture(string arena, string name)
+    {
+        var found = Level.Arenas.Find(a => a.Name == arena);
+        var archives = found != null ? Level.ArchivesOf(found) : [Level.LevelTextures];
+        return archives.Select(a => a.Textures.GetValueOrDefault(name)).FirstOrDefault(t => t != null);
     }
 
     /// <summary>The first active object of a type (the cutscenes' targets).</summary>
@@ -2852,6 +2886,4 @@ public sealed partial class ScriptRuntime
     /// <summary>A sound following an object, at an offset in its frame.</summary>
     private int PlayOn(string name, MdkObject obj, SoundMixer.Start start, Vector3 offset) =>
         Mixer.PlayOn(name, () => obj.Position + RotatedZ(offset, obj.Yaw), start);
-
-    // TODO full saves (snapshot.gd, script_runtime.gd snapshot/restore)
 }
