@@ -165,7 +165,7 @@ so the game runs them unchanged:
 2. ✅ Sky panorama, mirrors, triangle groups (state kept in the triangle flags, as the original).
    Animated textures (`Scripts/AnimatedTextures.cs`, opcode 133), the scripts' sky modes
    (`Level/SkyModes.cs`, the renderer's `Backdrop`), the glass panes' outlines (`Level/Outlines.cs`,
-   line primitives), ropes (`Objects/RopeView.cs`), bullet holes (`Scripts/BulletHoles.cs`,
+   line primitives; the enhanced look skips flagged edges inside a flat pane), ropes (`Objects/RopeView.cs`), bullet holes (`Scripts/BulletHoles.cs`,
    re-uploaded textures).
 3. ✅ Collision: the original's BSP (`Collision/Bsp.cs`, from godot-mdk `docs/bsp.md`).
 4. ✅ Sound mixer (SDL audio stream, the original's volume, distance, Doppler and pan laws), the
