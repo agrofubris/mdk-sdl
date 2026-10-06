@@ -91,6 +91,21 @@ public sealed unsafe partial class Renderer : IDisposable
     /// <summary>Whether a pipeline reads vertex buffers and the depth buffer (the sky does neither).</summary>
     private enum Geometry { Mesh, Screen }
 
+    /// <summary>A shader format and the extension of its embedded programs (shaders/palette.vs.dxil).</summary>
+    private readonly record struct ShaderFormat(SDL_GPUShaderFormat Format, string Extension);
+
+    /// <summary>The formats in the order tried: Direct3D 12, Metal, Vulkan. The build embeds those its
+    /// tools could compile (Mdk.Engine.csproj).</summary>
+    private static readonly ShaderFormat[] ShaderFormats =
+    [
+        new(SDL_GPUShaderFormat.SDL_GPU_SHADERFORMAT_DXIL, ".dxil"),
+        new(SDL_GPUShaderFormat.SDL_GPU_SHADERFORMAT_MSL, ".msl"),
+        new(SDL_GPUShaderFormat.SDL_GPU_SHADERFORMAT_SPIRV, ".spv"),
+    ];
+
+    /// <summary>The program whose resource tells whether a format is embedded.</summary>
+    private const string ShaderProbe = "shaders/palette.vs";
+
     private readonly record struct DrawCommand(int Mesh, int First, int Count, Material Material, int Frame, Matrix4x4 World);
 
     /// <summary>The 2D canvas: <see cref="CanvasHeight"/> units high like the original's view, as
@@ -104,6 +119,7 @@ public sealed unsafe partial class Renderer : IDisposable
 
     private readonly Window _window;
     private readonly SDL_GPUDevice* _device;
+    private readonly ShaderFormat _shaderFormat;
     private readonly SDL_GPUTextureFormat _depthFormat;
     private readonly Dictionary<Pass, IntPtr> _pipelines = [];
     private readonly SDL_GPUGraphicsPipeline* _skyPipeline;
@@ -123,7 +139,7 @@ public sealed unsafe partial class Renderer : IDisposable
     public Renderer(Window window)
     {
         _window = window;
-        _device = SDL_CreateGPUDevice(SDL_GPUShaderFormat.SDL_GPU_SHADERFORMAT_DXIL, false, (byte*)null);
+        _device = CreateDevice(out _shaderFormat);
         Check(_device != null, "SDL_CreateGPUDevice");
         Check(SDL_ClaimWindowForGPUDevice(_device, window.Handle), "SDL_ClaimWindowForGPUDevice");
 
@@ -249,6 +265,32 @@ public sealed unsafe partial class Renderer : IDisposable
         }
     }
 
+    /// <summary>A device for the first embedded shader format a GPU driver takes (SDL_GPU_DRIVER can
+    /// choose the driver, e.g. vulkan on Windows), or null.</summary>
+    private static SDL_GPUDevice* CreateDevice(out ShaderFormat format)
+    {
+        var embedded = typeof(Renderer).Assembly.GetManifestResourceNames();
+        foreach (var candidate in ShaderFormats)
+        {
+            if (!embedded.Contains(ShaderProbe + candidate.Extension))
+            {
+                continue;
+            }
+
+            var device = SDL_CreateGPUDevice(candidate.Format, false, (byte*)null);
+            if (device == null)
+            {
+                continue;
+            }
+
+            format = candidate;
+            return device;
+        }
+
+        format = default;
+        return null;
+    }
+
     private SDL_GPUSampler* CreateSampler(SDL_GPUSamplerAddressMode mode)
     {
         var info = new SDL_GPUSamplerCreateInfo
@@ -265,7 +307,7 @@ public sealed unsafe partial class Renderer : IDisposable
 
     private SDL_GPUShader* LoadShader(string name, SDL_GPUShaderStage stage, uint samplers)
     {
-        using var stream = typeof(Renderer).Assembly.GetManifestResourceStream("shaders/" + name)
+        using var stream = typeof(Renderer).Assembly.GetManifestResourceStream("shaders/" + name + _shaderFormat.Extension)
             ?? throw new InvalidOperationException($"Shader {name} not embedded: {string.Join(", ", typeof(Renderer).Assembly.GetManifestResourceNames())}");
         var code = new byte[stream.Length];
         stream.ReadExactly(code);
@@ -278,7 +320,7 @@ public sealed unsafe partial class Renderer : IDisposable
                 code = codePtr,
                 code_size = (nuint)code.Length,
                 entrypoint = entryPtr,
-                format = SDL_GPUShaderFormat.SDL_GPU_SHADERFORMAT_DXIL,
+                format = _shaderFormat.Format,
                 stage = stage,
                 num_samplers = samplers,
                 num_uniform_buffers = 1,
@@ -291,8 +333,8 @@ public sealed unsafe partial class Renderer : IDisposable
 
     private SDL_GPUGraphicsPipeline* CreatePipeline(string program, Pass pass, Geometry geometry)
     {
-        var vertexShader = LoadShader(program + ".vs.dxil", SDL_GPUShaderStage.SDL_GPU_SHADERSTAGE_VERTEX, 0);
-        var fragmentShader = LoadShader(program + ".ps.dxil", SDL_GPUShaderStage.SDL_GPU_SHADERSTAGE_FRAGMENT, 2);
+        var vertexShader = LoadShader(program + ".vs", SDL_GPUShaderStage.SDL_GPU_SHADERSTAGE_VERTEX, 0);
+        var fragmentShader = LoadShader(program + ".ps", SDL_GPUShaderStage.SDL_GPU_SHADERSTAGE_FRAGMENT, 2);
         var bufferDescription = new SDL_GPUVertexBufferDescription
         {
             slot = 0,

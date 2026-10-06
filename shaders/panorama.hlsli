@@ -1,12 +1,14 @@
 // The level's panorama, shared by the sky and the mirrors. MDK coordinates: Z up, the azimuth
 // counted from +Y towards +X.
 
+#include "bindings.hlsli"
+
 #define TAU 6.28318530718
 
-Texture2D<float> panorama_texture : register(t0, space2);
-SamplerState panorama_sampler : register(s0, space2);
-Texture2D<float4> palette_texture : register(t1, space2);
-SamplerState palette_sampler : register(s1, space2);
+COMBINED_SAMPLER(0) Texture2D<float> panorama_texture : register(t0, space2);
+COMBINED_SAMPLER(0) SamplerState panorama_sampler : register(s0, space2);
+COMBINED_SAMPLER(1) Texture2D<float4> palette_texture : register(t1, space2);
+COMBINED_SAMPLER(1) SamplerState palette_sampler : register(s1, space2);
 
 cbuffer PanoramaUniforms : register(b0, space3)
 {

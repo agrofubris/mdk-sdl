@@ -2,6 +2,8 @@
 // nearest texels, index 0 transparent. Flat-coloured surfaces skip the lookup.
 // SDL_GPU register spaces: vertex uniforms space1, fragment resources space2, fragment uniforms space3.
 
+#include "bindings.hlsli"
+
 cbuffer VertexUniforms : register(b0, space1)
 {
     float4x4 view_projection;
@@ -27,10 +29,10 @@ VertexOut vs_main(VertexIn input)
     return output;
 }
 
-Texture2D<float> index_texture : register(t0, space2);
-SamplerState index_sampler : register(s0, space2);
-Texture2D<float4> palette_texture : register(t1, space2);
-SamplerState palette_sampler : register(s1, space2);
+COMBINED_SAMPLER(0) Texture2D<float> index_texture : register(t0, space2);
+COMBINED_SAMPLER(0) SamplerState index_sampler : register(s0, space2);
+COMBINED_SAMPLER(1) Texture2D<float4> palette_texture : register(t1, space2);
+COMBINED_SAMPLER(1) SamplerState palette_sampler : register(s1, space2);
 
 cbuffer FragmentUniforms : register(b0, space3)
 {
