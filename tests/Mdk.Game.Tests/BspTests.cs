@@ -32,7 +32,7 @@ public class BspTests
         return (new Bsp(arena), dti.StartPosition);
     }
 
-    [Fact]
+    [DataFact]
     public void SegmentFindsTheFloorUnderTheStart()
     {
         var (bsp, start) = StartArena();
@@ -41,7 +41,7 @@ public class BspTests
         Assert.InRange(point.Z, GroundZ - GroundTolerance, GroundZ + GroundTolerance);
     }
 
-    [Fact]
+    [DataFact]
     public void FallingBoxLandsOnTheFloor()
     {
         var (bsp, start) = StartArena();
@@ -53,7 +53,7 @@ public class BspTests
         Assert.InRange(feet, ground.Z - Tolerance, ground.Z + Tolerance);
     }
 
-    [Fact]
+    [DataFact]
     public void WalkingFarIsStoppedByWalls()
     {
         var (bsp, start) = StartArena();
@@ -66,7 +66,7 @@ public class BspTests
         }
     }
 
-    [Fact]
+    [DataFact]
     public void NotSolidTrianglesAreSkipped()
     {
         var (bsp, start) = StartArena();

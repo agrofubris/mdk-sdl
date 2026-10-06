@@ -17,7 +17,7 @@ public class SniperScreenTests
         Assert.Equal([1, 2, 3, 4, 0, 0, 0, 5, 6, 0], mask[..10]);
     }
 
-    [Fact]
+    [DataFact]
     public void ScreenDecodesWithHoles()
     {
         var sprites = Bni.Load(Data.PathOf("TRAVERSE/TRAVSPRT.BNI"));

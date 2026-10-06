@@ -12,7 +12,7 @@ public class FallFormatTests
     private static readonly MdkData Data = MdkData.Find() ?? throw new InvalidOperationException("MDK data not found");
     private static readonly Bni Bni = Bni.Load(Data.PathOf("FALL3D/FALL3D.BNI"));
 
-    [Fact]
+    [DataFact]
     public void PickupsOfEachFall()
     {
         Assert.Equal(["SW_HOME", "SW_GATT", "SW_HOME"], Fall3d.Pickups(Bni, "FALLPU_1"));
@@ -23,7 +23,7 @@ public class FallFormatTests
     }
 
     /// <summary>A clear middle and blend offsets 1-8 around it.</summary>
-    [Fact]
+    [DataFact]
     public void HazeFrames600By180()
     {
         for (var i = 0; i < HazeFrames; i++)
@@ -37,7 +37,7 @@ public class FallFormatTests
     }
 
     /// <summary>Every model's textures and colours are in each fall's MTI (or <c>PEN_n</c> colours).</summary>
-    [Fact]
+    [DataFact]
     public void ModelMaterialsResolve()
     {
         string[] named = ["KURT", "MISSILE", "CHUTE", "BONES", "SW_DUMMY", "SW_H150", "SW_THUMP", "SW_TWIST", "SW_INTER"];

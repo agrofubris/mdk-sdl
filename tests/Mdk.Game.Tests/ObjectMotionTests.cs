@@ -33,7 +33,7 @@ public class ObjectMotionTests
     }
 
     /// <summary>An object thrown along the floor slides on it and touches it (a grenade lands).</summary>
-    [Fact]
+    [DataFact]
     public void ObjectSlidingAlongTheFloorTouchesIt()
     {
         var runtime = CreateRuntime();

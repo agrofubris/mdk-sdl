@@ -15,7 +15,7 @@ public class FormatTests
 
     private static string LevelPath(int level, string suffix) => Data.PathOf($"TRAVERSE/LEVEL{level}/LEVEL{level}{suffix}");
 
-    [Fact]
+    [DataFact]
     public void EveryLevelParses()
     {
         for (var level = FirstLevel; level <= LastLevel; level++)
@@ -33,7 +33,7 @@ public class FormatTests
         }
     }
 
-    [Fact]
+    [DataFact]
     public void Level7StartsInDant1()
     {
         var dti = Dti.Load(LevelPath(7, ".DTI"));
@@ -43,7 +43,7 @@ public class FormatTests
         Assert.Equal(Arena.PaletteColors * 3, mto.GetArena(FirstArena).PaletteRgb.Length);
     }
 
-    [Fact]
+    [DataFact]
     public void CorridorsParseFromSni()
     {
         var sni = Sni.Load(LevelPath(7, "O.SNI"));
@@ -56,7 +56,7 @@ public class FormatTests
         }
     }
 
-    [Fact]
+    [DataFact]
     public void ModelAnimationsBake()
     {
         var mto = Mto.Load(LevelPath(7, "O.MTO"));
@@ -74,7 +74,7 @@ public class FormatTests
         }
     }
 
-    [Fact]
+    [DataFact]
     public void KurtRunFramesDecode()
     {
         var bni = Bni.Load(Data.PathOf("TRAVERSE/TRAVSPRT.BNI"));
@@ -87,7 +87,7 @@ public class FormatTests
         }
     }
 
-    [Fact]
+    [DataFact]
     public void ScriptsAndSoundsParse()
     {
         for (var level = FirstLevel; level <= LastLevel; level++)
@@ -105,7 +105,7 @@ public class FormatTests
         }
     }
 
-    [Fact]
+    [DataFact]
     public void FontsParse()
     {
         var fti = Fti.Load(Data.PathOf("MISC/MDKFONT.FTI"));
@@ -113,7 +113,7 @@ public class FormatTests
         Assert.True(big.Width("MDK"u8) > big.SpaceWidth * 3);
     }
 
-    [Fact]
+    [DataFact]
     public void FontArchiveHasMenuTexts()
     {
         var fti = Fti.Load(Data.PathOf("MISC/MDKFONT.FTI"));

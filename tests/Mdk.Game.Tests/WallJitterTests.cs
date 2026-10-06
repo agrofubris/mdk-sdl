@@ -28,7 +28,7 @@ public class WallJitterTests
     private static readonly MdkData Data = MdkData.Find() ?? throw new InvalidOperationException("MDK data not found");
     private static readonly AudioDevice Device = new(Output.Muted);
 
-    [Theory]
+    [DataTheory]
     [InlineData(30f)]
     [InlineData(60f)]
     [InlineData(120f)]

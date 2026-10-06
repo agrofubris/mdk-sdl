@@ -102,7 +102,7 @@ public class ScriptVmTests
         return (vm, new MdkObject { Restart = code.Entry });
     }
 
-    [Fact]
+    [DataFact]
     public void LoopCountsWithVariablesAndGoto()
     {
         var code = new Code()
@@ -121,7 +121,7 @@ public class ScriptVmTests
         Assert.NotEqual(0, obj.Restart);
     }
 
-    [Fact]
+    [DataFact]
     public void GosubReturnsAfterTheCall()
     {
         var code = new Code()
@@ -142,7 +142,7 @@ public class ScriptVmTests
         Assert.Equal(code.Entry, obj.Restart);
     }
 
-    [Fact]
+    [DataFact]
     public void ReturnWithoutGosubStopsTheScript()
     {
         var (vm, obj) = Load(new Code().U8(Return).End());
@@ -152,7 +152,7 @@ public class ScriptVmTests
         Assert.Equal(0, obj.Restart);
     }
 
-    [Fact]
+    [DataFact]
     public void WaitResumesAfterItsTicks()
     {
         // 0.09 s: the script goes on at the 4th tick (30 ticks per second).
@@ -174,7 +174,7 @@ public class ScriptVmTests
         Assert.Equal(11f, obj.Variables[0]);
     }
 
-    [Fact]
+    [DataFact]
     public void FlagsBranchAndGotoZeroStops()
     {
         const int Bit = 3;
@@ -195,7 +195,7 @@ public class ScriptVmTests
         Assert.Equal(0, obj.Restart);
     }
 
-    [Fact]
+    [DataFact]
     public void UnimplementedConditionsAreFalse()
     {
         // if_cheat_key (13) never holds: the goto isn't taken.

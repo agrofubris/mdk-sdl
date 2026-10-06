@@ -249,7 +249,7 @@ public class SniperTests
         Assert.Equal(points[2].Z, path.Sample(over).Z, 1);
     }
 
-    [Fact]
+    [DataFact]
     public void KurtSnipesOnlyOnTheFloorAndAKnockDownEndsIt()
     {
         var kurt = StandingKurt();
@@ -275,7 +275,7 @@ public class SniperTests
         Assert.False(kurt.Sniping);
     }
 
-    [Fact]
+    [DataFact]
     public void SniperKeyLeavesSniperMode()
     {
         var kurt = StandingKurt();

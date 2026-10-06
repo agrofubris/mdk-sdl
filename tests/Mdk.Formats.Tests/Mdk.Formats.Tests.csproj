@@ -9,6 +9,11 @@
   </ItemGroup>
   <ItemGroup>
     <Using Include="Xunit" />
+    <Using Include="Mdk.Tests" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Skips the tests that read the game's files when it isn't installed. -->
+    <Compile Include="..\Shared\*.cs" LinkBase="Shared" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Mdk.Formats\Mdk.Formats.csproj" />

@@ -6,7 +6,7 @@ public class MediaTests
     private static readonly MdkData Data = MdkData.Find() ?? throw new InvalidOperationException("MDK data not found");
     private const int SlideCount = 8;
 
-    [Theory]
+    [DataTheory]
     [InlineData("MISC/FLIC/MDKEND.FLC")]
     [InlineData("MISC/FLIC/Mdk12.flc")]
     [InlineData("MISC/FLIC/pie.flc")]
@@ -24,7 +24,7 @@ public class MediaTests
         Assert.Contains(flc.Palette, c => c != 0);
     }
 
-    [Fact]
+    [DataFact]
     public void EndMovieDecodes()
     {
         var mve = Mve.Load(Data.PathOf("MISC/FLIC/MDKBZK.MVE"));
@@ -43,7 +43,7 @@ public class MediaTests
         Assert.Contains(mve.Indices, i => i != 0);
     }
 
-    [Fact]
+    [DataFact]
     public void SlidesDecode()
     {
         for (var i = 1; i <= SlideCount; i++)

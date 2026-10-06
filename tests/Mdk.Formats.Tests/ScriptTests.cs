@@ -15,7 +15,7 @@ public class ScriptTests
 
     private static readonly MdkData Data = MdkData.Find() ?? throw new InvalidOperationException("MDK data not found");
 
-    [Fact]
+    [DataFact]
     public void EveryScriptDecodes()
     {
         var decoded = 0;

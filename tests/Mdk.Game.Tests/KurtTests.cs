@@ -50,7 +50,7 @@ public class KurtTests
         }
     }
 
-    [Theory]
+    [DataTheory]
     [InlineData(Difficulty.Easy, 9, 6)]
     [InlineData(Difficulty.Easy, 1, 1)]
     [InlineData(Difficulty.Normal, 9, 9)]
@@ -62,7 +62,7 @@ public class KurtTests
         Assert.Equal(Kurt.Kurt.MaxHealth - taken, kurt.Health);
     }
 
-    [Fact]
+    [DataFact]
     public void InvulnerableKurtTakesNoDamage()
     {
         var kurt = Standing();
@@ -72,7 +72,7 @@ public class KurtTests
         Assert.Equal(0f, kurt.KnockDamage);
     }
 
-    [Fact]
+    [DataFact]
     public void KnockDamageAddsUpAndDrains()
     {
         var kurt = Standing();
@@ -86,7 +86,7 @@ public class KurtTests
         Assert.Equal(State.Still, kurt.Current);
     }
 
-    [Fact]
+    [DataFact]
     public void FiveDamageKnocksKurtDown()
     {
         var kurt = Standing();
@@ -103,7 +103,7 @@ public class KurtTests
         Assert.Equal(State.Still, kurt.Current);
     }
 
-    [Fact]
+    [DataFact]
     public void KnockedDownKurtStopsFiring()
     {
         var kurt = Standing();
@@ -118,7 +118,7 @@ public class KurtTests
         Assert.False(kurt.Firing);
     }
 
-    [Fact]
+    [DataFact]
     public void KurtDiesAndTheSkullFadesIn()
     {
         var kurt = Standing();
@@ -137,7 +137,7 @@ public class KurtTests
     private static Kurt.Kurt InFan(Vector3 feet, Func<float, float, float> updraft) =>
         new(new ArenaSpace(), new SoundMixer(Device, _ => null), _ => Frames) { Feet = feet, Updraft = updraft };
 
-    [Fact]
+    [DataFact]
     public void KurtRisesInAnUpdraft()
     {
         const float Lift = 10f;
@@ -152,7 +152,7 @@ public class KurtTests
         Assert.True(kurt.Feet.Z > 5f);
     }
 
-    [Fact]
+    [DataFact]
     public void KurtLeavesAnUpdraftAtMost40()
     {
         var kurt = InFan(new Vector3(0f, 0f, 100f), (_, _) => float.NaN);
