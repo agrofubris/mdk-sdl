@@ -40,8 +40,8 @@ public sealed class FallModels(Renderer renderer, Bni bni, TextureArchive mti, P
     }
 
     /// <summary>Draws a model at rest, or in a frame of an animation; <paramref name="textureFrame"/>
-    /// picks an animated texture's frame.</summary>
-    public void Draw(string name, Matrix4x4 world, string animation = "", int frame = 0, int textureFrame = 0)
+    /// picks an animated texture's frame, <paramref name="pass"/> how it meets the scene.</summary>
+    public void Draw(string name, Matrix4x4 world, string animation = "", int frame = 0, int textureFrame = 0, Pass pass = Pass.DoubleSided)
     {
         var key = (name, animation, frame);
         if (!_meshes.TryGetValue(key, out var mesh))
@@ -56,7 +56,7 @@ public sealed class FallModels(Renderer renderer, Bni bni, TextureArchive mti, P
 
         foreach (var batch in mesh.Batches)
         {
-            renderer.Draw(mesh.Mesh, batch.First, batch.Count, batch.Material, textureFrame, world);
+            renderer.Draw(mesh.Mesh, batch.First, batch.Count, batch.Material with { Pass = pass }, textureFrame, world);
         }
     }
 

@@ -40,6 +40,8 @@ public enum Pass
     Mirror,
     /// <summary>Blended by alpha, both faces, after the opaque ones (glass).</summary>
     Blended,
+    /// <summary>Opaque, both faces, over the scene without depth (the fall's explosions).</summary>
+    OnTop,
     /// <summary>The 2D canvas over the scene (HUD, menus): blended, no depth.</summary>
     Overlay,
 }
@@ -446,8 +448,8 @@ public sealed unsafe partial class Renderer : IDisposable
             depth_stencil_state = new SDL_GPUDepthStencilState
             {
                 compare_op = SDL_GPUCompareOp.SDL_GPU_COMPAREOP_LESS_OR_EQUAL,
-                enable_depth_test = geometry == Geometry.Mesh && pass != Pass.Overlay,
-                enable_depth_write = geometry == Geometry.Mesh && !blended,
+                enable_depth_test = geometry == Geometry.Mesh && pass is not (Pass.Overlay or Pass.OnTop),
+                enable_depth_write = geometry == Geometry.Mesh && !blended && pass != Pass.OnTop,
             },
             target_info = new SDL_GPUGraphicsPipelineTargetInfo
             {
