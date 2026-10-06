@@ -163,4 +163,26 @@ public class KurtTests
         Assert.False(kurt.InUpdraft);
         Assert.True(kurt.VerticalSpeed <= Kurt.Kurt.UpdraftExitSpeed);
     }
+
+    [DataFact]
+    public void ChuteFlapsWhileOpenAndClosesWithItsSound()
+    {
+        var entry = new SoundMixer.Entry(new Sound(new float[1000], 1, 1, Looping.Once), SoundMixer.FullVolume);
+        var mixer = new SoundMixer(Device, _ => entry);
+        var kurt = new Kurt.Kurt(new ArenaSpace(), mixer, _ => Frames) { Feet = new Vector3(0f, 0f, 1000f), VerticalSpeed = -20f };
+        var jump = new Input();
+        jump.Hold(Key.Jump, Input.State.Down);
+
+        // Open: CHUTEON once the opening frames are shown, looping.
+        Run(kurt, jump, 0.5f);
+        Assert.True(kurt.ChuteOpen);
+        Assert.True(mixer.IsPlaying("CHUTEON"));
+        Assert.False(mixer.IsPlaying("CHUTEIN"));
+
+        // Closed: CHUTEON stops, CHUTEIN plays.
+        Run(kurt, new Input(), 2 * Step);
+        Assert.False(kurt.ChuteOpen);
+        Assert.False(mixer.IsPlaying("CHUTEON"));
+        Assert.True(mixer.IsPlaying("CHUTEIN"));
+    }
 }

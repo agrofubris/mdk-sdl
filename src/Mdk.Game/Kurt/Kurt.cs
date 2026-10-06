@@ -56,6 +56,9 @@ public sealed partial class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.S
     private const float ChuteGravity = 21.33f;
     private const float ChuteFallSpeed = -8f;
     private const float ChuteBrake = 256f;
+    /// <summary>CHUTEON flaps after the chute's opening frames.</summary>
+    private const int ChuteOpenFrames = 4;
+    private const string ChuteOnSound = "CHUTEON";
 
     // damp_collide_move's slide factors: walking stops within 30° of head-on; falling slides off 45°.
     private const float WalkSlide = 0.75f;
@@ -150,6 +153,7 @@ public sealed partial class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.S
         }
 
         UpdateKnockDamage(delta);
+        UpdateChuteSound();
         var turbo = input.IsDown(Key.Turbo);
         if (InBetaMove)
         {
@@ -391,6 +395,25 @@ public sealed partial class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.S
         {
             VerticalSpeed = MathF.Min(VerticalSpeed + ChuteBrake * delta, ChuteFallSpeed);
         }
+    }
+
+    /// <summary>CHUTEON flaps while the chute is open (after its opening frames); closing stops it,
+    /// with CHUTEIN (damp_animate).</summary>
+    private void UpdateChuteSound()
+    {
+        if (ChuteOpen && Current == State.Chute && AnimationFrame >= ChuteOpenFrames)
+        {
+            mixer.Play(ChuteOnSound, SoundMixer.Start.Once);
+            return;
+        }
+
+        if (ChuteOpen || !mixer.IsPlaying(ChuteOnSound))
+        {
+            return;
+        }
+
+        mixer.Stop(ChuteOnSound);
+        mixer.Play("CHUTEIN");
     }
 
     /// <summary>On a floor flatter than 75°, walking downhill keeps the feet on it.</summary>

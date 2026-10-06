@@ -94,6 +94,7 @@ public sealed partial class Kurt
         VerticalSpeed = 0f;
         OnFloor = false;
         StopFiring();
+        mixer.Stop(ChuteOnSound);
         ChuteOpen = false;
         _climbTicks = 0;
         SetState(State.Hang);
