@@ -48,6 +48,8 @@ using Mdk.Game.Scripts;
 //   --ride=TYPE             put Kurt on the first walker of that type after the delay (tests)
 //   --bomber[=drop]         LEVEL7: call the XE of DANT_5 after the delay, board it (drop: and drop a bomb; tests)
 //   --snapshot=NAME         at the screenshot, a full save as F2 makes, its hash printed (tests)
+//   --soak[=seed]           random seeded keys on every screen, 6 steps a frame, checks in a level
+//                           (tests; --tour: every arena in turn during --wait; tests/soak_test.sh)
 
 const int DefaultLevel = 7;
 
@@ -100,6 +102,8 @@ var viewer = new ViewerOptions(level, position, yaw, pitch, sound)
     Ride = options.GetValueOrDefault("ride"),
     Bomber = options.TryGetValue("bomber", out var bomber) ? (bomber == "drop" ? BomberTest.Drop : BomberTest.Ride) : null,
     Snapshot = options.GetValueOrDefault("snapshot"),
+    Soak = options.TryGetValue("soak", out var soak) ? (soak.Length != 0 ? int.Parse(soak, CultureInfo.InvariantCulture) : 1) : null,
+    Route = options.ContainsKey("tour") ? SoakRoute.Tour : SoakRoute.Stay,
 };
 
 // Test options of a level (and --screenshot without --menu) skip the menu, as in the Godot port.

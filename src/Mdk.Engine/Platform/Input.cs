@@ -145,6 +145,13 @@ public sealed class Input
         _held.Remove(key);
     }
 
+    /// <summary>Presses a menu key for this frame from the program (automated tests).</summary>
+    public void Press(MenuKey key)
+    {
+        _menuPressed.Add(key);
+        AnyPressed = true;
+    }
+
     /// <summary>Pressed this frame.</summary>
     public bool WasPressed(Key key) => _pressed.Contains(key);
 

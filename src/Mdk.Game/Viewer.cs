@@ -56,6 +56,9 @@ public sealed record ViewerOptions(int Level, Vector3? Position, float? Yaw, flo
     public BomberTest? Bomber { get; init; }
     /// <summary>At the screenshot, a full save of this name (as F2), its hash printed.</summary>
     public string? Snapshot { get; init; }
+    /// <summary>The soak test's seed: random keys (<see cref="SoakKeys"/>) and checks (<see cref="SoakTest"/>) until the screenshot.</summary>
+    public int? Soak { get; init; }
+    public SoakRoute Route { get; init; }
 }
 
 public enum SoundMode { On, Muted }
@@ -108,6 +111,7 @@ public sealed class Viewer : IScreen
     private readonly SniperView _sniper;
     private readonly SniperTest _sniperTest;
     private readonly RideTest _rideTest;
+    private readonly SoakTest? _soak;
     /// <summary>F2's name prompt, while it's open.</summary>
     private SavePrompt? _snapshotPrompt;
     private readonly FollowCamera _follow = new();
@@ -164,7 +168,7 @@ public sealed class Viewer : IScreen
 
         // The difficulty decides the town's timer: before the scripts.
         _kurt.Inventory.Difficulty = ui.Settings.Difficulty;
-        _scripts = new ScriptRuntime(level, cmi, sprites, _space, groups, _mixer, _kurt)
+        _scripts = new ScriptRuntime(level, cmi, sprites, _space, groups, _mixer, _kurt, options.Soak)
         {
             Option = ui.Settings.Gore ? 1 : 0,
         };
@@ -190,6 +194,7 @@ public sealed class Viewer : IScreen
         _sniper = new SniperView(renderer, _objects, level, _hud);
         _sniperTest = new SniperTest(options);
         _rideTest = new RideTest(options);
+        _soak = options.Soak != null ? new SoakTest(level, _space, options.Route, options.Wait) : null;
         _fly = new FreeCamera { Pitch = options.Pitch };
         _flying = options.Fly;
         _pause = new PauseMenu(ui);
@@ -315,6 +320,7 @@ public sealed class Viewer : IScreen
         }
 
         Report(_kurt, _space);
+        _soak?.Report(_scripts, _kurt, _time);
         return Event.Quit;
     }
 
@@ -327,11 +333,11 @@ public sealed class Viewer : IScreen
         {
             _pending -= Step;
             _time += Step;
-            var started = _time >= options.Delay;
-            input.Hold(Key.Forward, started && _time <= options.Delay + options.Walk ? Input.State.Down : Input.State.Up);
-            input.Hold(Key.Jump, started && options.Jump ? Input.State.Down : Input.State.Up);
-            input.Hold(Key.Fire, started && options.Fire ? Input.State.Down : Input.State.Up);
-            input.Hold(Key.UseItem, options.Use && _time >= UseStart && _time <= UseStart + UseTime ? Input.State.Down : Input.State.Up);
+            if (_soak == null)
+            {
+                HoldTestKeys(input);
+            }
+
             RunTests();
             _sniperTest.Step(_kurt, _scripts, input, _time);
             _rideTest.Step(_kurt, _scripts, input, _time);
@@ -348,6 +354,7 @@ public sealed class Viewer : IScreen
             input.ClearMouse();
             _scripts.Update(Step);
             _space.SetSolid(_scripts.SolidArenas);
+            _soak?.Step(_kurt, _scripts, _space, _time);
             if (MathF.Floor(_time * Kurt.Kurt.Ticks) > MathF.Floor((_time - Step) * Kurt.Kurt.Ticks))
             {
                 _hud.Tick(HudStateOf(_kurt, _scripts));
@@ -358,6 +365,17 @@ public sealed class Viewer : IScreen
                 Profile(_scripts, _time);
             }
         }
+    }
+
+    /// <summary>The tests' held keys: forward for --walk seconds, jump, fire, and use at 1 second.</summary>
+    private void HoldTestKeys(Input input)
+    {
+        var options = _options;
+        var started = _time >= options.Delay;
+        input.Hold(Key.Forward, started && _time <= options.Delay + options.Walk ? Input.State.Down : Input.State.Up);
+        input.Hold(Key.Jump, started && options.Jump ? Input.State.Down : Input.State.Up);
+        input.Hold(Key.Fire, started && options.Fire ? Input.State.Down : Input.State.Up);
+        input.Hold(Key.UseItem, options.Use && _time >= UseStart && _time <= UseStart + UseTime ? Input.State.Down : Input.State.Up);
     }
 
     /// <summary>The tests' --die (Kurt is hurt to death) and --event (a special_event: 1 ends the level).</summary>

@@ -182,7 +182,8 @@ public sealed partial class ScriptRuntime
     public EndLevel? EndLevel;
     /// <summary>On-screen messages (hud_message), set by the game.</summary>
     public Hud.Messages? Messages;
-    public readonly Random Rng = new();
+    /// <summary>rand(); seeded by the soak test (its runs repeat), otherwise random.</summary>
+    public readonly Random Rng;
 
     /// <summary>The point and direction of the last shatter_group (0x4d5374, 0x4d5358).</summary>
     public Vector3 ShatterPoint;
@@ -285,8 +286,9 @@ public sealed partial class ScriptRuntime
     private int _tickCount;
 
     public ScriptRuntime(LevelData level, Cmi cmi, Bni sprites, ArenaSpace space, TriangleGroups groups, SoundMixer mixer,
-        Mdk.Game.Kurt.Kurt kurt)
+        Mdk.Game.Kurt.Kurt kurt, int? seed = null)
     {
+        Rng = seed is { } value ? new Random(value) : new Random();
         Kurt = kurt;
         Rides = new Rides(this);
         _sprites = sprites;

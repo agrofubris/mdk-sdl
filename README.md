@@ -93,7 +93,9 @@ mdk.exe
   `--ride=TYPE` (Kurt on that walker), `--bomber[=drop]` (level 7: calls the `XE`, boards it, and
   with `drop` drops a bomb once unlocked). With
   `--screenshot` but without `--level`, the screen shown after `--wait` seconds (menu,
-  statistics...) is saved.
+  statistics...) is saved. `--soak[=seed]`: random but seeded keys on every screen (menu keys
+  too when it starts in the menus), 0.1 s a frame; in a level Kurt is healed and problems print
+  as `Soak problem` (`--tour`: every arena in turn during `--wait`).
 
 Settings (volumes, music filter, mouse, fullscreen, difficulty, gore, key bindings) and saved games
 are kept in `%LOCALAPPDATA%/mdk-sdl` (`settings.cfg`, `saves/*.sav`; `MDK_USER_DIR` overrides the
@@ -139,7 +141,11 @@ sh tests/fall_test.sh
 sh tests/rides_test.sh
 sh tests/snapshot_test.sh
 sh tests/end_level_test.sh
+sh tests/soak_test.sh short
 ```
+
+`tests/soak_test.sh` (about 3 minutes with `short`, 15 without) plays every level, arena, fall,
+stream and menu with random keys and reports exceptions, hangs and `Soak problem` lines.
 
 ## Layout
 

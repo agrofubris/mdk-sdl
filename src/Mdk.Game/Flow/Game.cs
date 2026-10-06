@@ -49,6 +49,8 @@ public sealed class Game : IDisposable
     /// <summary>Overrides the user folder (settings and saves), for tests.</summary>
     private const string UserFolderVariable = "MDK_USER_DIR";
     private const int TownShift = 29;
+    /// <summary>The soak test's frames are this many game steps (0.1 s): it runs faster.</summary>
+    private const int SoakSteps = 6;
 
     private readonly GameOptions _options;
     private readonly Window _window;
@@ -59,6 +61,10 @@ public sealed class Game : IDisposable
     private readonly GameState _state = new();
     private readonly SaveGames _saves;
     private readonly Renderer.Scope _scope;
+    /// <summary>The soak test's random keys, on every screen; menu keys too when it starts in the
+    /// menus or the flow screens.</summary>
+    private readonly SoakKeys? _soak;
+    private readonly bool _soakMenus;
     private IScreen? _screen;
     /// <summary>The first level gets the command line's test options; later ones don't.</summary>
     private bool _firstLevel = true;
@@ -83,6 +89,8 @@ public sealed class Game : IDisposable
         settings.Apply(_audio, _window, _input);
         _ui = new Ui(data, _window, _renderer, _audio, _input, settings, folder);
         _scope = _renderer.Mark();
+        _soak = options.Level.Soak is { } seed ? new SoakKeys(seed) : null;
+        _soakMenus = options.Start is Start.Menu or Start.Statistics or Start.Briefing or Start.EndMovie;
     }
 
     /// <summary>Runs the screens until the window closes or one quits.</summary>
@@ -96,13 +104,20 @@ public sealed class Game : IDisposable
 
         Handle(first);
         var test = _options.Screenshot != null;
+        var step = _soak != null ? Viewer.Step * SoakSteps : Viewer.Step;
         var clock = Stopwatch.StartNew();
         var time = 0f;
         while (_screen != null && _window.PumpEvents(_input))
         {
-            var elapsed = test ? Viewer.Step : (float)clock.Elapsed.TotalSeconds;
+            var elapsed = test ? step : (float)clock.Elapsed.TotalSeconds;
             clock.Restart();
             time += elapsed;
+            _soak?.Hold(_input, time);
+            if (_soakMenus)
+            {
+                _soak?.PressMenu(_input, time);
+            }
+
             var shot = test && !_levelShot && time >= _options.Wait ? _options.Screenshot : null;
             var next = _screen.Frame(elapsed, shot);
             _audio.Update(elapsed);
