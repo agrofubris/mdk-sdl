@@ -736,6 +736,7 @@ public sealed partial class ScriptRuntime
             if (CurrentArena.Length != 0)
             {
                 SecondArena = CurrentArena;
+                Kurt.EnterArena();
             }
 
             CurrentArena = arena;

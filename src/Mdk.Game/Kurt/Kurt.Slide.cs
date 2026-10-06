@@ -10,7 +10,7 @@ namespace Mdk.Game.Kurt;
 /// <code>
 ///   wind zone ──► SLIP (K_SLIP) ──► SLIDE │ SLIDE_FAST (forward) │ SLIDE_BRAKE (back)
 ///   velocity += slope² + wind² (slide_accel), heading = velocity's, speed ≤ cap (15-80)
-///   ends: 20 ticks in the air ──► FALL │ at rest on the floor ──► gets up (K_BFLIP)
+///   ends: 20 ticks in the air or 15 in a new arena ──► FALL │ at rest on the floor ──► gets up (K_BFLIP)
 /// </code></summary>
 public sealed partial class Kurt
 {
@@ -45,6 +45,8 @@ public sealed partial class Kurt
     private const float SlideWallMove = 0.5f;
     private const float SlideWallShare = 0.5f;
     private const float SlideAirTicks = 20f;
+    /// <summary>Ticks of sliding left after entering another arena.</summary>
+    private const float SlideArenaTicks = 15f;
     /// <summary>At rest: no speed and no push left (within this).</summary>
     private const float SlideRest = 1e-5f;
     /// <summary>BUTSLIDE plays at 11025 Hz, at 15000 Hz going forward; BUTBRAKE while braking.</summary>
@@ -60,6 +62,8 @@ public sealed partial class Kurt
     private Vector3 _slideNormal = Vector3.UnitZ;
     private Vector2 _slidePush;
     private float _slideAir;
+    /// <summary>Ticks left after an arena change (0x573be8 below 0); 0: none.</summary>
+    private float _slideLeft;
     private int _slideVoice;
     private string _slideSound = "";
 
@@ -80,9 +84,22 @@ public sealed partial class Kurt
         _slideNormal = Vector3.UnitZ;
         _slidePush = Vector2.Zero;
         _slideAir = 0f;
+        _slideLeft = 0f;
         StopFiring();
         ChuteOpen = false;
         SetState(State.Slip);
+    }
+
+    /// <summary>Kurt crossed into another arena (0x41c550): a slide ends 15 ticks later. E.g.
+    /// LEVEL6's slide drops him into OLYM_2 against a wall.</summary>
+    public void EnterArena()
+    {
+        if (!Sliding || _slideLeft > 0f)
+        {
+            return;
+        }
+
+        _slideLeft = SlideArenaTicks;
     }
 
     public void StopSlide()
@@ -128,6 +145,18 @@ public sealed partial class Kurt
         {
             StopSlide();
             return false;
+        }
+
+        // 15 ticks after an arena change he falls.
+        if (_slideLeft > 0f)
+        {
+            _slideLeft -= Ticks * delta;
+            if (_slideLeft <= 0f)
+            {
+                StopSlide();
+                SetState(State.Fall);
+                return false;
+            }
         }
 
         if (OnFloor)
