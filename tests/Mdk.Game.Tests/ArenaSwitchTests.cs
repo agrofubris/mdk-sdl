@@ -67,4 +67,16 @@ public class ArenaSwitchTests
         Assert.Equal(Room, runtime.CurrentArena);
         Assert.Equal(Corridor, runtime.SecondArena);
     }
+
+    /// <summary>The first tick has no move (script_runtime.gd): no velocity from the origin.</summary>
+    [DataFact]
+    public void FirstTickHasNoMove()
+    {
+        var runtime = CreateRuntime();
+        runtime.Kurt.Teleport(new Vector3(0f, Doorway - 100f, Floor), 90f);
+
+        runtime.Update(ScriptRuntime.Tick);
+
+        Assert.Equal(Vector3.Zero, runtime.KurtVelocity);
+    }
 }

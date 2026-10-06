@@ -708,6 +708,12 @@ public sealed partial class ScriptRuntime
             }
         }
 
+        // The first tick (also after loading a game) has no move.
+        if (_tickCount == 0)
+        {
+            _previousKurtPosition = KurtPosition;
+        }
+
         // Kurt changes arena only through a connection of his (0x41c550); a teleport puts him anywhere.
         // The 1996 demo's connections have no direction: there the arenas' boxes decide.
         var arena = IsBeta ? BetaArena()
