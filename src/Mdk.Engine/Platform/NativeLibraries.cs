@@ -4,14 +4,16 @@ using System.Security.Cryptography;
 
 namespace Mdk.Engine.Platform;
 
-/// <summary>Keeps the program a single file: SDL3's native library is embedded and, on first use,
-/// written to the user's local data folder (once per version, named by its hash) and loaded from there.
+/// <summary>Keeps the program a single file: SDL3's native library for the target platform is embedded
+/// and, on first use, written to the user's local data folder (once per version, named by its hash) and
+/// loaded from there.
 /// <code>
-///   mdk.exe ─(resource native/SDL3.dll)─► %LOCALAPPDATA%/mdk-sdl/&lt;hash&gt;/SDL3.dll ─► SDL3-CS imports
+///   mdk ─(resource native/SDL3.dll, libSDL3.so or libSDL3.dylib)─► &lt;local data&gt;/mdk-sdl/&lt;hash&gt;/ ─► SDL3-CS imports
 /// </code></summary>
 internal static class NativeLibraries
 {
-    private const string Resource = "native/SDL3.dll";
+    /// <summary>The embedded library's resource name starts with it (Mdk.Engine.csproj).</summary>
+    private const string ResourceFolder = "native/";
     private const string LibraryName = "SDL3";
     private const string FolderName = "mdk-sdl";
     private const int HashCharacters = 16;
@@ -50,17 +52,19 @@ internal static class NativeLibraries
 
     private static string? Extract()
     {
-        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(Resource);
-        if (stream == null)
+        var assembly = Assembly.GetExecutingAssembly();
+        var resource = assembly.GetManifestResourceNames().FirstOrDefault(n => n.StartsWith(ResourceFolder, StringComparison.Ordinal));
+        if (resource == null)
         {
             return null;
         }
 
+        using var stream = assembly.GetManifestResourceStream(resource)!;
         var bytes = new byte[stream.Length];
         stream.ReadExactly(bytes);
         var hash = Convert.ToHexString(SHA256.HashData(bytes))[..HashCharacters];
         var folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), FolderName, hash);
-        var path = Path.Combine(folder, Path.GetFileName(Resource));
+        var path = Path.Combine(folder, Path.GetFileName(resource));
         if (File.Exists(path))
         {
             return path;

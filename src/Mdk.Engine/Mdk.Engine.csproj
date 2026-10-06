@@ -8,11 +8,19 @@
   </PropertyGroup>
   <PropertyGroup>
     <Sdl3Version>2026.722.0</Sdl3Version>
+    <!-- SDL3 for the target (dotnet publish -r linux-x64), else for this machine. Not runtime-agnostic:
+         the program's runtime reaches this project (and obj/, bin/ get a folder per runtime). -->
+    <IsRidAgnostic>false</IsRidAgnostic>
+    <Sdl3Runtime>$(RuntimeIdentifier)</Sdl3Runtime>
+    <Sdl3Runtime Condition="'$(Sdl3Runtime)' == ''">$(NETCoreSdkRuntimeIdentifier)</Sdl3Runtime>
+    <Sdl3Library>libSDL3.so</Sdl3Library>
+    <Sdl3Library Condition="$(Sdl3Runtime.StartsWith('win'))">SDL3.dll</Sdl3Library>
+    <Sdl3Library Condition="$(Sdl3Runtime.StartsWith('osx'))">libSDL3.dylib</Sdl3Library>
   </PropertyGroup>
   <ItemGroup>
     <!-- The native library is embedded instead (see Platform/NativeLibraries.cs): one exe. -->
     <PackageReference Include="ppy.SDL3-CS" Version="$(Sdl3Version)" ExcludeAssets="native" GeneratePathProperty="true" />
-    <EmbeddedResource Include="$(PkgPpy_SDL3-CS)/runtimes/win-x64/native/SDL3.dll" LogicalName="native/SDL3.dll" WithCulture="false" />
+    <EmbeddedResource Include="$(PkgPpy_SDL3-CS)/runtimes/$(Sdl3Runtime)/native/$(Sdl3Library)" LogicalName="native/$(Sdl3Library)" WithCulture="false" />
   </ItemGroup>
   <ItemGroup>
     <Shader Include="$(ShaderDir)*.hlsl" />

@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <RootNamespace>Mdk.Game</RootNamespace>
+    <!-- Passes the program's runtime on to the engine (its SDL3 library). -->
+    <IsRidAgnostic>false</IsRidAgnostic>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Mdk.Formats\Mdk.Formats.csproj" />
