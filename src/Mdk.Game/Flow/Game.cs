@@ -46,8 +46,7 @@ public sealed record GameOptions(Start Start, ViewerOptions Level)
 ///              ▲  └continue/save─► loading                     │                       save prompt
 ///              │                                               │ died: LASTGAME           briefing ──fall──► next level
 ///              └───────────────────────────────────────────────┘ event 81: end movies ─► splash ─► menu
-/// </code>
-/// [ ] are not ported yet (TODO hooks in <see cref="Handle"/>, the statistics and the menu).</summary>
+/// </code></summary>
 public sealed class Game : IDisposable
 {
     private const int WindowWidth = 1280;

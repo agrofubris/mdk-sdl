@@ -9,8 +9,7 @@ namespace Mdk.Game.Flow;
 ///   index 4:   tornado ─► Gunter stream ─► save prompt ─► LEVEL5 (no statistics, no fall)
 ///   index 5:   event 81 ─► end movies ─► menu
 ///   game over (the town flattened) or a level outside the order ─► menu
-/// </code>
-/// [ ] are not ported yet.</summary>
+/// </code></summary>
 public static class LevelFlow
 {
     public enum After { Menu, Statistics, LastLevel }

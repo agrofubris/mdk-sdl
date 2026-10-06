@@ -983,7 +983,7 @@ public sealed class ScriptVm(ScriptRuntime runtime, ScriptDecoder decoder)
             case 220: // place_x_near_player: [x min, x max, y limit]
                 runtime.PlaceNearKurt(obj, F(o[0]), F(o[1]), F(o[2]));
                 break;
-            case 203: // camera_track: [[mode(, height)]] (nothing in sniper mode, which isn't ported)
+            case 203: // camera_track: [[mode(, height)]] (nothing in sniper mode)
             {
                 var track = L(o[0]);
                 runtime.CameraTrack(obj, I(track[0]), track.Length > 1 ? F(track[1]) : 0f);

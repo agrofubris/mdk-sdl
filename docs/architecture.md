@@ -199,7 +199,7 @@ so the game runs them unchanged:
     `fall_missile.gd`): the intro in space, steering, the camera, the ground with the crawler's
     track and the haze (quads far below the camera), radars, missiles, pickups, Bones, the palette
     effects, the HUD; health and pickups go on to the level (`GameState.Carry`). Pickups are only
-    tested under their chute, as the original (0x41275c; fall.gd drops them at once).
+    tested under their chute, as the original (0x41275c, as fall.gd).
     Approximations: the radar's colours, the smoke trails, the red only on palette colours.
 11. ✅ Enhanced look (`Renderer.Enhanced.cs`, `shaders/enhanced.hlsl`, `post.hlsl`, `depth.hlsl`):
     filtered textures, sky, sprites and 2D screens, a sun with shadows, white ambient light,

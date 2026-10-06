@@ -67,8 +67,7 @@ public sealed partial class FallSim
             var previous = pickup.Position;
             MovePickup(pickup, dt, ticks);
 
-            // Only under its chute (0x41275c): dropped above the camera, it would go at once
-            // (fall.gd tests this from the drop, so its pickups never show).
+            // Only under its chute (0x41275c): dropped above the camera, it would go at once.
             if (!pickup.Chute)
             {
                 continue;
