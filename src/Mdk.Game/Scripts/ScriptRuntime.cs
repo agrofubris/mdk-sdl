@@ -214,8 +214,8 @@ public sealed partial class ScriptRuntime
     /// <summary>Frames of arena textures set by arena_texture_frame (opcode 133).</summary>
     public readonly AnimatedTextures AnimatedTextures;
 
-    /// <summary>The health bar (0x573c74 seconds left, 0x41e3c8): its object (0x573c78), or values.</summary>
-    // TODO the bar isn't drawn yet (hud)
+    /// <summary>The health bar (0x573c74 seconds left, 0x41e3c8): its object (0x573c78), or values;
+    /// drawn by Hud/HudView.</summary>
     public float BarTime;
     public MdkObject? BarObject;
     public int BarHealth;
@@ -254,7 +254,6 @@ public sealed partial class ScriptRuntime
     public string SecondArena = "";
     public bool SecondActive;
     /// <summary>The arenas drawn (Kurt's and the active second) last tick.</summary>
-    // TODO the level view still draws every reachable arena (level.gd show_arenas, set_solid_arenas)
     public IReadOnlyList<string> DrawnArenas => _drawnArenas;
 
     /// <summary>The arenas Kurt collides with: the drawn ones, not the second on the snowboard (0x465e34).</summary>
@@ -2841,6 +2840,4 @@ public sealed partial class ScriptRuntime
     /// <summary>A sound following an object, at an offset in its frame.</summary>
     private int PlayOn(string name, MdkObject obj, SoundMixer.Start start, Vector3 offset) =>
         Mixer.PlayOn(name, () => obj.Position + RotatedZ(offset, obj.Yaw), start);
-
-    // TODO full saves (snapshot.gd, script_runtime.gd snapshot/restore)
 }
