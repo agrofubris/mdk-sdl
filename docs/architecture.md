@@ -144,6 +144,21 @@ so the game runs them unchanged:
   `s16` are taken as padding after the retail six (`BetaDemo.CheckNodes` warns when nodes don't hold
   their triangles); the rest follows the Godot port, tested on synthetic files.
 
+## Open questions
+
+- Passable but standable objects. The original's `damp_collide_move` skips objects with flag 0x10
+  or 0x800 (godot-mdk `docs/engine.md` "Kurt and objects"); platforms (0x100, which `set_targetable`
+  sets with 0x800000) are found by `damp_platform_floor`'s ray, whose flag test isn't documented.
+  The ports differ, neither from the RE:
+
+  | flags                | Godot (`mdk_object.gd` `update_body`) | C# (`ScriptRuntime.SolidsWithin`) |
+  |----------------------|----------------------------------------|-----------------------------------|
+  | 0x10 + 0x800000      | passed through                         | floor only                        |
+  | 0x800 + 0x800000     | solid (walls and floor)                | floor only                        |
+
+  The code is left as it is until `damp_platform_floor` (0x41d2c4) is read in Ghidra. The snowboard
+  isn't affected: mounting it adds 0x800 and clears 0x800000.
+
 ## Roadmap
 
 1. ✅ Formats, level viewer (arenas, corridors, textures, glass).
