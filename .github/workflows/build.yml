@@ -42,9 +42,9 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
@@ -53,7 +53,7 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           gh release download "$DXC_TAG" -R microsoft/DirectXShaderCompiler -p 'dxc_2*.zip' -D "$RUNNER_TEMP"
-          unzip -q "$RUNNER_TEMP"/dxc_2*.zip -d "$RUNNER_TEMP/dxc"
+          7z x -bd -o"$RUNNER_TEMP/dxc" "$RUNNER_TEMP"/dxc_2*.zip > /dev/null
           DXC=$(cygpath -w "$RUNNER_TEMP/dxc/bin/x64/dxc.exe")
           echo "SHADER_TOOLS=-p:Dxc=$DXC -p:DxcSpirv=$DXC" >> "$GITHUB_ENV"
 
@@ -83,6 +83,13 @@ jobs:
       - name: Publish
         run: sh tools/publish.sh ${{ matrix.rid }} $SHADER_TOOLS "-p:RequiredShaders=${{ matrix.shaders }}"
 
+      # The native executable starts; without the game it stops there (no GPU on the runners).
+      - name: Smoke test
+        run: |
+          OUT=$(./publish/mdk --mute 2>&1 || true)
+          echo "$OUT"
+          echo "$OUT" | grep -q "MDK data not found"
+
       - name: Archive
         run: |
           mkdir dist
@@ -95,7 +102,7 @@ jobs:
           fi
           ls -la dist
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: mdk-${{ matrix.rid }}
           path: dist/*
@@ -110,7 +117,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
