@@ -1,0 +1,119 @@
+# Builds, tests (without the game's data, whose tests are skipped) and publishes one native
+# executable per platform; a v* tag also makes a GitHub release of the three archives.
+#
+#   windows-latest ─► mdk-win-x64.zip      (DXIL + SPIR-V)
+#   ubuntu-latest  ─► mdk-linux-x64.tar.gz (SPIR-V)          ─► release (tags v*)
+#   macos-latest   ─► mdk-osx-arm64.zip    (SPIR-V + MSL)
+name: build
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  DOTNET_VERSION: 10.0.x
+  # DirectXShaderCompiler release: dxc with DXIL (signed) and SPIR-V, for Windows and Linux.
+  DXC_TAG: v1.9.2609
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_NOLOGO: 1
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+            shaders: dxil spirv
+          - os: ubuntu-latest
+            rid: linux-x64
+            shaders: spirv
+          - os: macos-latest
+            rid: osx-arm64
+            shaders: spirv msl
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      # Shader tools, passed to the build as MSBuild properties (src/Mdk.Engine/Mdk.Engine.csproj).
+      - name: Shader tools (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          gh release download "$DXC_TAG" -R microsoft/DirectXShaderCompiler -p 'dxc_2*.zip' -D "$RUNNER_TEMP"
+          unzip -q "$RUNNER_TEMP"/dxc_2*.zip -d "$RUNNER_TEMP/dxc"
+          DXC=$(cygpath -w "$RUNNER_TEMP/dxc/bin/x64/dxc.exe")
+          echo "SHADER_TOOLS=-p:Dxc=$DXC -p:DxcSpirv=$DXC" >> "$GITHUB_ENV"
+
+      - name: Shader tools (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          gh release download "$DXC_TAG" -R microsoft/DirectXShaderCompiler -p 'linux_dxc_*.tar.gz' -D "$RUNNER_TEMP"
+          mkdir "$RUNNER_TEMP/dxc"
+          tar -xzf "$RUNNER_TEMP"/linux_dxc_*.tar.gz -C "$RUNNER_TEMP/dxc"
+          echo "SHADER_TOOLS=-p:DxcSpirv=$RUNNER_TEMP/dxc/bin/dxc" >> "$GITHUB_ENV"
+
+      # No dxc release for macOS: the Vulkan SDK has dxc and spirv-cross.
+      - name: Shader tools (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/vulkan.zip" https://sdk.lunarg.com/sdk/download/latest/mac/vulkan_sdk.zip
+          unzip -q "$RUNNER_TEMP/vulkan.zip" -d "$RUNNER_TEMP/vulkan"
+          INSTALLER=$(find "$RUNNER_TEMP/vulkan" -path '*.app/Contents/MacOS/*' -type f | head -n 1)
+          sudo "$INSTALLER" --root "$HOME/VulkanSDK" --accept-licenses --default-answer --confirm-command install
+          DXC=$(find "$HOME/VulkanSDK" -path '*/bin/dxc' | head -n 1)
+          SPIRV_CROSS=$(find "$HOME/VulkanSDK" -path '*/bin/spirv-cross' | head -n 1)
+          echo "SHADER_TOOLS=-p:DxcSpirv=$DXC -p:SpirvCross=$SPIRV_CROSS" >> "$GITHUB_ENV"
+
+      - name: Test
+        run: dotnet test $SHADER_TOOLS "-p:RequiredShaders=${{ matrix.shaders }}"
+
+      - name: Publish
+        run: sh tools/publish.sh ${{ matrix.rid }} $SHADER_TOOLS "-p:RequiredShaders=${{ matrix.shaders }}"
+
+      - name: Archive
+        run: |
+          mkdir dist
+          if [ "$RUNNER_OS" = Windows ]; then
+            7z a -tzip "dist/mdk-${{ matrix.rid }}.zip" ./publish/mdk.exe
+          elif [ "$RUNNER_OS" = Linux ]; then
+            tar -czf "dist/mdk-${{ matrix.rid }}.tar.gz" -C publish mdk
+          else
+            (cd publish && zip -q "../dist/mdk-${{ matrix.rid }}.zip" mdk)
+          fi
+          ls -la dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mdk-${{ matrix.rid }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Release
+        run: gh release create "$GITHUB_REF_NAME" dist/* -R "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes
