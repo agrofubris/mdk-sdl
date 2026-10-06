@@ -31,12 +31,13 @@ public sealed class MdkData
         candidates.Add("C:/Program Files (x86)/GOG Galaxy/Games/MDK");
         candidates.Add("C:/Program Files (x86)/Steam/steamapps/common/MDK");
 
-        var found = candidates.FirstOrDefault(c => File.Exists(Path.Combine(c, Marker)));
+        var found = candidates.FirstOrDefault(c => File.Exists(CaseInsensitivePath.Resolve(c, Marker)));
         return found == null ? null : new MdkData(found);
     }
 
-    /// <summary>Absolute path of a data file, e.g. <c>TRAVERSE/LEVEL3/LEVEL3O.MTO</c>.</summary>
-    public string PathOf(string relative) => Path.Combine(Dir, relative);
+    /// <summary>Absolute path of a data file, e.g. <c>TRAVERSE/LEVEL3/LEVEL3O.MTO</c>, named as on disk
+    /// (<c>MISC/MDKFONT.FTI</c> may be <c>MISC/mdkfont.fti</c>).</summary>
+    public string PathOf(string relative) => CaseInsensitivePath.Resolve(Dir, relative);
 
     public byte[] Read(string relative) => File.ReadAllBytes(PathOf(relative));
 }

@@ -2,4 +2,7 @@
   <PropertyGroup>
     <RootNamespace>Mdk.Formats</RootNamespace>
   </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Mdk.Formats.Tests" />
+  </ItemGroup>
 </Project>
