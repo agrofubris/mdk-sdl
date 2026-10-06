@@ -203,6 +203,44 @@ public class KurtMovesTests
         Assert.True(RunUntil(kurt, new Input(), State.Still, 2f));
     }
 
+    /// <summary>LEVEL6: the slide drops Kurt into OLYM_2 against a wall; still moving, he lay there
+    /// until friction stopped him. A new arena ends the slide 15 ticks later (0x573be8 = −15).</summary>
+    [DataFact]
+    public void ANewArenaEndsTheSlide()
+    {
+        var kurt = KurtIn(SpaceOf(3), FlatFloor);
+        Run(kurt, new Input(), 1f);
+        kurt.StartSlide();
+        kurt.SlideAccel(new Vector2(0f, 30f), 1f);
+        kurt.EnterArena();
+
+        Run(kurt, new Input(), 0.45f);
+        Assert.True(kurt.Sliding);
+
+        Run(kurt, new Input(), 0.1f);
+        Assert.False(kurt.Sliding);
+        Assert.Equal(Vector2.Zero, kurt.SlideVelocity);
+        Assert.True(RunUntil(kurt, new Input(), State.Still, 2f));
+    }
+
+    /// <summary>The mouse steers the slide as it turns Kurt walking, at most 4 × 45°/s (damp_control
+    /// clamps it to ±4 before 0x5014d4).</summary>
+    [DataTheory]
+    [InlineData(10f, -1.5f)]
+    [InlineData(1000f, -3f)]
+    public void TheMouseSteersTheSlide(float mouse, float yaw)
+    {
+        var kurt = KurtIn(SpaceOf(3), FlatFloor);
+        Run(kurt, new Input(), 1f);
+        kurt.StartSlide();
+        kurt.SlideAccel(new Vector2(30f, 0f), 1f);
+        var input = new Input();
+        input.AddMouseMotion(mouse, 0f);
+
+        kurt.Update(input, Step);
+        Assert.Equal(yaw, kurt.Yaw, 3);
+    }
+
     [Fact]
     public void TwentyTicksInTheAirEndTheSlide()
     {
