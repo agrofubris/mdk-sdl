@@ -2,6 +2,8 @@
 # Kurt on level 3: he lands on the start pad, walks down the ramp where the Godot port's Kurt goes
 # (-10, 57, 143 after 3 s), and a held jump opens the chute on the way down.
 # Run from the project folder after `dotnet build`: sh tests/kurt_test.sh
+# No window: the game draws off screen and never takes the focus.
+export MDK_HIDDEN=1
 MDK=src/Mdk.App/bin/Debug/net10.0/mdk
 SHOT=${TMPDIR:-/tmp}/mdk_kurt.bmp
 FAILED=0

@@ -6,6 +6,8 @@
 # through a floor) and level runs that don't reach their end.
 # Run from the project folder after `dotnet build`: sh tests/soak_test.sh [short] [seeds]
 #   short: a few seconds per run (about 3 minutes); seeds: how many seeds per level run (default 1).
+# No window: the game draws off screen and never takes the focus.
+export MDK_HIDDEN=1
 MDK=src/Mdk.App/bin/Debug/net10.0/mdk.exe
 OUT_DIR=${TMPDIR:-/tmp}
 SHOT=$OUT_DIR/mdk_soak.bmp

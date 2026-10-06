@@ -12,8 +12,13 @@ public enum Start { Menu, Level, Statistics, Briefing, EndMovie, Stream, Fall }
 
 /// <summary>The command line's choices: where the game starts, the first level's test options, the
 /// statistics' test counts, a save to load or write, a screenshot.</summary>
+/// <summary>Whether the game shows its window.</summary>
+public enum Display { Window, Hidden }
+
 public sealed record GameOptions(Start Start, ViewerOptions Level)
 {
+    /// <summary>Hidden: no window is shown or focused, frames are drawn off screen (tests).</summary>
+    public Display Display { get; init; }
     public MenuPage Page { get; init; }
     /// <summary>The menu shows the splash first even when it's started directly.</summary>
     public bool Splash { get; init; }
@@ -83,7 +88,7 @@ public sealed class Game : IDisposable
         // The original deletes LASTGAME.SAV when it quits.
         _saves.Delete(SaveGames.LastGame);
         var settings = Settings.Load(Settings.PathIn(folder));
-        _window = new Window("MDK", WindowWidth, WindowHeight);
+        _window = new Window("MDK", WindowWidth, WindowHeight, options.Display == Display.Hidden ? Visibility.Hidden : Visibility.Shown);
         _renderer = new Renderer(_window);
         _audio = new AudioDevice(options.Level.Sound == SoundMode.Muted ? Output.Muted : Output.Speakers);
         settings.Apply(_audio, _window, _input);
