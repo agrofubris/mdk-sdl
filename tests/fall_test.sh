@@ -5,6 +5,8 @@
 # his health and pickups. Expected numbers from the Godot port (game/fall/fall.gd, run headless
 # with a probe printing the same values; --fixed-fps 60).
 # Run from the project folder after `dotnet build`: sh tests/fall_test.sh
+# No window: the game draws off screen and never takes the focus.
+export MDK_HIDDEN=1
 MDK=src/Mdk.App/bin/Debug/net10.0/mdk
 OUT_DIR=${TMPDIR:-/tmp}
 SHOT=$OUT_DIR/mdk_fall.bmp

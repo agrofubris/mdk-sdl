@@ -3,6 +3,8 @@
 # the end of a level leading to the statistics, Kurt's death leading to the menu with "Continue",
 # and a saved game written and loaded again. Settings and saves go to a temporary user folder.
 # Run from the project folder after `dotnet build`: sh tests/flow_test.sh
+# No window: the game draws off screen and never takes the focus.
+export MDK_HIDDEN=1
 MDK=src/Mdk.App/bin/Debug/net10.0/mdk
 OUT_DIR=${TMPDIR:-/tmp}
 SHOT=$OUT_DIR/mdk_flow.bmp

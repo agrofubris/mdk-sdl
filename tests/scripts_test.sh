@@ -2,6 +2,8 @@
 # Level scripts: objects spawn, animate, move and doors open, close to the Godot port's --profile
 # output (references below, taken from godot-mdk at the same game time, about 3 ticks apart).
 # Run from the project folder after `dotnet build`: sh tests/scripts_test.sh
+# No window: the game draws off screen and never takes the focus.
+export MDK_HIDDEN=1
 MDK=src/Mdk.App/bin/Debug/net10.0/mdk
 SHOT=${TMPDIR:-/tmp}/mdk_scripts.bmp
 FAILED=0
