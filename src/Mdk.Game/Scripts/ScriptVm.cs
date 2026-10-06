@@ -709,19 +709,24 @@ public sealed class ScriptVm(ScriptRuntime runtime, ScriptDecoder decoder)
                 return Branch(obj, ins, (obj.ContactFlags & MdkObject.ContactFloor) != 0);
             case 200: // move_to_point
             {
+                // 0x459555: a Manhattan step, clamped per axis; gravity leaves z alone. (Euclid made
+                // diagonals faster: XGEN's targets hit their pedestals' glass sides too low.)
                 const float Arrived = 0.5f;
+                const float MinDistance = 0.1f;
                 var toPoint = V(o, 1) - obj.Position;
-                if ((obj.Flags & MdkObject.FlagCollides) != 0)
+                if ((obj.Flags & MdkObject.FlagGravity) != 0)
                 {
                     toPoint.Z = 0f;
                 }
 
-                if (MathF.Abs(toPoint.X) + MathF.Abs(toPoint.Y) + MathF.Abs(toPoint.Z) < Arrived)
+                var distance = MathF.Abs(toPoint.X) + MathF.Abs(toPoint.Y) + MathF.Abs(toPoint.Z);
+                if (distance < Arrived)
                 {
                     return Branch(obj, ins, true);
                 }
 
-                obj.Push += Vector3.Normalize(toPoint) * MathF.Min(F(o[0]), toPoint.Length() / Dt);
+                var step = F(o[0]) * Dt / MathF.Max(distance, MinDistance) * toPoint;
+                obj.Push += Vector3.Clamp(step, -Vector3.Abs(toPoint), Vector3.Abs(toPoint)) / Dt;
                 break;
             }
 
