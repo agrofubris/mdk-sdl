@@ -401,13 +401,23 @@ public sealed partial class ScriptRuntime
     /// <summary>Whether a sound (by name) is playing anywhere (if_sound_playing).</summary>
     public bool IsSoundPlaying(string name) => Mixer.IsPlaying(name.ToUpperInvariant());
 
+    /// <summary>An arena Kurt may only reach by a teleport is shown and made solid (level.gd enter_arena).</summary>
+    private void EnterArena(string arena)
+    {
+        ArenaEntered?.Invoke(arena);
+        if (Level.Arenas.Find(a => a.Name == arena) is { } entered)
+        {
+            _space.Add(entered);
+        }
+    }
+
     /// <summary>Moves Kurt (teleport_player): within the arena with a white flash when
     /// <paramref name="arena"/> is empty, otherwise into that arena.</summary>
     public void TeleportKurt(string arena, Vector3 position, float yaw)
     {
         if (arena.Length != 0)
         {
-            ArenaEntered?.Invoke(arena);
+            EnterArena(arena);
 
             // A teleport leaves no second arena (0x41bce4).
             SecondArena = "";

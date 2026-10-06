@@ -43,9 +43,10 @@ public sealed partial class ArenaSpace
         _solid = arenas.Select(name => _arenas.Find(a => a.Bsp.Arena.Name == name).Bsp).Where(b => b != null).ToList();
     }
 
+    /// <summary>Adds an arena once (a teleport may add one no connection leads to).</summary>
     public void Add(Arena arena)
     {
-        if (arena.Vertices.Length == 0)
+        if (arena.Vertices.Length == 0 || _arenas.Exists(a => a.Bsp.Arena == arena))
         {
             return;
         }

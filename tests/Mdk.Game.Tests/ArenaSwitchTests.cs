@@ -23,12 +23,13 @@ public class ArenaSwitchTests
     private static readonly MdkData Data = MdkData.Find() ?? throw new InvalidOperationException("MDK data not found");
     private static readonly AudioDevice Device = new(Output.Muted);
 
-    private static ScriptRuntime CreateRuntime()
+    private static ScriptRuntime CreateRuntime() => CreateRuntime(new ArenaSpace());
+
+    private static ScriptRuntime CreateRuntime(ArenaSpace space)
     {
         var level = new LevelData(Data, Level);
         var cmi = Cmi.Load(Data.PathOf($"TRAVERSE/LEVEL{Level}/LEVEL{Level}.CMI"));
         var sprites = Bni.Load(Data.PathOf("TRAVERSE/TRAVSPRT.BNI"));
-        var space = new ArenaSpace();
         foreach (var arena in level.Arenas.Where(a => level.IsReachable(a.Name)))
         {
             space.Add(arena);
@@ -78,5 +79,21 @@ public class ArenaSwitchTests
         runtime.Update(ScriptRuntime.Tick);
 
         Assert.Equal(Vector3.Zero, runtime.KurtVelocity);
+    }
+
+    /// <summary>An arena no connection leads to isn't solid until a script teleports Kurt into it
+    /// (level.gd enter_arena): then it's in Kurt's space.</summary>
+    [DataFact]
+    public void TeleportMakesUnreachableArenaSolid()
+    {
+        var space = new ArenaSpace();
+        var runtime = CreateRuntime(space);
+        var arena = runtime.Level.Arenas.First(a => !runtime.Level.IsReachable(a.Name) && a.Vertices.Length > 0);
+        var center = (arena.Vertices.Aggregate(Vector3.Min) + arena.Vertices.Aggregate(Vector3.Max)) / 2f;
+        Assert.DoesNotContain(space.At(center), b => b.Arena.Name == arena.Name);
+
+        runtime.TeleportKurt(arena.Name, center, 0f);
+
+        Assert.Contains(space.At(center), b => b.Arena.Name == arena.Name);
     }
 }

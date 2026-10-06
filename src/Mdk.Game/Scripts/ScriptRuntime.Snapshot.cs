@@ -126,10 +126,10 @@ public sealed partial class ScriptRuntime
         _groups.Restore(data["groups"]!.AsObject());
 
         // An arena reached by a teleport is shown again.
-        ArenaEntered?.Invoke(CurrentArena);
+        EnterArena(CurrentArena);
         if (SecondArena.Length != 0)
         {
-            ArenaEntered?.Invoke(SecondArena);
+            EnterArena(SecondArena);
         }
     }
 
