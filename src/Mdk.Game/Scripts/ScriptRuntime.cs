@@ -204,8 +204,7 @@ public sealed partial class ScriptRuntime
     public MdkObject? AlienTarget;
     /// <summary>Ticks the alarm keeps sounding (0x573aec), set by objects with movement command 15.</summary>
     public int AlarmTicks;
-    /// <summary>How the sky is drawn (0x574304, opcode 202): 0 normally, 1 black, -1 not drawn.</summary>
-    // TODO the sky isn't switched yet (level.gd show_sky)
+    /// <summary>How the sky is drawn (0x574304, opcode 202): 0 normally, 1 black, -1 not drawn (<see cref="Level.SkyModes"/>).</summary>
     public int SkyMode;
     /// <summary>Gore (if_option, 0x5742dc): 1 on, 0 off.</summary>
     public int Option = 1;

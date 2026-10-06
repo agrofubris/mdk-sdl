@@ -48,6 +48,10 @@ public readonly record struct Material(int Texture, int Palette, Vector4 Colour,
 public sealed record Panorama(int Sky, int MirrorSky, int Palette, float WrapWidth, float HorizonRow, float Offset,
     float Height, int TopColour, int BottomColour);
 
+/// <summary>What is behind the scene (the scripts' sky modes, 0x574304): the panorama, the clear
+/// colour, or the last frame kept.</summary>
+public enum Backdrop { Sky, Clear, Keep }
+
 /// <summary>The camera: its view-projection, the inverse of its rotation and projection (clip space
 /// to world directions, for the sky), and its position.</summary>
 public readonly record struct View(Matrix4x4 ViewProjection, Matrix4x4 ClipToDirection, Vector3 Position);
@@ -200,6 +204,7 @@ public sealed unsafe partial class Renderer : IDisposable
         }
 
         Panorama = null;
+        Backdrop = Backdrop.Sky;
     }
 
     /// <summary>The canvas's width for the window's aspect.</summary>
@@ -256,6 +261,9 @@ public sealed unsafe partial class Renderer : IDisposable
 
     /// <summary>The sky and mirrors' panorama; without one the screen is cleared to a colour.</summary>
     public Panorama? Panorama { get; set; }
+
+    /// <summary>What the scene is drawn over; the sky needs a <see cref="Panorama"/>.</summary>
+    public Backdrop Backdrop { get; set; }
 
     private static void Check(bool ok, string what)
     {
@@ -563,7 +571,7 @@ public sealed unsafe partial class Renderer : IDisposable
         {
             texture = _target,
             clear_color = new SDL_FColor { r = clearColour.X, g = clearColour.Y, b = clearColour.Z, a = clearColour.W },
-            load_op = SDL_GPULoadOp.SDL_GPU_LOADOP_CLEAR,
+            load_op = Backdrop == Backdrop.Keep ? SDL_GPULoadOp.SDL_GPU_LOADOP_LOAD : SDL_GPULoadOp.SDL_GPU_LOADOP_CLEAR,
             store_op = SDL_GPUStoreOp.SDL_GPU_STOREOP_STORE,
         };
         var depthTarget = new SDL_GPUDepthStencilTargetInfo
@@ -577,7 +585,7 @@ public sealed unsafe partial class Renderer : IDisposable
         };
 
         var pass = SDL_BeginGPURenderPass(commands, &colourTarget, 1, &depthTarget);
-        if (Panorama != null)
+        if (Panorama != null && Backdrop == Backdrop.Sky)
         {
             DrawSky(commands, pass, view, Panorama);
         }

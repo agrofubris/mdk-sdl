@@ -244,7 +244,7 @@ public sealed class Viewer : IScreen
         {
             DrawScene(elapsed);
             var paused = _pause.Update(elapsed);
-            _renderer.Present(SceneView(), SkyColour(_level.Dti), screenshot);
+            _renderer.Present(SceneView(), Background(), screenshot);
             CaptureMouse();
             return paused;
         }
@@ -262,7 +262,7 @@ public sealed class Viewer : IScreen
         {
             _strikeTime += elapsed;
             var shot = SavePath(_options, input, _time + _strikeTime) ?? screenshot;
-            _renderer.Present(strikeView, SkyColour(_level.Dti), shot);
+            _renderer.Present(strikeView, Background(), shot);
             if (shot != null && _test)
             {
                 Console.WriteLine($"Saved {shot} (strike)");
@@ -303,7 +303,7 @@ public sealed class Viewer : IScreen
 
         var camera = DrawScene(elapsed);
         var save = SavePath(_options, input, _time) ?? screenshot;
-        _renderer.Present(camera, SkyColour(_level.Dti), save);
+        _renderer.Present(camera, Background(), save);
         if (save == null)
         {
             return _next;
@@ -366,6 +366,7 @@ public sealed class Viewer : IScreen
             if (options.Profile && MathF.Floor(_time) > MathF.Floor(_time - Step))
             {
                 Profile(_scripts, _time);
+                Console.WriteLine($"  sky {_scripts.SkyMode} ({_renderer.Backdrop})");
                 Console.WriteLine($"  music {_music.Playing} {Decibels(_music.Volume)}dB, fading {_music.Fading ?? "-"}");
             }
         }
@@ -530,6 +531,7 @@ public sealed class Viewer : IScreen
     public void Dispose()
     {
         _audio.StopAll();
+        _renderer.Backdrop = Backdrop.Sky;
         _ui.Window.CaptureMouse(Capture.Off);
     }
 
@@ -642,6 +644,13 @@ public sealed class Viewer : IScreen
         var palette = renderer.CreatePalette(dti.Palette.Rgba);
         return new Panorama(sky, mirrorSky, palette, dti.SkyWrapWidth, dti.SkyHorizonRow, dti.SkyOffset, dti.Sky.Height,
             dti.SkyTopColor, dti.SkyBottomColor);
+    }
+
+    /// <summary>The background the scripts want (sky, black or the last frame) and its clear colour.</summary>
+    private Vector4 Background()
+    {
+        _renderer.Backdrop = SkyModes.BackdropOf(_scripts.SkyMode);
+        return SkyModes.ClearOf(_scripts.SkyMode, SkyColour(_level.Dti));
     }
 
     /// <summary>The colour above the sky panorama.</summary>
