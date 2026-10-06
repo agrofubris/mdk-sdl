@@ -17,8 +17,8 @@ namespace Mdk.Game.Fall;
 ///        6990  haze        │ moon      (fall: white streaks by the wind level │ intro)
 ///        7000  ground      │ space
 /// </code>
-/// The whitening and the darkening go over everything as canvas fills; the red of death changes
-/// the palette, as the original does (<see cref="FallPalette"/>).</summary>
+/// The palette effects change the palette, as the original does (<see cref="FallPalette"/>); the
+/// intro's whitening and the darkening go over everything as canvas fills.</summary>
 public sealed class FallView
 {
     private const float Focal = 250f;
@@ -149,6 +149,9 @@ public sealed class FallView
         return _renderer.CreateIndexTexture(Fall3d.HazeWidth, Fall3d.HazeRows * HazeLevels, masks);
     }
 
+    /// <summary>The colour behind the scene: palette colour 0 with the effects.</summary>
+    public Vector4 Backdrop => _effects.Colour(0);
+
     /// <summary>Queues the frame's 3D scene and returns its camera.</summary>
     public View Draw(FallSim sim)
     {
@@ -182,11 +185,11 @@ public sealed class FallView
         return new View(view * projection, Matrix4x4.Identity, camera);
     }
 
-    /// <summary>The palette effects over everything: towards white, then darkened.</summary>
+    /// <summary>The effects over everything: towards white in the intro, then darkened.</summary>
     public void DrawEffects(FallSim sim)
     {
         var canvas = new RectangleF(0f, 0f, _renderer.CanvasWidth, Renderer.CanvasHeight);
-        if (sim.Whiten < 1f)
+        if (sim.InIntro && sim.Whiten < 1f)
         {
             _renderer.FillRect(canvas, new Vector4(1f, 1f, 1f, 1f - sim.Whiten));
         }
@@ -197,10 +200,13 @@ public sealed class FallView
         }
     }
 
-    /// <summary>The red of death in the palette.</summary>
+    /// <summary>The fall's whitening and the red of death in the palette; colour 0 is whitened in
+    /// the first second only.</summary>
     private void SetEffects(FallSim sim)
     {
-        if (_effects.Set(1f, sim.Red, FallPalette.Zero.Kept))
+        var brightness = sim.InIntro ? 1f : sim.Whiten;
+        var zero = sim.Time < 1f ? FallPalette.Zero.Whitened : FallPalette.Zero.Kept;
+        if (_effects.Set(brightness, sim.Red, zero))
         {
             _renderer.UpdateTexture(_palette, Palette.Size, 1, _effects.Rgba);
         }

@@ -95,7 +95,7 @@ public sealed class FallScreen : IScreen
         }
 
         _view.DrawEffects(_sim);
-        _ui.Renderer.Present(view, Ui.Black, screenshot);
+        _ui.Renderer.Present(view, _view.Backdrop, screenshot);
         return Next();
     }
 
