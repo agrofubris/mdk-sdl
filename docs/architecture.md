@@ -200,7 +200,7 @@ so the game runs them unchanged:
     track and the haze (quads far below the camera), radars, missiles, pickups, Bones, the palette
     effects, the HUD; health and pickups go on to the level (`GameState.Carry`). Pickups are only
     tested under their chute, as the original (0x41275c; fall.gd drops them at once).
-    Approximations: the radar's colours, the smoke trails, the red only on palette colours.
+    Approximations: the radar's colours, the smoke trails.
 11. ✅ Enhanced look (`Renderer.Enhanced.cs`, `shaders/enhanced.hlsl`, `post.hlsl`, `depth.hlsl`):
     filtered textures, sky, sprites and 2D screens, a sun with shadows, white ambient light,
     ambient occlusion, glow, haze; anti-aliasing in both looks. Still to do: mipmaps for the

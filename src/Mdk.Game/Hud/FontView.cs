@@ -21,7 +21,12 @@ public sealed class FontView
     private readonly int _maxAscent;
     private readonly Vector2 _size;
 
-    public FontView(Renderer renderer, Font font, Palette palette)
+    public FontView(Renderer renderer, Font font, Palette palette) : this(renderer, font, renderer.CreatePalette(palette.Rgba))
+    {
+    }
+
+    /// <summary>A font drawn through a palette the caller owns (the fall's, with its effects).</summary>
+    public FontView(Renderer renderer, Font font, int palette)
     {
         _renderer = renderer;
         _font = font;
@@ -51,7 +56,7 @@ public sealed class FontView
 
         _size = new Vector2(width, height);
         _texture = renderer.CreateIndexTexture(width, height, indices);
-        _palette = renderer.CreatePalette(palette.Rgba);
+        _palette = palette;
     }
 
     public int Width(ReadOnlySpan<byte> text) => _font.Width(text);
