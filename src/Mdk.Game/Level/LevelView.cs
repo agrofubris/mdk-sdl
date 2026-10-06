@@ -49,6 +49,7 @@ public sealed class LevelView
     private readonly Renderer _renderer;
     private readonly MaterialResolver _resolver;
     private readonly TriangleGroups _groups;
+    private readonly OutlineEdges _edges;
     private readonly Dictionary<string, ArenaView> _arenas = [];
     private int _tornShown;
     private int _piecesMesh = -1;
@@ -59,6 +60,7 @@ public sealed class LevelView
         _renderer = renderer;
         _groups = groups;
         _resolver = new MaterialResolver(renderer, level.Dti, shading);
+        _edges = shading == Shading.Original ? OutlineEdges.Flagged : OutlineEdges.Frame;
         foreach (var arena in level.Arenas)
         {
             groups.Add(arena);
@@ -248,7 +250,7 @@ public sealed class LevelView
                 continue;
             }
 
-            var lines = Outlines.Of(arena, triangles);
+            var lines = Outlines.Of(arena, triangles, _edges);
             if (lines.Count == 0)
             {
                 continue;
