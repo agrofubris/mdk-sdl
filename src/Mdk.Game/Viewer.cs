@@ -140,6 +140,8 @@ public sealed class Viewer : IScreen
         var loading = Stopwatch.StartNew();
         _ui = ui;
         _cheats = new Cheats(ui.Settings, state);
+        // The menus' wheel and mouse don't reach Kurt.
+        ui.Input.ClearMouse();
         _options = options;
         _state = state;
         _renderer = ui.Renderer;
@@ -264,6 +266,12 @@ public sealed class Viewer : IScreen
     public Event Frame(float elapsed, string? screenshot)
     {
         var input = _ui.Input;
+
+        // While the game waits, the mouse and the wheel don't pile up for Kurt.
+        if (_snapshotPrompt != null || _pause.Open)
+        {
+            input.ClearMouse();
+        }
 
         // F2's name prompt: the game waits under it.
         if (_snapshotPrompt != null)
