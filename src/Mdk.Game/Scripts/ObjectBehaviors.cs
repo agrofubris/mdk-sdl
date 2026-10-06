@@ -65,10 +65,20 @@ public sealed class ObjectBehaviors(ScriptRuntime runtime)
     private const int CowHitType = -4;
 
     private const float Dt = ScriptRuntime.Tick;
+    /// <summary>A door moved to its other side turns around (0x43ca00).</summary>
+    private const float DoorTurn = 180f;
+    private const float FullTurn = 360f;
 
     /// <summary>Opens the door when Kurt comes closer than its distance, closes it when he goes away.</summary>
     public void UpdateDoor(MdkObject obj)
     {
+        // A door seen from its other side moves into Kurt's arena (0x43cc68), so it stays live,
+        // solid and drawn there after the arena behind it is put away.
+        if (obj.Arena != runtime.CurrentArena && obj.Connects == runtime.CurrentArena)
+        {
+            MoveDoor(obj);
+        }
+
         var state = obj.DoorState;
         if ((state & DoorOpening) != 0)
         {
@@ -132,6 +142,18 @@ public sealed class ObjectBehaviors(ScriptRuntime runtime)
         }
 
         obj.Flags = (state & DoorOpen) != 0 ? obj.Flags | MdkObject.FlagNotSolid : obj.Flags & ~MdkObject.FlagNotSolid;
+    }
+
+    /// <summary>Moves a door into the arena on its other side, turned around (0x43ca00): e.g. the
+    /// door CDANT_1 → DANT_2 at yaw 90 becomes DANT_2 → CDANT_1 at yaw 270.</summary>
+    public static void MoveDoor(MdkObject door)
+    {
+        (door.Arena, door.Connects) = (door.Connects, door.Arena);
+        door.Yaw += DoorTurn;
+        if (door.Yaw >= FullTurn)
+        {
+            door.Yaw -= FullTurn;
+        }
     }
 
     /// <summary>Sets up a new door (spawn_connector): masks of its LOCK and HC... parts.</summary>

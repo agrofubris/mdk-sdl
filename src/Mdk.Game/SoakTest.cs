@@ -11,8 +11,8 @@ public enum SoakRoute { Stay, Tour }
 /// <summary>The soak test in a level (--soak, --tour): Kurt is healed so he lives on, the tour
 /// teleports him to each reachable arena in turn (to a floor under one of its records), and every
 /// step looks for problems: NaN positions, Kurt standing outside every arena or falling through a
-/// floor (falling into a pit is only noted). Problems print as "Soak problem ..." (once per kind
-/// and arena), the counts at the end ("Soak end").
+/// floor (falling into a pit is only noted), an open door onto an arena not drawn.
+/// Problems print as "Soak problem ..." (once per kind and arena), the counts at the end ("Soak end").
 /// <code>
 ///   step ──► tour: next arena due? ──► teleport
 ///        ├─► health low ──► healed
@@ -30,6 +30,8 @@ public sealed class SoakTest
     private const int HealBelow = Kurt.Inventory.MaxHealth / 2;
     /// <summary>Seconds standing outside every arena before it's a problem, falling before it's a pit.</summary>
     private const float LostTime = 3f;
+    /// <summary>Seconds an open door may show an undrawn arena (it's shown a tick after it opens).</summary>
+    private const float HoleTime = 0.5f;
     private const float FallTime = 6f;
     /// <summary>The feet stand this little above a floor; a step's move starts this high.</summary>
     private const float FloorLift = 0.05f;
@@ -45,6 +47,7 @@ public sealed class SoakTest
     private readonly HashSet<string> _visited = [];
     private int _stop = -1;
     private float _lost;
+    private float _hole;
     private float _falling;
     private int _heals;
     /// <summary>Where Kurt last stood (problems tell where a fall started).</summary>
@@ -141,6 +144,15 @@ public sealed class SoakTest
         if (_lost >= LostTime)
         {
             Problem(time, arena, "Kurt outside every arena", Where(kurt));
+        }
+
+        // A drawn door that isn't shut shows its other side: that arena must be drawn too.
+        var hole = scripts.Objects.FirstOrDefault(o => o.Visible && !o.Dead && (o.Flags & Objects.MdkObject.FlagDoor) != 0
+            && (o.DoorState & ObjectBehaviors.DoorClosed) == 0 && o.Connects.Length != 0 && !scripts.DrawnArenas.Contains(o.Connects));
+        _hole = hole != null ? _hole + Viewer.Step : 0f;
+        if (hole != null && _hole >= HoleTime)
+        {
+            Problem(time, arena, "open door shows an undrawn arena", $"{hole.TypeName}_{hole.InstanceId} in {hole.Arena} to {hole.Connects}, {Where(kurt)}");
         }
 
         _falling = kurt.OnFloor || kurt.Platform != null ? 0f : _falling + Viewer.Step;
