@@ -224,8 +224,8 @@ public sealed partial class ScriptRuntime
     public int Cutscene;
     public MdkObject? CutsceneTarget;
     /// <summary>The cutscene camera (0x599920...0x599940): shot, yaw (90° - heading), pitch, distance
-    /// to the target, stored position and the blend timer in ticks.</summary>
-    // TODO the game doesn't look through the cutscene camera yet
+    /// to the target, stored position and the blend timer in ticks; the game looks from
+    /// <see cref="CameraPoint"/> (<see cref="CutsceneCamera"/>).</summary>
     public int CameraMode;
     public float CameraYaw;
     public float CameraPitch;

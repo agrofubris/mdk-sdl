@@ -116,6 +116,7 @@ public sealed class Viewer : IScreen
     /// <summary>F2's name prompt, while it's open.</summary>
     private SavePrompt? _snapshotPrompt;
     private readonly FollowCamera _follow = new();
+    private readonly CutsceneCamera _cutscene = new();
     private readonly FreeCamera _fly;
     private readonly PauseMenu _pause;
     private readonly bool _test;
@@ -349,13 +350,18 @@ public sealed class Viewer : IScreen
             else
             {
                 _kurt.Update(input, Step);
-                _follow.Update(_kurt, ArenaPitch(_level, _space, _kurt.Feet), input, Step);
+                _follow.Update(_kurt, PitchGoal(), input, Step);
             }
 
             input.ClearMouse();
             _music.Enter(_space.ArenaAt(_kurt.Feet));
             _music.Update(Step);
             _scripts.Update(Step);
+            if (CutsceneCamera.Active(_scripts))
+            {
+                _cutscene.Update(_scripts);
+            }
+
             _space.SetSolid(_scripts.SolidArenas);
             _soak?.Step(_kurt, _scripts, _space, _time);
             if (MathF.Floor(_time * Kurt.Kurt.Ticks) > MathF.Floor((_time - Step) * Kurt.Kurt.Ticks))
@@ -406,8 +412,9 @@ public sealed class Viewer : IScreen
     private View DrawScene(float elapsed)
     {
         var camera = SceneView();
+        var eye = Eye();
         _mixer.ListenerPosition = camera.Position;
-        _mixer.ListenerRight = _flying ? _fly.Right : _follow.Right;
+        _mixer.ListenerRight = eye.Right;
         // In sniper mode the sounds are heard through the scope.
         _mixer.ScopeZoom = _kurt.Sniping && !_flying ? _kurt.Scope.Zoom : 0f;
         _mixer.ListenerForward = _kurt.SniperForward;
@@ -419,16 +426,46 @@ public sealed class Viewer : IScreen
         DrawObjects(_objects, _scripts, _level, _looks);
         _sniper.Draw(_kurt, _scripts, elapsed);
         _effects.Draw(_scripts, camera);
-        _sprite.Draw(_kurt, camera.Position, _flying ? _fly.Forward : _follow.Forward, _flying ? Vector3.UnitZ : _follow.Up,
-            _flying ? FreeCamera.FieldOfView : FollowCamera.FieldOfView);
+        _sprite.Draw(_kurt, camera.Position, eye.Forward, eye.Up, eye.FieldOfView);
 
         _hud.Messages.Update(elapsed);
         _hud.Draw(HudStateOf(_kurt, _scripts));
         return camera;
     }
 
-    private View SceneView() => _flying ? _fly.View(_renderer.AspectRatio)
-        : _kurt.Sniping ? FollowCamera.SniperView(_kurt, _renderer.AspectRatio) : _follow.View(_renderer.AspectRatio);
+    private View SceneView()
+    {
+        var aspect = _renderer.AspectRatio;
+        if (_flying)
+        {
+            return _fly.View(aspect);
+        }
+
+        if (_kurt.Sniping)
+        {
+            return FollowCamera.SniperView(_kurt, aspect);
+        }
+
+        return CutsceneCamera.Active(_scripts) ? _cutscene.View(aspect) : _follow.View(aspect);
+    }
+
+    /// <summary>The camera's axes and field of view outside sniper mode: flying, a cutscene's or Kurt's.</summary>
+    private (Vector3 Forward, Vector3 Up, Vector3 Right, float FieldOfView) Eye()
+    {
+        if (_flying)
+        {
+            return (_fly.Forward, Vector3.UnitZ, _fly.Right, FreeCamera.FieldOfView);
+        }
+
+        return CutsceneCamera.Active(_scripts)
+            ? (_cutscene.Forward, _cutscene.Up, _cutscene.Right, FollowCamera.FieldOfView)
+            : (_follow.Forward, _follow.Up, _follow.Right, FollowCamera.FieldOfView);
+    }
+
+    /// <summary>The pitch the follow camera eases to: camera_track's (opcode 203) while a script
+    /// asks for it, else the arena's.</summary>
+    private float PitchGoal() =>
+        _scripts.CameraTrackTicks > 0 ? _scripts.CameraTrackPitch : ArenaPitch(_level, _space, _kurt.Feet);
 
     /// <summary>A full save being loaded: the level and Kurt as they were.</summary>
     private void RestoreSnapshot(GameState state)
@@ -582,6 +619,13 @@ public sealed class Viewer : IScreen
                 $"  {obj.TypeName}_{obj.InstanceId} {obj.Arena} ({Rounded(p.X)}, {Rounded(p.Y)}, {Rounded(p.Z)}) yaw {(int)obj.Yaw} " +
                 $"move {obj.MoveCommand} path {obj.Path} anim {obj.Animation?.Name ?? "-"} frame {obj.AnimationFrame} " +
                 $"speed {obj.Speed:0.0} health {obj.Health} flags {obj.Flags:x}{door}"));
+        }
+
+        if (CutsceneCamera.Active(scripts))
+        {
+            var c = scripts.CameraPoint;
+            Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
+                $"  cutscene {scripts.Cutscene:x} shot {scripts.CameraMode} camera ({Rounded(c.X)}, {Rounded(c.Y)}, {Rounded(c.Z)}) yaw {scripts.CameraYaw:0} pitch {scripts.CameraPitch:0}"));
         }
 
         foreach (var ((arena, texture), frame) in scripts.AnimatedTextures.Frames)
