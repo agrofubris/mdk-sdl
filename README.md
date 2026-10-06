@@ -176,7 +176,7 @@ src/Mdk.App/bin/Debug/net10.0/mdk --level=3
 
 One native executable (Native AOT; also needs the Visual Studio C++ tools on Windows, clang and
 zlib on Linux, Xcode on macOS): `sh tools/publish.sh [win-x64|linux-x64|osx-arm64|osx-x64]` (this
-machine's by default) gives `publish/mdk` or `publish/mdk.exe` (about 7 MB). SDL3 is embedded in it
+machine's by default; `publish.bat` on Windows) gives `publish/mdk` or `publish/mdk.exe` (about 8 MB). SDL3 is embedded in it
 and unpacked once to the user's local data folder (above).
 
 GitHub Actions (`.github/workflows/build.yml`) builds and tests every push on Windows, Linux and
