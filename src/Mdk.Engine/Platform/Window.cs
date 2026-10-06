@@ -8,15 +8,25 @@ public sealed unsafe class Window : IDisposable
 {
     internal SDL_Window* Handle { get; }
 
-    public Window(string title, int width, int height)
+    /// <summary>A hidden window (tests) is never shown nor focused: frames are drawn off screen.</summary>
+    public Visibility Visibility { get; }
+
+    public Window(string title, int width, int height, Visibility visibility = Visibility.Shown)
     {
+        Visibility = visibility;
         NativeLibraries.Install();
         if (!SDL_Init(SDL_InitFlags.SDL_INIT_VIDEO | SDL_InitFlags.SDL_INIT_EVENTS))
         {
             throw new InvalidOperationException($"SDL_Init: {SDL_GetError()}");
         }
 
-        Handle = SDL_CreateWindow(title, width, height, SDL_WindowFlags.SDL_WINDOW_RESIZABLE);
+        var flags = SDL_WindowFlags.SDL_WINDOW_RESIZABLE;
+        if (visibility == Visibility.Hidden)
+        {
+            flags |= SDL_WindowFlags.SDL_WINDOW_HIDDEN;
+        }
+
+        Handle = SDL_CreateWindow(title, width, height, flags);
         if (Handle == null)
         {
             throw new InvalidOperationException($"SDL_CreateWindow: {SDL_GetError()}");
@@ -89,5 +99,7 @@ public sealed unsafe class Window : IDisposable
 }
 
 public enum Capture { Off, On }
+
+public enum Visibility { Shown, Hidden }
 
 public enum Fullscreen { Off, On }

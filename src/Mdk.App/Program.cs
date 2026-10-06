@@ -28,6 +28,7 @@ using Mdk.Game.Scripts;
 //   --pitch=degrees         flying camera pitch (positive looks up)
 //   --fly                   start with the flying camera
 //   --mute                  no sound (tests)
+//   --hidden                no window, frames drawn off screen (tests; also MDK_HIDDEN=1)
 //   --screenshot=file.bmp   save a frame after --wait seconds of game time, print Kurt, quit (tests)
 //   --wait=seconds          game time before the screenshot
 //   --walk=seconds          hold "forward" for this long (tests)
@@ -115,8 +116,11 @@ var start = options.ContainsKey("end") ? Start.EndMovie
     : options.ContainsKey("level") || (screenshot != null && !options.ContainsKey("menu")) ? Start.Level
     : Start.Menu;
 var page = options.ContainsKey("controls") ? MenuPage.Controls : options.ContainsKey("options") ? MenuPage.Options : MenuPage.Main;
+// Tests run without a window: --hidden, or MDK_HIDDEN set (so nothing takes the focus).
+var hidden = options.ContainsKey("hidden") || !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("MDK_HIDDEN"));
 using var game = new Game(data, new GameOptions(start, viewer)
 {
+    Display = hidden ? Display.Hidden : Display.Window,
     Page = page,
     Splash = !options.ContainsKey("menu") || options.ContainsKey("splash"),
     Phase = Number("phase") is { } phase ? (StatsScreen.Phase)phase : null,

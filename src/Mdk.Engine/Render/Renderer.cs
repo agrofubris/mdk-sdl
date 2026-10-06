@@ -528,9 +528,12 @@ public sealed unsafe partial class Renderer : IDisposable
     public void Present(View view, Vector4 clearColour, string? screenshot = null)
     {
         var commands = SDL_AcquireGPUCommandBuffer(_device);
-        SDL_GPUTexture* swapchain;
-        uint width, height;
-        if (!SDL_WaitAndAcquireGPUSwapchainTexture(commands, _window.Handle, &swapchain, &width, &height) || swapchain == null)
+        SDL_GPUTexture* swapchain = null;
+        uint width = HiddenWidth, height = HiddenHeight;
+
+        // A hidden window has no swapchain to show: the frame stays in the offscreen target.
+        var shown = _window.Visibility == Visibility.Shown;
+        if (shown && (!SDL_WaitAndAcquireGPUSwapchainTexture(commands, _window.Handle, &swapchain, &width, &height) || swapchain == null))
         {
             SDL_SubmitGPUCommandBuffer(commands);
             _commands.Clear();
@@ -542,7 +545,10 @@ public sealed unsafe partial class Renderer : IDisposable
         QueueCanvas();
         UploadDynamic(commands);
         RenderScene(commands, view, clearColour);
-        Blit(commands, swapchain, width, height);
+        if (swapchain != null)
+        {
+            Blit(commands, swapchain, width, height);
+        }
         if (screenshot != null)
         {
             Save(commands, screenshot);
@@ -554,6 +560,10 @@ public sealed unsafe partial class Renderer : IDisposable
 
         _commands.Clear();
     }
+
+    /// <summary>The offscreen frame of a hidden window (the shown one's default size).</summary>
+    private const uint HiddenWidth = 1280;
+    private const uint HiddenHeight = 960;
 
     public float AspectRatio => _targetHeight == 0 ? 4f / 3f : (float)_targetWidth / _targetHeight;
 
