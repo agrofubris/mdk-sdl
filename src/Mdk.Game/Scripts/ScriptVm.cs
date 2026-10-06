@@ -896,11 +896,7 @@ public sealed class ScriptVm(ScriptRuntime runtime, ScriptDecoder decoder)
                 break;
             }
             case 133: // arena_texture_frame: [texture, mode, value]; the levels only use mode 1 (frames per second)
-                if (I(o[1]) == 1)
-                {
-                    runtime.TextureRates[(obj.Arena, (string)o[0]!)] = F(o[2]);
-                }
-
+                runtime.AnimatedTextures.Set(obj.Arena, (string)o[0]!, AnimatedTextures.ModeOf(I(o[1])), F(o[2]), Dt);
                 break;
             case 131: // special_event: cutscenes and the end of the level
                 runtime.SpecialEvent(obj, I(o[0]));

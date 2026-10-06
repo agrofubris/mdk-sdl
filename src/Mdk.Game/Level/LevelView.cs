@@ -17,7 +17,9 @@ namespace Mdk.Game.Level;
 /// </code></summary>
 public sealed class LevelView
 {
-    private readonly record struct Batch(int First, int Count, Material Material);
+    /// <summary>Triangles of one surface; <paramref name="Animated"/> names a texture whose frame
+    /// the scripts set (opcode 133).</summary>
+    private readonly record struct Batch(int First, int Count, Material Material, string? Animated = null);
 
     private sealed class GroupMesh(int mesh, List<Batch> batches, Vertex[] vertices)
     {
@@ -82,8 +84,9 @@ public sealed class LevelView
     }
 
     /// <summary>Queues the visible groups of <paramref name="arenas"/> (the original draws Kurt's
-    /// arena and the active second one, 0x41e344), or of every reachable arena when empty.</summary>
-    public void Draw(IReadOnlyCollection<string> arenas)
+    /// arena and the active second one, 0x41e344), or of every reachable arena when empty, animated
+    /// textures at their <paramref name="frames"/>.</summary>
+    public void Draw(IReadOnlyCollection<string> arenas, AnimatedTextures frames)
     {
         var shown = arenas.Count == 0 ? _arenas.Values.Where(a => a.Reachable) : arenas.Where(_arenas.ContainsKey).Select(a => _arenas[a]);
         foreach (var view in shown)
@@ -97,7 +100,8 @@ public sealed class LevelView
 
                 foreach (var batch in mesh.Batches)
                 {
-                    _renderer.Draw(mesh.Mesh, batch.First, batch.Count, batch.Material);
+                    var frame = batch.Animated != null ? frames.FrameOf(view.Arena.Name, batch.Animated) : 0;
+                    _renderer.Draw(mesh.Mesh, batch.First, batch.Count, batch.Material, frame);
                 }
             }
         }
@@ -257,7 +261,8 @@ public sealed class LevelView
                 }
             }
 
-            batches.Add(new Batch(first, vertices.Count - first, material));
+            var animated = texture is { FrameCount: > 1 } ? texture.Name : null;
+            batches.Add(new Batch(first, vertices.Count - first, material, animated));
             for (var i = 0; i < triangles.Count; i++)
             {
                 view.Placements[triangles[i]] = new Placement(group.Number, first + i * TriangleVertices, material, scale);

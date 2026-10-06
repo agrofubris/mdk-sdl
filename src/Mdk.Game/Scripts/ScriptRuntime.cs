@@ -212,9 +212,8 @@ public sealed partial class ScriptRuntime
     /// <summary>The strongest screen shake asked this tick (raise_573aa8).</summary>
     // TODO the follow camera doesn't shake yet
     public float Shake;
-    /// <summary>Frames per second of arena textures set by arena_texture_frame (opcode 133), by arena and texture.</summary>
-    // TODO animated textures aren't drawn by their rate yet
-    public readonly Dictionary<(string Arena, string Texture), float> TextureRates = [];
+    /// <summary>Frames of arena textures set by arena_texture_frame (opcode 133).</summary>
+    public readonly AnimatedTextures AnimatedTextures;
 
     /// <summary>The health bar (0x573c74 seconds left, 0x41e3c8): its object (0x573c78), or values.</summary>
     // TODO the bar isn't drawn yet (hud)
@@ -301,6 +300,7 @@ public sealed partial class ScriptRuntime
         kurt.CanUseItem = Items.CanUse;
         kurt.SolidsWithin = SolidsWithin;
         Effects = new Effects(Rng) { FrameCount = TextureFrames, Ray = RayIn };
+        AnimatedTextures = new AnimatedTextures(TextureFrames);
         Fans = new Fans(level.Dti.Arenas, Rng) { Spark = FanSpark, IsLive = IsLiveArena };
         Debris = new Debris(Rng)
         {

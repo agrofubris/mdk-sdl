@@ -413,7 +413,7 @@ public sealed class Viewer : IScreen
         _mixer.ListenerUp = FollowCamera.UpOf(_kurt.SniperForward);
         _mixer.Update(elapsed);
         _scripts.Eye = camera.Position;
-        _view.Draw(_scripts.DrawnArenas);
+        _view.Draw(_scripts.DrawnArenas, _scripts.AnimatedTextures);
         _view.DrawEnd(_scripts.EndLevel);
         DrawObjects(_objects, _scripts, _level, _looks);
         _sniper.Draw(_kurt, _scripts, elapsed);
@@ -580,6 +580,11 @@ public sealed class Viewer : IScreen
                 $"  {obj.TypeName}_{obj.InstanceId} {obj.Arena} ({Rounded(p.X)}, {Rounded(p.Y)}, {Rounded(p.Z)}) yaw {(int)obj.Yaw} " +
                 $"move {obj.MoveCommand} path {obj.Path} anim {obj.Animation?.Name ?? "-"} frame {obj.AnimationFrame} " +
                 $"speed {obj.Speed:0.0} health {obj.Health} flags {obj.Flags:x}{door}"));
+        }
+
+        foreach (var ((arena, texture), frame) in scripts.AnimatedTextures.Frames)
+        {
+            Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"  texture {arena} {texture} frame {frame:0.00}"));
         }
 
         RideTest.Report(scripts);
