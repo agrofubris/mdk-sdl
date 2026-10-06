@@ -156,6 +156,12 @@ public sealed partial class Kurt
             _zoomVoice = 0;
         }
 
+        // The wheel zooms here, so it doesn't pick ammo too (kurt.gd _wheel_used).
+        if (input.Wheel != 0f)
+        {
+            return;
+        }
+
         if (Pressed(input, Key.ItemNext))
         {
             Scope.SelectAmmo(Inventory, 1);

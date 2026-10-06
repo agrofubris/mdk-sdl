@@ -129,10 +129,10 @@ folder). `LASTGAME` (written when Kurt dies) is deleted at start, as in the orig
 
 Controls: W/S or Up/Down to run, A/D to strafe, the mouse or Left/Right to turn, Space to jump
 (hold it while falling to open the chute; running into a ledge while falling grabs it), Shift for turbo, Ctrl or the left mouse button to fire,
-Enter to use the item, Tab or [ ] to select it (or 1-5), the right mouse button for sniper mode
+Enter or E to use the item, Tab, [ ] or the mouse wheel to select it (or 1-5), the right mouse button for sniper mode
 (the mouse wheel or PageUp/PageDown zoom, Tab or [ ] select the ammo), F1 for the flying camera (E/Q to go up and
 down), F2 for a full save, F12 for a screenshot, Esc for the pause menu (resume, options, main menu, quit). The bindings
-can be changed in Options, Controls. In the menus: the arrows or the mouse, Enter or a click, Esc
+can be changed in Options, Controls (to any key, mouse button or wheel direction). In the menus: the arrows or the mouse, Enter or a click, Esc
 back; the mouse cursor is the original's arrow. Typing `TOOSCARYFORME` in a level turns gore on or
 off, `SEETHEWHOLEGAME` the main menu's debug keys (3-8 start that level, F the fall before LEVEL8,
 S the stream after LEVEL7, D the statistics with random counts).

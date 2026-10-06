@@ -26,6 +26,9 @@
     <Sdl3Library Condition="$(Sdl3Runtime.StartsWith('osx'))">libSDL3.dylib</Sdl3Library>
   </PropertyGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="Mdk.Game.Tests" />
+  </ItemGroup>
+  <ItemGroup>
     <!-- The native library is embedded instead (see Platform/NativeLibraries.cs): one exe. -->
     <PackageReference Include="ppy.SDL3-CS" Version="$(Sdl3Version)" ExcludeAssets="native" GeneratePathProperty="true" />
     <EmbeddedResource Include="$(PkgPpy_SDL3-CS)/runtimes/$(Sdl3Runtime)/native/$(Sdl3Library)" LogicalName="native/$(Sdl3Library)" WithCulture="false" />
