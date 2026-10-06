@@ -16,8 +16,6 @@ namespace Mdk.Game.Kurt;
 public sealed partial class Kurt
 {
     public const int MaxHealth = Inventory.MaxHealth;
-    /// <summary>Extra gravity of the wind zones in the air (kurt.gd SLIDE_GRAVITY, u/s²).</summary>
-    public const float SlideGravity = 128f;
 
     /// <summary>Red flash after hits (0x573b70): +25 per damage point, kept within 75-180; flashes
     /// fade by 4 per tick. Once Kurt is dead it's the skull's fade, rising by 2 per tick to 255.</summary>
@@ -67,6 +65,10 @@ public sealed partial class Kurt
         [State.Chute] = (20, 0),
     };
 
+    /// <summary>On the board (state 201, K_SURF) the flash is drawn at (−42, 12).</summary>
+    private const string SurfPose = "K_SURF";
+    private static readonly (int X, int Y) SurfMuzzle = (-42, 12);
+
     /// <summary>A muzzle flash: the K_MUZZF frame, drawn behind Kurt with its hotspot at his plus the offset (pixels, y down).</summary>
     public readonly record struct MuzzleFlash(int Frame, int X, int Y);
 
@@ -87,9 +89,6 @@ public sealed partial class Kurt
     public bool Frozen;
     public bool Visible = true;
     public Inventory Inventory { get; } = new();
-
-    // TODO port slides (kurt.gd damp_buttslide).
-    public bool Sliding { get; private set; }
 
     /// <summary>The skull has faded in: the original loads the last saved game.</summary>
     public event Action? Died;
@@ -123,12 +122,18 @@ public sealed partial class Kurt
             return;
         }
 
-        if (Invulnerable > 0f || Current is State.Dead or State.Knocked or State.GetUp)
+        if (Invulnerable > 0f || Current is State.Dead or State.Knocked or State.GetUp or State.HardLand)
         {
             KnockDamage = 0f;
             return;
         }
 
+        Damage(damage);
+    }
+
+    /// <summary>Damage by the difficulty, its red flash, and the knock damage (0x46a77c).</summary>
+    private void Damage(int damage)
+    {
         damage = Scaled(damage, Inventory.Difficulty);
         if (damage > 0)
         {
@@ -187,19 +192,6 @@ public sealed partial class Kurt
         KnockDamage = 0f;
         _push = Vector2.Zero;
         SetState(State.Still);
-    }
-
-    // TODO port slides (kurt.gd start_slide, stop_slide, slide_accel)
-    public void StartSlide()
-    {
-    }
-
-    public void StopSlide()
-    {
-    }
-
-    public void SlideAccel(Vector2 acceleration, float dt)
-    {
     }
 
     private void FadeFlashes(float delta)
@@ -341,7 +333,7 @@ public sealed partial class Kurt
     {
         _muzzleTicks += Ticks * delta;
         var tick = (int)_muzzleTicks;
-        if (!Firing || !MuzzleOffsets.TryGetValue(Current, out var offset) || (tick & 1) == 0)
+        if (!Firing || MuzzleOffset() is not { } offset || (tick & 1) == 0)
         {
             Muzzle = null;
             return;
@@ -355,6 +347,17 @@ public sealed partial class Kurt
         _muzzleTick = tick;
         _muzzleFrame = (_muzzleFrame + _random.Next(MuzzleFrameMask) + 1) & MuzzleFrameMask;
         Muzzle = new MuzzleFlash(_muzzleFrame, offset.X + _random.Next(MuzzleJitter), offset.Y + _random.Next(MuzzleJitter));
+    }
+
+    /// <summary>The flash's offset in the current state or pose, or null when the frames show it.</summary>
+    private (int X, int Y)? MuzzleOffset()
+    {
+        if (Pose?.Name == SurfPose)
+        {
+            return SurfMuzzle;
+        }
+
+        return MuzzleOffsets.TryGetValue(Current, out var offset) ? offset : null;
     }
 
     /// <summary>The states that override walking: death, knock-down, throwing. Returns whether one did.</summary>

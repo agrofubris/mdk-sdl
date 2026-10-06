@@ -160,7 +160,7 @@ public sealed class Snowboard
 
         FollowPath(previous, dt);
         Turn(delta, dt);
-        Place();
+        Place(delta);
         Ram();
         Animate(dt);
     }
@@ -414,12 +414,14 @@ public sealed class Snowboard
     private static float TurnTowards(float from, float to, float step) => Wrap360(from + Math.Clamp(WrapHalf(to - from), -step, step));
 
     /// <summary>The board under Kurt's feet at the yaw <c>H + S</c>, its nose up while carving.</summary>
-    private void Place()
+    private void Place(float delta)
     {
         _pitch = Wrap360(_pitch + MathF.Abs(_steer) * CarveTilt);
         Board.Position = _kurt.Feet - new Vector3(0f, 0f, BoardDrop);
         Board.Yaw = Wrap360(_heading + _steer);
         Board.Pitch = WrapHalf(_pitch);
+        // The view rolls with the board's bank (0x46ac4c).
+        _kurt.CameraRoll.Follow(WrapHalf(Board.Roll), delta);
     }
 
     /// <summary>Whatever Kurt runs into dies, and he takes 5 damage.</summary>

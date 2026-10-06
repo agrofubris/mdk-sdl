@@ -17,7 +17,8 @@ namespace Mdk.Game.Kurt;
 /// </code></summary>
 public sealed partial class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.State, int> frameCount)
 {
-    public enum State { Still, Idle, Run, Side, Turn, Jump, RunJump, Fall, Chute, Land, Shot, RunFire, Throw, Knocked, GetUp, Dead }
+    public enum State { Still, Idle, Run, Side, Turn, Jump, RunJump, Fall, Chute, Land, Shot, RunFire, Throw, Knocked, GetUp, Dead,
+        Slip, Slide, SlideFast, SlideBrake, Hang, HardLand }
 
     public const float Ticks = 30f;
 
@@ -66,6 +67,14 @@ public sealed partial class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.S
     /// <summary>Objects this far around a move (and Kurt's height above it) may stop it.</summary>
     private static readonly Vector3 NearbyMargin = new(1f, 1f, Solids.PlatformReach);
     private const float KurtHeight = 5f;
+    /// <summary>Landing faster than this is a hard landing: 10 damage and K_CRASHL (state 806).</summary>
+    private const float HardLandingSpeed = -100f;
+    private const int HardLandingDamage = 10;
+    /// <summary>K_CRASHL plays at 2 ticks a frame; in the air it holds at tick 8.</summary>
+    private const int CrashTicksPerFrame = 2;
+    private const int CrashHoldTick = 8;
+    /// <summary>Kurt dies this far below his arena's lowest point.</summary>
+    private const float FallOutDepth = -50f;
 
     private const float IdleDelay = 6f;
     private const float MovingSpeed = 1f;
@@ -95,6 +104,7 @@ public sealed partial class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.S
     public float StateTime;
     /// <summary>Animation position in frames.</summary>
     public float AnimationFrame;
+    public CameraRoll CameraRoll { get; } = new();
 
     private Vector3 _floorNormal = Vector3.UnitZ;
     private bool _footstepPair = true;
@@ -128,6 +138,7 @@ public sealed partial class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.S
         }
 
         FadeFlashes(delta);
+        CameraRoll.Settle(delta);
         if (Ride != null)
         {
             // No knock-down, chute or ledges while riding.
@@ -138,8 +149,15 @@ public sealed partial class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.S
 
         UpdateKnockDamage(delta);
         var turbo = input.IsDown(Key.Turbo);
-        if (UpdateSniper(input, turbo, delta))
+        if (UpdateSniper(input, turbo, delta) || UpdateSlide(input, delta))
         {
+            return;
+        }
+
+        if (Current is State.Hang or State.HardLand)
+        {
+            // States from 800 on: no walking (damp_control).
+            UpdateSpecial(delta);
             return;
         }
 
@@ -157,7 +175,10 @@ public sealed partial class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.S
         var air = OnFloor ? 1f : AirControl;
         ForwardSpeed = Accelerate(ForwardSpeed, forward, turbo, 1f, air, delta);
         StrafeSpeed = Accelerate(StrafeSpeed, strafe, turbo, air, air, delta);
+        // Running while turning with the keys (not the mouse) rolls the view.
+        CameraRoll.Walk(-Axis(input, Key.TurnLeft, Key.TurnRight), forward, delta);
 
+        var before = Feet;
         var move = (Facing * ForwardSpeed + Right * StrafeSpeed + new Vector3(_push, 0f)) * delta;
         DrainPush(delta);
         if (move != Vector3.Zero)
@@ -173,6 +194,11 @@ public sealed partial class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.S
 
         UpdateVertical(input, move, delta);
         UpdateTouched();
+        if (Current == State.HardLand || GrabLedge(before, forward))
+        {
+            return;
+        }
+
         UpdateItems(input);
         UpdateFiring(input);
         UpdateState(forward, strafe, delta);
@@ -187,6 +213,20 @@ public sealed partial class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.S
         ForwardSpeed = 0f;
         StrafeSpeed = 0f;
         VerticalSpeed = 0f;
+    }
+
+    /// <summary>Moves Kurt by <paramref name="offset"/> (horizontal) with collision, sliding along
+    /// what he meets (the camera's push, damp_collide_move). Returns how far he went.</summary>
+    public Vector3 Shove(Vector3 offset)
+    {
+        var start = Feet;
+        var move = offset with { Z = 0f };
+        if (move != Vector3.Zero)
+        {
+            Feet = Contact(space.Move(Feet, move, ArenaSpace.Motion.Walk, WalkSlide, Nearby(Feet + move))).Feet;
+        }
+
+        return Feet - start;
     }
 
     /// <summary>Kurt's vertical speed changes (wind zones, push_kurt).</summary>
@@ -353,9 +393,24 @@ public sealed partial class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.S
         VerticalSpeed = MathF.Max(VerticalSpeed - Gravity * delta, -MaxFallSpeed);
     }
 
-    /// <summary>The fall move: a hit going down lands, going up bumps the head. A platform under the
-    /// feet stops the fall at its top (damp_gravity 0x469efc).</summary>
+    /// <summary>The fall move, then out of the arena: 50 below its lowest point Kurt dies
+    /// (damp_gravity 0x469efc; he counts as on a floor, so the death plays).</summary>
     private void Fall(float delta)
+    {
+        FallMove(delta);
+        if (space.Bottom(Feet) is not { } bottom || Feet.Z > bottom + FallOutDepth)
+        {
+            return;
+        }
+
+        Health = 0;
+        VerticalSpeed = 0f;
+        OnFloor = true;
+    }
+
+    /// <summary>The fall move: a hit going down lands, going up bumps the head; sliding keeps the
+    /// fall rate. A platform under the feet stops the fall at its top (damp_gravity 0x469efc).</summary>
+    private void FallMove(float delta)
     {
         var before = Feet;
         var dz = VerticalSpeed * delta;
@@ -388,6 +443,14 @@ public sealed partial class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.S
             return;
         }
 
+        if (Sliding)
+        {
+            VerticalSpeed = (Feet.Z - before.Z) / delta;
+            OnFloor = true;
+            _floorNormal = result.Normal;
+            return;
+        }
+
         if (VerticalSpeed > 0f)
         {
             VerticalSpeed = 0f;
@@ -400,15 +463,66 @@ public sealed partial class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.S
 
     private void Land(Vector3 before, Vector3 normal, float delta)
     {
-        // No creeping on a landing.
-        if (Vector3.DistanceSquared(Feet, before) < CreepSpeed * delta * (CreepSpeed * delta))
+        if (VerticalSpeed < HardLandingSpeed && Ride == null)
         {
+            HardLanding();
+        }
+        else if (Vector3.DistanceSquared(Feet, before) < CreepSpeed * delta * (CreepSpeed * delta))
+        {
+            // No creeping on a landing.
             Feet = before;
         }
 
         VerticalSpeed = 0f;
         OnFloor = true;
         _floorNormal = normal;
+    }
+
+    /// <summary>A hard landing: 10 damage (no knock-down) and K_CRASHL; the board skips it.</summary>
+    private void HardLanding()
+    {
+        if (Health > 0)
+        {
+            Damage(HardLandingDamage);
+        }
+
+        KnockDamage = 0f;
+        if (Health == 0 || Current is State.Dead or State.Knocked or State.GetUp)
+        {
+            return;
+        }
+
+        StopFiring();
+        ChuteOpen = false;
+        SetState(State.HardLand);
+    }
+
+    /// <summary>States from 800 on: climbing a ledge, or the hard landing's K_CRASHL with gravity
+    /// (held at tick 8 while still falling).</summary>
+    private void UpdateSpecial(float delta)
+    {
+        if (Current == State.Hang)
+        {
+            UpdateClimb(delta);
+            return;
+        }
+
+        StateTime += delta;
+        VerticalSpeed = MathF.Max(VerticalSpeed - Gravity * delta, -MaxFallSpeed);
+        Fall(delta);
+        UpdateTouched();
+        var ticks = AnimationFrame * CrashTicksPerFrame;
+        var next = ticks + Ticks * delta;
+        if (ticks <= CrashHoldTick && next >= CrashHoldTick && !OnFloor && VerticalSpeed <= 0f && !ChuteOpen)
+        {
+            next = CrashHoldTick;
+        }
+
+        AnimationFrame = next / CrashTicksPerFrame;
+        if (AnimationFrame >= frameCount(State.HardLand))
+        {
+            SetState(State.Still);
+        }
     }
 
     private void UpdateState(float forward, float strafe, float delta)
