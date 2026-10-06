@@ -34,6 +34,9 @@ public sealed partial class ScriptRuntime
         var data = JsonNode.Parse(json)!.AsObject();
         Restore(data["level"]!.AsObject());
         Kurt.Restore(data["kurt"]!.AsObject());
+
+        // The first tick's move starts where Kurt is: it crosses no connection.
+        _previousKurtPosition = Kurt.Feet;
     }
 
     /// <summary>The level's state for a full save.</summary>

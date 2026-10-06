@@ -77,6 +77,10 @@ public sealed partial class ScriptRuntime
     private const uint DtiCover = 5;
     private const uint DtiWaypoint = 8;
     private const uint DtiWind = 9;
+    /// <summary>Connections (DTI type 6, 0x41c550): the doorway reaches this far below its floor
+    /// (0x4945c8), a hatch's plane is this far below its z (0x4945d0).</summary>
+    private const float DoorwayDrop = 5f;
+    private const float HatchDrop = 0.5f;
     private const int DtiStaticFlags = MdkObject.FlagPickup | MdkObject.FlagNotSolid2 | MdkObject.FlagNoBanking | MdkObject.FlagNotTarget;
     private const string NoArena = "NONE";
 
@@ -274,7 +278,8 @@ public sealed partial class ScriptRuntime
     private readonly TriangleGroups _groups;
     private readonly Dictionary<string, Bsp> _bsps = [];
     private readonly Dictionary<string, float> _floors = [];
-    private readonly Dictionary<string, List<string>> _connections = [];
+    /// <summary>The arena at the other end of each connection: (arena, record id) → arena.</summary>
+    private readonly Dictionary<(string Arena, int Id), string> _connections = [];
     private readonly Dictionary<string, ArenaState> _arenas = [];
     private readonly Dictionary<int, ModelAnimation> _animations = [];
     private readonly List<MdkObject> _boxes = [];
@@ -410,6 +415,9 @@ public sealed partial class ScriptRuntime
             SecondActive = false;
             CurrentArena = arena;
             ShowArena(arena);
+
+            // No move crosses a connection (0x41bce4 sets 0x5739cc too).
+            _previousKurtPosition = position;
         }
 
         Kurt.Teleport(position, yaw);
@@ -593,16 +601,65 @@ public sealed partial class ScriptRuntime
         return t >= 0f && t <= 1f && u >= 0f && u <= 1f;
     }
 
+    /// <summary>Which way a move goes through a connection to leave the arena (the DTI record's
+    /// angle field, an integer): across its x, y or z plane, or across the XY line from its first
+    /// corner to the other, ending on its left or right (unused by the levels).</summary>
+    private enum Doorway { MinusX, PlusX, MinusY, PlusY, Left, Right, MinusZ, PlusZ }
+
+    /// <summary>The arena Kurt enters when his move crosses a connection of his arena (0x41c550,
+    /// every tick), or "". E.g. LEVEL4 MEAT_7 1012 (+y at y = 14822) → CMEAT_7.</summary>
+    private string CrossedArena(Vector3 from, Vector3 to)
+    {
+        foreach (var record in ArenaRecords(CurrentArena))
+        {
+            if (record.Type == LevelData.Connection && CrossesDoorway(record, from, to)
+                && _connections.TryGetValue((CurrentArena, record.Id), out var other))
+            {
+                return other;
+            }
+        }
+
+        return "";
+    }
+
+    /// <summary>Whether a move goes out through a doorway: across its plane in its direction, the
+    /// move within (or across) the doorway on the other axes. A horizontal doorway's box reaches
+    /// <see cref="DoorwayDrop"/> below it; the diagonal ones only test where the move ends.</summary>
+    private static bool CrossesDoorway(Dti.Record record, Vector3 from, Vector3 to)
+    {
+        var min = record.Position;
+        var max = record.BoxEnd;
+        var bottom = min.Z - DoorwayDrop;
+        var plane = min.Z - HatchDrop;
+        var withinX = Spans(from.X, to.X, min.X, max.X);
+        var withinY = Spans(from.Y, to.Y, min.Y, max.Y);
+        var withinZ = Spans(from.Z, to.Z, bottom, max.Z);
+        var side = (to.X - min.X) * (max.Y - min.Y) - (max.X - min.X) * (to.Y - min.Y);
+        return (Doorway)BitConverter.SingleToInt32Bits(record.Angle) switch
+        {
+            Doorway.MinusX => withinY && withinZ && to.X < min.X && from.X >= min.X,
+            Doorway.PlusX => withinY && withinZ && to.X > min.X && from.X <= min.X,
+            Doorway.MinusY => withinX && withinZ && to.Y < min.Y && from.Y >= min.Y,
+            Doorway.PlusY => withinX && withinZ && to.Y > min.Y && from.Y <= min.Y,
+            Doorway.MinusZ => withinX && withinY && to.Z < plane && from.Z >= plane,
+            Doorway.PlusZ => withinX && withinY && to.Z > plane && from.Z <= plane,
+            Doorway.Right => withinX && withinY && withinZ && side > 0f,
+            _ => withinX && withinY && withinZ && side < 0f,
+        };
+    }
+
+    /// <summary>Whether a move from a to b on one axis is within [min, max] or crosses it.</summary>
+    private static bool Spans(float a, float b, float min, float max) => MathF.Max(a, b) >= min && MathF.Min(a, b) <= max;
+
     private IEnumerable<Dti.Record> ArenaRecords(string arena) =>
         Level.Dti.Arenas.FirstOrDefault(a => a.Name == arena)?.Records ?? [];
 
-    /// <summary>Pairs the connection records (DTI type 6) of the arenas by their id.</summary>
+    /// <summary>Pairs the connection records (DTI type 6) of the arenas by their id (0x41c22c).</summary>
     private void FindConnections()
     {
         var byId = new Dictionary<int, List<string>>();
         foreach (var entry in Level.Dti.Arenas)
         {
-            _connections[entry.Name] = [];
             foreach (var record in entry.Records.Where(r => r.Type == LevelData.Connection))
             {
                 if (!byId.TryGetValue(record.Id, out var names))
@@ -614,20 +671,17 @@ public sealed partial class ScriptRuntime
             }
         }
 
-        foreach (var names in byId.Values)
+        foreach (var (id, names) in byId)
         {
             foreach (var a in names)
             {
-                foreach (var b in names.Where(b => a != b && !_connections[a].Contains(b)))
+                foreach (var b in names.Where(b => a != b))
                 {
-                    _connections[a].Add(b);
+                    _connections[(a, id)] = b;
                 }
             }
         }
     }
-
-    /// <summary>Whether a connection leads from one arena to the other.</summary>
-    private bool Connects(string from, string to) => _connections.TryGetValue(from, out var list) && list.Contains(to);
 
     private void RunTick()
     {
@@ -654,13 +708,8 @@ public sealed partial class ScriptRuntime
             }
         }
 
-        // Kurt only goes into an arena connected to his (0x41c550); a teleport puts him anywhere.
-        var arena = _space.ArenaAt(KurtPosition) ?? "";
-        if (CurrentArena.Length != 0 && !Connects(CurrentArena, arena))
-        {
-            arena = CurrentArena;
-        }
-
+        // Kurt changes arena only through a connection of his (0x41c550); a teleport puts him anywhere.
+        var arena = CurrentArena.Length == 0 ? _space.ArenaAt(KurtPosition) ?? "" : CrossedArena(_previousKurtPosition, KurtPosition);
         if (arena.Length != 0 && arena != CurrentArena)
         {
             // Crossing into another arena: the one left stays as the active second arena.
@@ -938,7 +987,7 @@ public sealed partial class ScriptRuntime
             top = 0.3f * obj.Position.Z + 0.7f * boundsTop;
         }
 
-        var rest = CameraPitchAt(KurtPosition);
+        var rest = ArenaCameraPitch();
         var target = rest;
         if (off <= 90f && top >= KurtPosition.Z)
         {
@@ -950,12 +999,9 @@ public sealed partial class ScriptRuntime
         CameraTrackTicks = 2;
     }
 
-    /// <summary>The DTI camera pitch of the arena around a point.</summary>
-    private float CameraPitchAt(Vector3 point)
-    {
-        var name = _space.ArenaAt(point);
-        return Level.Dti.Arenas.FirstOrDefault(a => a.Name == name)?.Pitch ?? DefaultCameraPitch;
-    }
+    /// <summary>The DTI camera pitch of Kurt's arena (arena+0x462).</summary>
+    private float ArenaCameraPitch() =>
+        Level.Dti.Arenas.FirstOrDefault(a => a.Name == CurrentArena)?.Pitch ?? DefaultCameraPitch;
 
     /// <summary>The scope's target lock (during projection in the original, 0x43b65c): the nearest
     /// object whose screen box overlaps a 64-pixel square around the crosshair (640x480 pixels), not

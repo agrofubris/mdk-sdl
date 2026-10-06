@@ -348,7 +348,7 @@ public sealed class Viewer : IScreen
             else
             {
                 _kurt.Update(input, Step);
-                _follow.Update(_kurt, ArenaPitch(_level, _space, _kurt.Feet), input, Step);
+                _follow.Update(_kurt, ArenaPitch(_level, _scripts.CurrentArena), input, Step);
             }
 
             input.ClearMouse();
@@ -613,11 +613,10 @@ public sealed class Viewer : IScreen
             $"Kurt at {f.X:0.00} {f.Y:0.00} {f.Z:0.00} yaw {kurt.Yaw:0} {kurt.Current} floor {kurt.OnFloor} arena {space.ArenaAt(f)} health {kurt.Health}"));
     }
 
-    /// <summary>The camera pitch of the arena around the feet (DTI, degrees).</summary>
-    private static float ArenaPitch(LevelData level, ArenaSpace space, Vector3 feet)
+    /// <summary>The camera pitch of Kurt's arena (DTI, degrees; camera_update 0x4174d0).</summary>
+    private static float ArenaPitch(LevelData level, string name)
     {
         const float DefaultPitch = 4f;
-        var name = space.ArenaAt(feet);
         return level.Dti.Arenas.FirstOrDefault(a => a.Name == name)?.Pitch ?? DefaultPitch;
     }
 

@@ -1,0 +1,70 @@
+using System.Numerics;
+using Mdk.Engine.Audio;
+using Mdk.Formats;
+using Mdk.Game.Audio;
+using Mdk.Game.Collision;
+using Mdk.Game.Level;
+using Mdk.Game.Scripts;
+
+namespace Mdk.Game.Tests;
+
+/// <summary>Found by playtest: Kurt's arena came from the arena boxes, so on level 4's MEAT_7 floor,
+/// just before the doorway to CMEAT_7 (connection 1012, the plane y = 14822), he was already in the
+/// corridor; the scripts then dropped MEAT_7 from the solid arenas and he fell through its floor.
+/// The original switches only when his move crosses the doorway (0x41c550).</summary>
+public class ArenaSwitchTests
+{
+    private const int Level = 4;
+    private const string Room = "MEAT_7";
+    private const string Corridor = "CMEAT_7";
+    private const float Doorway = 14822f;
+    private const float Floor = 21f;
+
+    private static readonly MdkData Data = MdkData.Find() ?? throw new InvalidOperationException("MDK data not found");
+    private static readonly AudioDevice Device = new(Output.Muted);
+
+    private static ScriptRuntime CreateRuntime()
+    {
+        var level = new LevelData(Data, Level);
+        var cmi = Cmi.Load(Data.PathOf($"TRAVERSE/LEVEL{Level}/LEVEL{Level}.CMI"));
+        var sprites = Bni.Load(Data.PathOf("TRAVERSE/TRAVSPRT.BNI"));
+        var space = new ArenaSpace();
+        foreach (var arena in level.Arenas.Where(a => level.IsReachable(a.Name)))
+        {
+            space.Add(arena);
+        }
+
+        var mixer = new SoundMixer(Device, _ => null);
+        return new ScriptRuntime(level, cmi, sprites, space, new TriangleGroups(), mixer, new Kurt.Kurt(space, mixer, _ => 1));
+    }
+
+    /// <summary>Puts Kurt at a y on the floor by the doorway and runs a tick.</summary>
+    private static void StepTo(ScriptRuntime runtime, float y)
+    {
+        runtime.Kurt.Teleport(new Vector3(0f, y, Floor), runtime.Kurt.Yaw);
+        runtime.Update(ScriptRuntime.Tick);
+    }
+
+    [DataFact]
+    public void ArenaSwitchesAtDoorway()
+    {
+        var runtime = CreateRuntime();
+        runtime.TeleportKurt(Room, new Vector3(0f, Doorway - 100f, Floor), 90f);
+        runtime.Update(ScriptRuntime.Tick);
+
+        // Inside the corridor's box, but not through the doorway yet.
+        StepTo(runtime, Doorway - 1f);
+        Assert.Equal(Room, runtime.CurrentArena);
+
+        // Through: the room stays as the active second arena.
+        StepTo(runtime, Doorway + 3f);
+        Assert.Equal(Corridor, runtime.CurrentArena);
+        Assert.Equal(Room, runtime.SecondArena);
+        Assert.True(runtime.SecondActive);
+
+        // And back.
+        StepTo(runtime, Doorway - 1f);
+        Assert.Equal(Room, runtime.CurrentArena);
+        Assert.Equal(Corridor, runtime.SecondArena);
+    }
+}
