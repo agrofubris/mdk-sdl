@@ -18,7 +18,7 @@ Each layer talks only to the one below it.
     │         Viewer (a level): level, camera, collision (BSP), sound mixer, scripts and objects, Kurt
     │   └──────────────► Mdk.Formats  (parsers: DTI, MTO, MTI, SNI, FTI, BNI, models; the 1996 demo's)
  Mdk.Engine   Render (Renderer: meshes, index textures, palettes, panorama)
-    │         Audio (AudioDevice: software mixer of voices, music and effects buses, streamed voices)
+    │         Audio (AudioDevice: software mixer of voices, music and effects buses, streamed voices, master limiter)
     │         Platform (Window, Input: game keys (rebindable), menu keys, pointer, text, cursor, embedded SDL3)
  SDL3         SDL_GPU (Direct3D 12 / Vulkan / Metal), events
 ```
