@@ -7,6 +7,8 @@
 # Run from the project folder after `dotnet build`: sh tests/sniper_test.sh
 # No window: the game draws off screen and never takes the focus.
 export MDK_HIDDEN=1
+# Default settings, not the player's (their difficulty changes damage).
+export MDK_USER_DIR="$(mktemp -d)"
 MDK=src/Mdk.App/bin/Debug/net10.0/mdk
 SHOT=${TMPDIR:-/tmp}/mdk_sniper.bmp
 SPOT=--at=0,120,150,75.5
