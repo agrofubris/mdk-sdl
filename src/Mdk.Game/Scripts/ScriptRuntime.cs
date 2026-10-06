@@ -281,6 +281,8 @@ public sealed partial class ScriptRuntime
     private readonly Dictionary<string, ArenaState> _arenas = [];
     private readonly Dictionary<int, ModelAnimation> _animations = [];
     private readonly List<MdkObject> _boxes = [];
+    /// <summary>The voices following each object: they stop when it's removed.</summary>
+    private readonly Dictionary<MdkObject, List<int>> _following = [];
     private List<string> _loadedArenas = [];
     private List<string> _drawnArenas = [];
     private int _nextInstance = 1000;
@@ -1442,6 +1444,11 @@ public sealed partial class ScriptRuntime
         // The object's sounds go with it.
         Mixer.StopVoice(obj.LoopSound);
         Mixer.StopVoice(obj.TrackedVoice);
+        if (_following.Remove(obj, out var voices))
+        {
+            voices.ForEach(Mixer.StopVoice);
+        }
+
         obj.LoopSound = 0;
         obj.TrackedVoice = 0;
         obj.Dead = true;
@@ -2953,7 +2960,18 @@ public sealed partial class ScriptRuntime
         }
     }
 
-    /// <summary>A sound following an object, at an offset in its frame.</summary>
-    private int PlayOn(string name, MdkObject obj, SoundMixer.Start start, Vector3 offset) =>
-        Mixer.PlayOn(name, () => obj.Position + RotatedZ(offset, obj.Yaw), start);
+    /// <summary>A sound following an object, at an offset in its frame (kept to stop it with the object).</summary>
+    private int PlayOn(string name, MdkObject obj, SoundMixer.Start start, Vector3 offset)
+    {
+        var voice = Mixer.PlayOn(name, () => obj.Position + RotatedZ(offset, obj.Yaw), start);
+        if (!_following.TryGetValue(obj, out var voices))
+        {
+            _following[obj] = voices = [];
+        }
+
+        // Ended voices are forgotten.
+        voices.RemoveAll(v => !Mixer.IsVoicePlaying(v));
+        voices.Add(voice);
+        return voice;
+    }
 }

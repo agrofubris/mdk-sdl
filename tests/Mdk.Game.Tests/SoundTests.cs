@@ -1,6 +1,11 @@
 using System.Numerics;
 using Mdk.Engine.Audio;
+using Mdk.Formats;
 using Mdk.Game.Audio;
+using Mdk.Game.Collision;
+using Mdk.Game.Level;
+using Mdk.Game.Objects;
+using Mdk.Game.Scripts;
 
 namespace Mdk.Game.Tests;
 
@@ -54,5 +59,28 @@ public class SoundTests
         var far = mixer.PlayAt("A", new Vector3(300f, 0f, 0f));
         Assert.Equal(1f, device.GainOf(near), 3);
         Assert.Equal(FloorGain, device.GainOf(far), 3);
+    }
+
+    /// <summary>A sound following an object (play_sound flag 0x10) stops when the object is removed
+    /// (sound_mixer.gd: its player goes with the object).</summary>
+    [DataFact]
+    public void FollowingSoundStopsWithItsObject()
+    {
+        const int Level = 3;
+        const int Following = 0x10;
+        var data = MdkData.Find()!;
+        using var device = new AudioDevice(Output.Muted);
+        var entry = new SoundMixer.Entry(Tone(1f, Looping.Forever), SoundMixer.FullVolume);
+        var mixer = new SoundMixer(device, _ => entry);
+        var space = new ArenaSpace();
+        var runtime = new ScriptRuntime(new LevelData(data, Level), Cmi.Load(data.PathOf($"TRAVERSE/LEVEL{Level}/LEVEL{Level}.CMI")),
+            Bni.Load(data.PathOf("TRAVERSE/TRAVSPRT.BNI")), space, new TriangleGroups(), mixer, new Kurt.Kurt(space, mixer, _ => 1));
+        var obj = new MdkObject();
+        runtime.PlaySound(obj, "A", Following, null);
+        Assert.True(mixer.IsPlaying("A"));
+
+        runtime.Remove(obj);
+
+        Assert.False(mixer.IsPlaying("A"));
     }
 }
