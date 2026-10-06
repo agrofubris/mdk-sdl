@@ -67,6 +67,7 @@ One native executable per platform (Native AOT). It embeds SDL3's library for it
 ```
 
 - Palette index 0 is transparent.
+- Vertex colours (white unless given) multiply the surface, Gouraud-blended: the stream's tube.
 - Glass (`GLASS1-4`) blends after the opaque surfaces; mirrors show the panorama where the sky
   behind them would be (shifted by MIRRLOW...MIRRHIGH).
 - Insets (`Renderer.Insets.cs`): 3D views in canvas rectangles, under or over the canvas (sniper
@@ -209,13 +210,12 @@ so the game runs them unchanged:
 10. 🟡 Fall, stream, bomber, snowboard sequences. The rides are done (see 6). The stream is done (`Stream/`; ports of
     `stream.gd`, `stream_tube.gd`): the tube from Watcom's `rand()` (`--stream` uses seed 1, as the
     Godot reference test), Kurt's steering, drift and walls, the lights, the bonus, Bones' rescue,
-    the Gunter tube and the planet, the fades. Approximations: per-segment alpha, ramp colours
-    through an index texture, blended lights and red. The fall is done (`Fall/`; ports of `fall.gd`,
-    `fall_missile.gd`): the intro in space, steering, the camera, the ground with the crawler's
+    the Gunter tube and the planet, the fades. Unknown: the lights' blend (added). The fall is done
+    (`Fall/`; ports of `fall.gd`, `fall_missile.gd`): the intro in space, steering, the camera, the ground with the crawler's
     track and the haze (quads far below the camera), radars, missiles, pickups, Bones, the palette
     effects, the HUD; health and pickups go on to the level (`GameState.Carry`). Pickups are only
     tested under their chute, as the original (0x41275c, as fall.gd).
-    Approximations: the radar's colours, the smoke trails, the red only on palette colours.
+    Approximations: the radar's colours, the smoke trails.
 11. ✅ Enhanced look (`Renderer.Enhanced.cs`, `shaders/enhanced.hlsl`, `post.hlsl`, `depth.hlsl`):
     filtered textures, sky, sprites and 2D screens, a sun with shadows, white ambient light,
     ambient occlusion, glow, haze; anti-aliasing in both looks. Still to do: mipmaps for the

@@ -11,13 +11,11 @@ namespace Mdk.Game.Stream;
 /// <summary>Draws the stream (0x436b00, 0x438bfc): the scrolling background far behind, the models,
 /// the translucent tube far to near, the lights and the planet, the health box and the fade.
 /// <code>
-///   background quad (far) ─► Kurt, Bones, bonus / Gunter ─► tube (blended, per segment) ─► lights
-///   ─► canvas: health box, fade (red, white, black)
+///   background quad (far) ─► Kurt, Bones, bonus / Gunter ─► tube (blended, far to near) ─► lights
+///   ─► canvas: health box, fade (red added, white, black)
 /// </code>
-/// The tube's vertex colours are ramp indices: an identity index texture is looked up through a
-/// palette holding the ramp twice (1-64, 65-128), so that a triangle across the ramp's wrap
-/// (63 → 0) blends through 63 → 64 instead of the whole ramp. Each segment takes the mean alpha of
-/// its two rings (the original blends per vertex).</summary>
+/// The tube's vertices carry their RGBA (ramp colour, level alpha), Gouraud-blended as the
+/// original's direct-colour triangles.</summary>
 public sealed class StreamView
 {
     private const float ViewHeight = 360f;
@@ -29,17 +27,9 @@ public sealed class StreamView
     /// <summary>Sprites are drawn a quarter of their size (lights), the planet half.</summary>
     private const float LightScale = 0.25f;
     private const float PlanetScale = 0.5f;
-    /// <summary>The lights glow over what's behind (❓ the original's blend isn't known).</summary>
-    private const float LightAlpha = 0.75f;
     private const int SpriteCapacity = 256;
     private const int QuadVertices = 6;
     private const int TubeCapacity = StreamTube.Rings * StreamTube.Points * 2 * 3;
-    private const int IdentitySize = Palette.Size;
-    /// <summary>Ramp colour c is palette entry 1 + c (0 is transparent); the copy starts at 65.</summary>
-    private const int RampFirst = 1;
-    private const int HalfRamp = StreamTube.RampSize / 2;
-    /// <summary>The middle of a texel of the one-row identity texture.</summary>
-    private const float TexelCentre = 0.5f;
     // The health box (0x420830): SC_STAT at the bottom right, SNIP_TXT digits, blinking at 20 or less.
     private const float PanelRight = 16f;
     private const float PanelBottom = 10f;
@@ -62,8 +52,6 @@ public sealed class StreamView
     private readonly Dictionary<string, ModelAnimation> _animations = [];
     private readonly Dictionary<(string, string), Vector3[][][]> _baked = [];
     private readonly int _paletteId;
-    private readonly int _rampTexture;
-    private readonly int _rampPalette;
     private readonly int _tubeMesh;
     private readonly int _spriteMesh;
     private readonly int _backMesh;
@@ -75,7 +63,7 @@ public sealed class StreamView
     private readonly List<TubeVertex> _tubeVertices = [];
     private readonly List<Vertex> _vertices = [];
 
-    public StreamView(Renderer renderer, Bni bni, Palette palette, TextureArchive archive, IReadOnlyList<(byte R, byte G, byte B)> ramp)
+    public StreamView(Renderer renderer, Bni bni, Palette palette, TextureArchive archive)
     {
         _renderer = renderer;
         _bni = bni;
@@ -88,15 +76,6 @@ public sealed class StreamView
         _planet = Load("PLANET");
         _panel = Load("SC_STAT");
         _digits = Load("SNIP_TXT");
-
-        var identity = new byte[IdentitySize];
-        for (var i = 0; i < identity.Length; i++)
-        {
-            identity[i] = (byte)i;
-        }
-
-        _rampTexture = renderer.CreateIndexTexture(IdentitySize, 1, identity);
-        _rampPalette = renderer.CreatePalette(RampPalette(ramp));
         _tubeMesh = renderer.CreateDynamicMesh(TubeCapacity);
         _spriteMesh = renderer.CreateDynamicMesh(SpriteCapacity * QuadVertices);
         _backMesh = renderer.CreateDynamicMesh(QuadVertices);
@@ -106,22 +85,6 @@ public sealed class StreamView
     {
         var texture = _bni.GetImage(name);
         return new Image(_renderer.CreateIndexTexture(texture.Width, texture.Height, texture.Indices), new Vector2(texture.Width, texture.Height));
-    }
-
-    /// <summary>The ramp twice from entry 1, opaque.</summary>
-    private static byte[] RampPalette(IReadOnlyList<(byte R, byte G, byte B)> ramp)
-    {
-        var rgba = new byte[Palette.Size * 4];
-        for (var copy = 0; copy < 2; copy++)
-        {
-            for (var i = 0; i < ramp.Count; i++)
-            {
-                var at = (RampFirst + copy * ramp.Count + i) * 4;
-                (rgba[at], rgba[at + 1], rgba[at + 2], rgba[at + 3]) = (ramp[i].R, ramp[i].G, ramp[i].B, byte.MaxValue);
-            }
-        }
-
-        return rgba;
     }
 
     /// <summary>The camera's view for the window's aspect: 250-pixel focal length on the 360-high view.</summary>
@@ -180,29 +143,20 @@ public sealed class StreamView
         _vertices.Add(new Vertex(bottomLeft, new Vector2(uv0.X, uv1.Y)));
     }
 
-    /// <summary>The tube's segments far to near, each with its alpha.</summary>
+    /// <summary>The tube's segments far to near in one draw, each vertex with its RGBA.</summary>
     private void DrawTube(Flight flight)
     {
         var tube = flight.Tube;
         _vertices.Clear();
-        var batches = new List<(int First, int Count, float Alpha)>();
         foreach (var n in tube.DrawnSegments())
         {
             _tubeVertices.Clear();
             tube.AddTriangles(n, flight.Eye, _tubeVertices);
-            if (_tubeVertices.Count == 0)
+            foreach (var v in _tubeVertices)
             {
-                continue;
+                var (r, g, b, a) = tube.Rgba(v);
+                _vertices.Add(new Vertex(v.Position, Vector2.Zero, Vertex.Rgba(r, g, b, a)));
             }
-
-            var first = _vertices.Count;
-            for (var i = 0; i < _tubeVertices.Count; i += 3)
-            {
-                AddTubeTriangle(_tubeVertices[i], _tubeVertices[i + 1], _tubeVertices[i + 2]);
-            }
-
-            var alpha = (StreamTube.AlphaOf(_tubeVertices[0].Level) + StreamTube.AlphaOf(_tubeVertices[1].Level)) / 2f;
-            batches.Add((first, _vertices.Count - first, alpha));
         }
 
         if (_vertices.Count == 0)
@@ -211,25 +165,7 @@ public sealed class StreamView
         }
 
         _renderer.UpdateMesh(_tubeMesh, CollectionsMarshal.AsSpan(_vertices));
-        foreach (var (first, count, alpha) in batches)
-        {
-            var material = new Material(_rampTexture, _rampPalette, new Vector4(1f, 1f, 1f, alpha), 1, Pass.Blended);
-            _renderer.Draw(_tubeMesh, first, count, material);
-        }
-    }
-
-    /// <summary>A triangle whose colours span the ramp's wrap takes the copy above 63 for its low ones.</summary>
-    private void AddTubeTriangle(TubeVertex a, TubeVertex b, TubeVertex c)
-    {
-        var low = Math.Min(a.Colour, Math.Min(b.Colour, c.Colour));
-        var high = Math.Max(a.Colour, Math.Max(b.Colour, c.Colour));
-        var wraps = high - low > HalfRamp;
-        foreach (var v in (ReadOnlySpan<TubeVertex>)[a, b, c])
-        {
-            var colour = wraps && v.Colour < HalfRamp ? v.Colour + StreamTube.RampSize : v.Colour;
-            var u = (RampFirst + colour + TexelCentre) / IdentitySize;
-            _vertices.Add(new Vertex(v.Position, new Vector2(u, TexelCentre)));
-        }
+        _renderer.Draw(_tubeMesh, 0, _vertices.Count, Material.Flat(Vector4.One, Pass.Blended));
     }
 
     /// <summary>The planet and the lights: billboards facing the camera.</summary>
@@ -251,8 +187,9 @@ public sealed class StreamView
 
         if (lights > 0)
         {
-            var glow = new Vector4(1f, 1f, 1f, LightAlpha);
-            _renderer.Draw(_spriteMesh, planets, lights, new Material(_light.Texture, _paletteId, glow, 1, Pass.Blended));
+            // The lights glow, added to what's behind (as stream.gd; ❓ the original's blend isn't known).
+            var glow = new Material(_light.Texture, _paletteId, Vector4.One, 1, Pass.Blended, Blend: Blend.Add);
+            _renderer.Draw(_spriteMesh, planets, lights, glow);
         }
     }
 
@@ -391,14 +328,14 @@ public sealed class StreamView
     private void DrawImage(Image image, RectangleF source, RectangleF target) =>
         _renderer.DrawImage(image.Texture, _paletteId, image.Size, source, target, Vector4.One);
 
-    /// <summary>The fade over everything: red (❓ added in the original, blended here), then towards
-    /// white, then darkened.</summary>
+    /// <summary>The fade over everything: red added (0x4352ac: R + red, green and blue kept), then
+    /// towards white, then darkened.</summary>
     private void DrawFade(Fade fade)
     {
         var screen = new RectangleF(0f, 0f, _renderer.CanvasWidth, Renderer.CanvasHeight);
         if (fade.Red > 0f)
         {
-            _renderer.FillRect(screen, new Vector4(1f, 0f, 0f, fade.Red));
+            _renderer.AddRect(screen, new Vector4(1f, 0f, 0f, fade.Red));
         }
 
         if (fade.Whiten < 1f)

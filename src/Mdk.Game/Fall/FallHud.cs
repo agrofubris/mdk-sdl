@@ -66,10 +66,9 @@ public sealed class FallHud
             _icons.Add(Load(frame.Image, frame.HotspotX, frame.HotspotY));
         }
 
-        // The fonts use the interface's colours (SYS_PAL).
-        var system = Palette.FromRgb(fti.GetBytes("SYS_PAL"));
-        var big = new FontView(renderer, Font.Parse(fti.GetBytes("FONTBIG"), FontSpaceBig), system);
-        var small = new FontView(renderer, Font.Parse(fti.GetBytes("FONTSML"), FontSpaceSmall), system);
+        // The fonts use the fall's palette and its effects (fall.gd).
+        var big = new FontView(renderer, Font.Parse(fti.GetBytes("FONTBIG"), FontSpaceBig), palette);
+        var small = new FontView(renderer, Font.Parse(fti.GetBytes("FONTSML"), FontSpaceSmall), palette);
         Messages = new Messages(fti, big, small);
     }
 

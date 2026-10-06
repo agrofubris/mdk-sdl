@@ -39,6 +39,18 @@ public class StreamTests
         Assert.Equal((turn, min, max), (tube.MaxTurn, tube.MinRadius, tube.MaxRadius));
     }
 
+    /// <summary>A vertex takes its ramp colour and its level's alpha (of 256), blended per vertex.</summary>
+    [Theory]
+    [InlineData(0, 0, 222, 206, 90, 0x5A)]
+    [InlineData(10, 2, 0x87, 0x68, 0x1a, 0x50)]
+    [InlineData(63, 5, 209, 186, 79, 0x0F)]
+    public void VertexTakesRampAndLevel(int colour, int level, int r, int g, int b, int a)
+    {
+        var tube = Tube(0, Difficulty.Normal, StreamTube.Kind.Normal);
+        var rgba = tube.Rgba(new TubeVertex(Vector3.Zero, colour, level));
+        Assert.Equal((r, g, b, a), ((int)rgba.R, (int)rgba.G, (int)rgba.B, (int)rgba.A));
+    }
+
     /// <summary>godot-mdk, StreamTube.new(0, 1, NORMAL) with Watcom's rand().</summary>
     [Fact]
     public void TubeMatchesGodot()

@@ -12,13 +12,13 @@ namespace Mdk.Game.Fall;
 /// <code>
 ///   camera ──►  models (Kurt, Bones, missiles, pickups, chutes, explosions), radar beam, trails
 ///      │
-///      ▼ 6970  haze (white streaks, by the wind level)
+///      ▼ 6970  minecrawler             (fall)
 ///        6980  earth                   (intro)
-///        6990  minecrawler │ moon      (fall │ intro)
+///        6990  haze        │ moon      (fall: white streaks by the wind level │ intro)
 ///        7000  ground      │ space
 /// </code>
-/// The palette effects go over everything as canvas fills (white, then black); the red of death
-/// changes the palette, as the original does.</summary>
+/// The palette effects change the palette, as the original does (<see cref="FallPalette"/>); the
+/// intro's whitening and the darkening go over everything as canvas fills.</summary>
 public sealed class FallView
 {
     private const float Focal = 250f;
@@ -66,7 +66,7 @@ public sealed class FallView
 
     private readonly Renderer _renderer;
     private readonly int _index;
-    private readonly byte[] _rgba;
+    private readonly FallPalette _effects;
     private readonly int _palette;
     private readonly int _spacePalette;
     private readonly int _whitePalette;
@@ -82,7 +82,6 @@ public sealed class FallView
     private readonly int _trailMesh;
     private readonly List<Vertex> _back = [];
     private readonly List<(int First, Material Material, int Frame)> _backDraws = [];
-    private float _red;
 
     public FallModels Models { get; }
     public FallHud Hud { get; }
@@ -93,13 +92,13 @@ public sealed class FallView
         _index = index;
         var n = index + 1;
         var palette = PaletteOf(bni, $"FALLP{n}");
-        _rgba = palette.Rgba;
+        _effects = new FallPalette(palette.Rgba);
         _palette = renderer.CreatePalette(palette.Rgba);
         _spacePalette = renderer.CreatePalette(PaletteOf(bni, "SPACEPAL").Rgba);
         var white = new byte[Palette.Size * 4];
         Array.Fill(white, byte.MaxValue);
         _whitePalette = renderer.CreatePalette(white);
-        Models = new FallModels(renderer, bni, mti, palette, _palette);
+        Models = new FallModels(renderer, bni, mti, _effects, _palette);
         Hud = new FallHud(renderer, bni, _palette, fti);
 
         _ground = new FallGround(mti.Textures[$"LEVEL{n}"], mti.Textures[$"POD{n}"]);
@@ -150,10 +149,13 @@ public sealed class FallView
         return _renderer.CreateIndexTexture(Fall3d.HazeWidth, Fall3d.HazeRows * HazeLevels, masks);
     }
 
+    /// <summary>The colour behind the scene: palette colour 0 with the effects.</summary>
+    public Vector4 Backdrop => _effects.Colour(0);
+
     /// <summary>Queues the frame's 3D scene and returns its camera.</summary>
     public View Draw(FallSim sim)
     {
-        SetRed(sim.Red);
+        SetEffects(sim);
         var camera = sim.CameraPosition;
         var width = _renderer.CanvasWidth;
         _back.Clear();
@@ -183,11 +185,11 @@ public sealed class FallView
         return new View(view * projection, Matrix4x4.Identity, camera);
     }
 
-    /// <summary>The palette effects over everything: towards white, then darkened.</summary>
+    /// <summary>The effects over everything: towards white in the intro, then darkened.</summary>
     public void DrawEffects(FallSim sim)
     {
         var canvas = new RectangleF(0f, 0f, _renderer.CanvasWidth, Renderer.CanvasHeight);
-        if (sim.Whiten < 1f)
+        if (sim.InIntro && sim.Whiten < 1f)
         {
             _renderer.FillRect(canvas, new Vector4(1f, 1f, 1f, 1f - sim.Whiten));
         }
@@ -198,22 +200,16 @@ public sealed class FallView
         }
     }
 
-    /// <summary>The red of death: added to the palette's red.</summary>
-    private void SetRed(float red)
+    /// <summary>The fall's whitening and the red of death in the palette; colour 0 is whitened in
+    /// the first second only.</summary>
+    private void SetEffects(FallSim sim)
     {
-        if (red == _red)
+        var brightness = sim.InIntro ? 1f : sim.Whiten;
+        var zero = sim.Time < 1f ? FallPalette.Zero.Whitened : FallPalette.Zero.Kept;
+        if (_effects.Set(brightness, sim.Red, zero))
         {
-            return;
+            _renderer.UpdateTexture(_palette, Palette.Size, 1, _effects.Rgba);
         }
-
-        _red = red;
-        var rgba = (byte[])_rgba.Clone();
-        for (var i = 0; i < Palette.Size; i++)
-        {
-            rgba[i * 4] = (byte)Math.Min(rgba[i * 4] + red * byte.MaxValue, byte.MaxValue);
-        }
-
-        _renderer.UpdateTexture(_palette, Palette.Size, 1, rgba);
     }
 
     /// <summary>Space as the background, the moon and the flattened earth rising and growing.</summary>
@@ -229,7 +225,7 @@ public sealed class FallView
         Sprite(camera, width, _earth, earth, new Vector2(Grow(EarthScaleX), Grow(EarthScaleY)), BackDepth - 2f * LayerStep, _spacePalette);
     }
 
-    /// <summary>The ground with the track, the minecrawler on it and the haze over both.</summary>
+    /// <summary>The ground with the track, the haze over it, the minecrawler over both (fall.gd).</summary>
     private void QueueGround(FallSim sim, Vector3 camera, float width)
     {
         var centreRow = FallGround.CentreRow(sim.Time);
@@ -248,7 +244,7 @@ public sealed class FallView
         if (_crawler.Count != 0)
         {
             var (centre, scale) = FallGround.Crawler(camera, width);
-            Sprite(camera, width, _crawler[(int)sim.CrawlerFrame % _crawler.Count], centre, new Vector2(scale), BackDepth - LayerStep, _palette);
+            Sprite(camera, width, _crawler[(int)sim.CrawlerFrame % _crawler.Count], centre, new Vector2(scale), BackDepth - 3f * LayerStep, _palette);
         }
 
         // Each blend offset b uses table (wind level + b): white by its alpha.
@@ -262,7 +258,7 @@ public sealed class FallView
             }
 
             var material = new Material(_haze[sim.HazeFrame], _whitePalette, new Vector4(1f, 1f, 1f, alpha), HazeLevels, Pass.Blended);
-            Quad(camera, width, new RectangleF(0f, 0f, width, ViewHeight), BackDepth - 3f * LayerStep, material, frame: b - 1);
+            Quad(camera, width, new RectangleF(0f, 0f, width, ViewHeight), BackDepth - LayerStep, material, frame: b - 1);
         }
     }
 
@@ -326,13 +322,13 @@ public sealed class FallView
             }
         }
 
-        // Explosions grow and play their texture's frames.
+        // Explosions grow and play their texture's frames, over everything (sorted at camera z + 5).
         foreach (var explosion in sim.Explosions)
         {
             var frame = (int)explosion.Ticks;
             var scale = MathF.Max(ExplosionGrowth * frame / FallSim.ExplosionTicks, ExplosionMinScale);
             var world = Matrix4x4.CreateScale(scale) * Matrix4x4.CreateRotationZ(explosion.Yaw) * Matrix4x4.CreateTranslation(explosion.Position);
-            Models.Draw("EXPLODE", world, textureFrame: frame);
+            Models.Draw("EXPLODE", world, textureFrame: frame, pass: Pass.OnTop);
         }
     }
 
@@ -403,7 +399,7 @@ public sealed class FallView
         _renderer.UpdateMesh(_radarMesh, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(vertices));
         for (var c = 0; c < RadarAlpha.Length; c++)
         {
-            var colour = Material.Flat(new Vector4(0f, 1f, 0f, RadarAlpha[c] / BlendUnit), Pass.Blended);
+            var colour = Material.Flat(_effects.Apply(new Vector4(0f, 1f, 0f, RadarAlpha[c] / BlendUnit)), Pass.Blended);
             _renderer.Draw(_radarMesh, bands[c], bands[c + 1] - bands[c], colour);
         }
     }
@@ -438,6 +434,6 @@ public sealed class FallView
         }
 
         _renderer.UpdateMesh(_trailMesh, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(vertices));
-        _renderer.Draw(_trailMesh, 0, vertices.Count, Material.Flat(TrailColour, Pass.Blended));
+        _renderer.Draw(_trailMesh, 0, vertices.Count, Material.Flat(_effects.Apply(TrailColour), Pass.Blended));
     }
 }

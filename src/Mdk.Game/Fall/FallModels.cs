@@ -6,19 +6,22 @@ namespace Mdk.Game.Fall;
 
 /// <summary>The fall's models (<c>FALL3D.BNI</c>, without the arena models' flags word) in the
 /// textures of <c>FALL3D_n.MTI</c> and the <c>FALLPn</c> palette, both faces drawn: a mesh per
-/// pose (model, animation, frame), built once.
+/// pose (model, animation, frame), built once. Flat colours follow the palette's effects.
 /// <code>
 ///   (model, animation, frame) ──► cached mesh + batches per surface ──(world matrix)──► renderer
 /// </code></summary>
-public sealed class FallModels(Renderer renderer, Bni bni, TextureArchive mti, Palette palette, int paletteId)
+public sealed class FallModels(Renderer renderer, Bni bni, TextureArchive mti, FallPalette palette, int paletteId)
 {
     /// <summary>Models with named parts (bit 7 of the table 0x490ca4).</summary>
     private static readonly HashSet<string> NamedParts = ["KURT", "MISSILE", "CHUTE", "BONES", "SW_DUMMY", "SW_H150", "SW_THUMP", "SW_TWIST", "SW_INTER"];
     /// <summary>Material values from 256 are special (glass, mirrors): not in the fall.</summary>
     private const int SpecialFirst = 256;
     private const string PenPrefix = "PEN_";
+    /// <summary>A textured batch's palette colour: none.</summary>
+    private const int NoPen = -1;
 
-    private readonly record struct Batch(int First, int Count, Material Material);
+    /// <summary>Triangles of a surface; <paramref name="Pen"/> is a flat colour's palette index.</summary>
+    private readonly record struct Batch(int First, int Count, Material Material, int Pen);
 
     private sealed record PoseMesh(int Mesh, List<Batch> Batches);
 
@@ -40,8 +43,8 @@ public sealed class FallModels(Renderer renderer, Bni bni, TextureArchive mti, P
     }
 
     /// <summary>Draws a model at rest, or in a frame of an animation; <paramref name="textureFrame"/>
-    /// picks an animated texture's frame.</summary>
-    public void Draw(string name, Matrix4x4 world, string animation = "", int frame = 0, int textureFrame = 0)
+    /// picks an animated texture's frame, <paramref name="pass"/> how it meets the scene.</summary>
+    public void Draw(string name, Matrix4x4 world, string animation = "", int frame = 0, int textureFrame = 0, Pass pass = Pass.DoubleSided)
     {
         var key = (name, animation, frame);
         if (!_meshes.TryGetValue(key, out var mesh))
@@ -56,7 +59,8 @@ public sealed class FallModels(Renderer renderer, Bni bni, TextureArchive mti, P
 
         foreach (var batch in mesh.Batches)
         {
-            renderer.Draw(mesh.Mesh, batch.First, batch.Count, batch.Material, textureFrame, world);
+            var material = batch.Pen == NoPen ? batch.Material : batch.Material with { Colour = palette.Colour(batch.Pen) };
+            renderer.Draw(mesh.Mesh, batch.First, batch.Count, material with { Pass = pass }, textureFrame, world);
         }
     }
 
@@ -89,7 +93,7 @@ public sealed class FallModels(Renderer renderer, Bni bni, TextureArchive mti, P
             pose = frames[frame];
         }
 
-        var bySurface = new Dictionary<Material, (Texture? Texture, List<Vertex> Vertices)>();
+        var bySurface = new Dictionary<(Material, int), (Texture? Texture, List<Vertex> Vertices)>();
         for (var p = 0; p < model.PartList.Count; p++)
         {
             var part = model.PartList[p];
@@ -100,9 +104,10 @@ public sealed class FallModels(Renderer renderer, Bni bni, TextureArchive mti, P
                     continue;
                 }
 
-                if (!bySurface.TryGetValue(surface.Material, out var entry))
+                var key = (surface.Material, surface.Pen);
+                if (!bySurface.TryGetValue(key, out var entry))
                 {
-                    bySurface[surface.Material] = entry = (surface.Texture, []);
+                    bySurface[key] = entry = (surface.Texture, []);
                 }
 
                 var scale = entry.Texture == null ? Vector2.Zero : new Vector2(1f / entry.Texture.Width, 1f / entry.Texture.Height);
@@ -115,9 +120,9 @@ public sealed class FallModels(Renderer renderer, Bni bni, TextureArchive mti, P
 
         var vertices = new List<Vertex>();
         var batches = new List<Batch>();
-        foreach (var (material, (_, triangles)) in bySurface)
+        foreach (var ((material, pen), (_, triangles)) in bySurface)
         {
-            batches.Add(new Batch(vertices.Count, triangles.Count, material));
+            batches.Add(new Batch(vertices.Count, triangles.Count, material, pen));
             vertices.AddRange(triangles);
         }
 
@@ -126,7 +131,7 @@ public sealed class FallModels(Renderer renderer, Bni bni, TextureArchive mti, P
 
     /// <summary>A triangle's surface: a texture of the MTI, or a palette colour (negative values, the
     /// MTI's colours, <c>PEN_n</c>); null when it isn't drawn.</summary>
-    private (Material Material, Texture? Texture)? Resolve(int value, IReadOnlyList<string> names)
+    private (Material Material, Texture? Texture, int Pen)? Resolve(int value, IReadOnlyList<string> names)
     {
         if (value < 0)
         {
@@ -136,7 +141,7 @@ public sealed class FallModels(Renderer renderer, Bni bni, TextureArchive mti, P
         var name = names[value];
         if (mti.Textures.TryGetValue(name, out var texture))
         {
-            return (new Material(TextureId(texture), paletteId, Vector4.One, texture.FrameCount, Pass.DoubleSided), texture);
+            return (new Material(TextureId(texture), paletteId, Vector4.One, texture.FrameCount, Pass.DoubleSided), texture, NoPen);
         }
 
         if (mti.Colors.TryGetValue(name, out var index))
@@ -147,16 +152,14 @@ public sealed class FallModels(Renderer renderer, Bni bni, TextureArchive mti, P
         return name.StartsWith(PenPrefix) && int.TryParse(name.AsSpan(PenPrefix.Length), out var pen) ? Colour(pen) : null;
     }
 
-    private (Material Material, Texture? Texture)? Colour(int index)
+    private (Material Material, Texture? Texture, int Pen)? Colour(int index)
     {
         if (index >= SpecialFirst)
         {
             return null;
         }
 
-        var rgba = palette.Rgba;
-        var colour = new Vector4(rgba[index * 4], rgba[index * 4 + 1], rgba[index * 4 + 2], byte.MaxValue) / byte.MaxValue;
-        return (Material.Flat(colour, Pass.DoubleSided), null);
+        return (Material.Flat(palette.Colour(index), Pass.DoubleSided), null, index);
     }
 
     private int TextureId(Texture texture)
