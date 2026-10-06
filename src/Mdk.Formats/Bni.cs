@@ -17,6 +17,14 @@ public sealed class Bni
 
     public bool Has(string name) => _index.Entries.ContainsKey(name);
 
+    /// <summary>Adds or replaces an entry (the 1996 demo's loose sprite files, <see cref="BetaDemo"/>).</summary>
+    internal void Add(string name, byte[] data)
+    {
+        _index.Add(name, data);
+        _images.Remove(name);
+        _animations.Remove(name);
+    }
+
     /// <summary>A plain image entry (<c>u16 width, u16 height</c>, palette indices).</summary>
     public Texture GetImage(string name)
     {

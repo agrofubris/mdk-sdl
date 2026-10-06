@@ -12,9 +12,9 @@ using Mdk.Game.Scripts;
 // select it, the right mouse button toggles sniper mode (wheel or PageUp/PageDown zoom, Tab/[/]
 // select the ammo), F1 flying camera with E/Q up and down, F12 screenshot, Esc the pause menu.
 //
-//   --level=N               play level 3-8 at once (no menu)
+//   --level=N               play level 3-8 at once (no menu); 961, 963, 966: the 1996 demo's
 //   --menu                  the main menu without the splash (--splash: with it)
-//   --options, --controls   the menu's options or controls page
+//   --options, --controls   the menu's options or controls page (--beta-levels: the demo's levels)
 //   --stats=N               the screens after level N (--phase=1-4 starts at a page,
 //                           --counts=shots,hits,sniper,sniper hits,kills,enemies,heads, --towns=bits)
 //   --briefing=N            the briefing of level N
@@ -49,6 +49,8 @@ using Mdk.Game.Scripts;
 //   --ride=TYPE             put Kurt on the first walker of that type after the delay (tests)
 //   --bomber[=drop]         LEVEL7: call the XE of DANT_5 after the delay, board it (drop: and drop a bomb; tests)
 //   --snapshot=NAME         at the screenshot, a full save as F2 makes, its hash printed (tests)
+//   --beta-teleport=N       the 1996 demo's teleport N after the delay (tests)
+//   --roll=left|right       hold a roll of the 1996 demo's levels after the delay (tests)
 //   --soak[=seed]           random seeded keys on every screen, 6 steps a frame, checks in a level
 //                           (tests; --tour: every arena in turn during --wait; tests/soak_test.sh)
 
@@ -61,7 +63,7 @@ var options = args.Where(a => a.StartsWith("--"))
 var data = MdkData.Find();
 if (data == null)
 {
-    Console.Error.WriteLine("MDK data not found: install MDK (GOG/Steam), put this folder in it, or set MDK_DATA_DIR.");
+    Console.Error.WriteLine("MDK data not found: install MDK (GOG/Steam), put this folder in it, set MDK_DATA_DIR, or name it as mdk in mdk_paths.cfg next to the program.");
     return 1;
 }
 
@@ -76,6 +78,12 @@ if (options.TryGetValue("at", out var at))
 
 int? Number(string name) => options.TryGetValue(name, out var text) ? int.Parse(text, CultureInfo.InvariantCulture) : null;
 var level = Number("level") ?? Number("stats") ?? Number("briefing") ?? Number("stream") ?? Number("fall") ?? DefaultLevel;
+if (BetaDemo.IsBeta(level) && BetaDemo.Find(data) == null)
+{
+    Console.Error.WriteLine("The 1996 beta demo not found: set MDK_BETA_DIR, or name it as beta in mdk_paths.cfg next to the program.");
+    return 1;
+}
+
 var pitch = options.TryGetValue("pitch", out var pitchText) ? float.Parse(pitchText, CultureInfo.InvariantCulture) : 0f;
 options.TryGetValue("screenshot", out var screenshot);
 var sound = options.ContainsKey("mute") ? SoundMode.Muted : SoundMode.On;
@@ -105,6 +113,8 @@ var viewer = new ViewerOptions(level, position, yaw, pitch, sound)
     Snapshot = options.GetValueOrDefault("snapshot"),
     Soak = options.TryGetValue("soak", out var soak) ? (soak.Length != 0 ? int.Parse(soak, CultureInfo.InvariantCulture) : 1) : null,
     Route = options.ContainsKey("tour") ? SoakRoute.Tour : SoakRoute.Stay,
+    BetaTeleport = Number("beta-teleport"),
+    Roll = options.TryGetValue("roll", out var roll) ? (roll == "left" ? BetaRoll.Left : BetaRoll.Right) : null,
 };
 
 // Test options of a level (and --screenshot without --menu) skip the menu, as in the Godot port.
@@ -115,7 +125,10 @@ var start = options.ContainsKey("end") ? Start.EndMovie
     : options.ContainsKey("fall") ? Start.Fall
     : options.ContainsKey("level") || (screenshot != null && !options.ContainsKey("menu")) ? Start.Level
     : Start.Menu;
-var page = options.ContainsKey("controls") ? MenuPage.Controls : options.ContainsKey("options") ? MenuPage.Options : MenuPage.Main;
+var page = options.ContainsKey("controls") ? MenuPage.Controls
+    : options.ContainsKey("options") ? MenuPage.Options
+    : options.ContainsKey("beta-levels") ? MenuPage.BetaLevels
+    : MenuPage.Main;
 // Tests run without a window: --hidden, or MDK_HIDDEN set (so nothing takes the focus).
 var hidden = options.ContainsKey("hidden") || !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("MDK_HIDDEN"));
 using var game = new Game(data, new GameOptions(start, viewer)

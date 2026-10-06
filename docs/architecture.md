@@ -16,10 +16,10 @@ Each layer talks only to the one below it.
     │         Stream: the tube between levels (generator, Kurt's flight, drawing)
     │         Fall: the fall before a level (FallSim, FallView, FallHud)
     │         Viewer (a level): level, camera, collision (BSP), sound mixer, scripts and objects, Kurt
-    │   └──────────────► Mdk.Formats  (parsers: DTI, MTO, MTI, SNI, FTI, BNI, models)
+    │   └──────────────► Mdk.Formats  (parsers: DTI, MTO, MTI, SNI, FTI, BNI, models; the 1996 demo's)
  Mdk.Engine   Render (Renderer: meshes, index textures, palettes, panorama)
     │         Audio (AudioDevice: software mixer of voices, music and effects buses, streamed voices)
-    │         Platform (Window, Input: game keys (rebindable), menu keys, pointer, text, embedded SDL3)
+    │         Platform (Window, Input: game keys (rebindable), menu keys, pointer, text, cursor, embedded SDL3)
  SDL3         SDL_GPU (Direct3D 12 / Vulkan / Metal), events
 ```
 
@@ -27,6 +27,8 @@ Each layer talks only to the one below it.
 - `Mdk.Engine` hides SDL: the game sees meshes, materials, keys.
 - Shaders (`shaders/*.hlsl`) are compiled at build time to each format whose tool is found, and
   embedded; the renderer creates its device with the first embedded format a GPU driver takes.
+- `Mdk.Formats` finds the game: `MDK_DATA_DIR`, `mdk` in `mdk_paths.cfg` next to the program
+  (`LocalPaths`, the Godot port's file), the folders above the program, GOG and Steam folders.
 - `Mdk.Formats` finds data files whatever their case (`CaseInsensitivePath`: the GOG installation
   has `MISC/mdkfont.fti`, the game asks for `MISC/MDKFONT.FTI`).
 
@@ -89,6 +91,32 @@ picks the next screen. A screen's textures and meshes are freed when it ends (`R
               └── end movies (event 81) ◄── LEVEL5
 ```
 
+## The 1996 beta demo
+
+The three levels of `MDKDEMO.EXE` (6 August 1996; godot-mdk `docs/beta96.md`, `mdk_beta.gd`,
+`beta_script_decoder.gd`) are numbered 961, 963 and 966. `BetaDemo` (found by `MDK_BETA_DIR`, `beta`
+in `mdk_paths.cfg` or a `BETA96` folder) reads their loose files into the retail loaders' objects,
+so the game runs them unchanged:
+
+```
+ LEVELn.SET, .CON, ARENAS/*.HOT ──► Dti         ARENAS/*.BSP (16-char names, 36-byte nodes) ──► Arena
+ LEVELnO.MTO, LEVELnS.MTI, *.LBA ──► TextureArchive (no header, index 0 made black)
+ LEVELn.CMI ──► Cmi (Dialect Beta1996: paths ──► retail splines, animations ──► ParseBeta)
+ *.SNI ──► Sni         SPRITES/*.ABB, HUD/*.LBB ──► over TRAVSPRT.BNI's entries
+```
+
+- Scripts: `ScriptDecoder.For(cmi)` decodes the demo's bytecode into retail instructions
+  (`ScriptDecoder.Beta.cs`); its own opcodes (`BetaOpcodes`: follow_path, fire, the alarm-ended
+  condition) run in `ScriptVm`.
+- Triangles flagged 2 (`Arena.ClipFlag`) aren't drawn and stop Kurt, not the scripts' rays
+  (`Bsp.Clip`).
+- `ScriptRuntime.Beta.cs`: no town timer, Kurt's arena from the arenas' boxes, the part the chain gun
+  hits. `Kurt.Beta.cs`: rolls (Z, C), the helmet, backing up. `Viewer`: the teleports (T or Alt and a
+  digit), the demo's sprites, `LevelMusic.Ambience`. `MainMenu`: the "Beta Levels" page.
+- Not checked against the demo (it isn't on the development machine): the BSP nodes' last four
+  `s16` are taken as padding after the retail six (`BetaDemo.CheckNodes` warns when nodes don't hold
+  their triangles); the rest follows the Godot port, tested on synthetic files.
+
 ## Roadmap
 
 1. ✅ Formats, level viewer (arenas, corridors, textures, glass).
@@ -134,7 +162,8 @@ picks the next screen. A screen's textures and meshes are freed when it ends (`R
    bindings, saved games (the Godot port's JSON), "Continue" after a death, the pause menu, the
    loading screen, the end of a level (`EndLevel`: Kurt rises, the white flash), the
    intermission, debriefing, Score-O-matic (its heads: `Menu/HeadsView.cs`), save prompt and
-   briefing, the end movies, F2's full saves. Still to do: the original's mouse cursor.
+   briefing, the end movies, F2's full saves, the original's mouse cursor (`Menu/MenuCursor.cs`,
+   `Window.SetCursor`), the `SEETHEWHOLEGAME` debug keys.
 10. 🟡 Fall, stream, bomber, snowboard sequences. The rides are done (see 6). The stream is done (`Stream/`; ports of
     `stream.gd`, `stream_tube.gd`): the tube from Watcom's `rand()` (`--stream` uses seed 1, as the
     Godot reference test), Kurt's steering, drift and walls, the lights, the bonus, Bones' rescue,

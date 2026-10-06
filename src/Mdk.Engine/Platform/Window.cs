@@ -8,6 +8,9 @@ public sealed unsafe class Window : IDisposable
 {
     internal SDL_Window* Handle { get; }
 
+    /// <summary>The mouse cursor set by <see cref="SetCursor"/>, or null for the system's.</summary>
+    private SDL_Cursor* _cursor;
+
     /// <summary>A hidden window (tests) is never shown nor focused: frames are drawn off screen.</summary>
     public Visibility Visibility { get; }
 
@@ -38,6 +41,49 @@ public sealed unsafe class Window : IDisposable
 
     /// <summary>The window fills the screen or not.</summary>
     public void SetFullscreen(Fullscreen mode) => SDL_SetWindowFullscreen(Handle, mode == Fullscreen.On);
+
+    /// <summary>The window's size in pixels.</summary>
+    public (int Width, int Height) Size
+    {
+        get
+        {
+            int width, height;
+            SDL_GetWindowSize(Handle, &width, &height);
+            return (width, height);
+        }
+    }
+
+    /// <summary>The mouse cursor becomes an image (RGBA8, <paramref name="width"/> x
+    /// <paramref name="height"/>) whose hotspot is (<paramref name="hotX"/>, <paramref name="hotY"/>).</summary>
+    public void SetCursor(byte[] rgba, int width, int height, int hotX, int hotY)
+    {
+        const int BytesPerPixel = 4;
+        SDL_Cursor* cursor;
+        fixed (byte* pixels = rgba)
+        {
+            var surface = SDL_CreateSurfaceFrom(width, height, SDL_PixelFormat.SDL_PIXELFORMAT_ABGR8888, (nint)pixels, width * BytesPerPixel);
+            if (surface == null)
+            {
+                return;
+            }
+
+            cursor = SDL_CreateColorCursor(surface, hotX, hotY);
+            SDL_DestroySurface(surface);
+        }
+
+        if (cursor == null)
+        {
+            return;
+        }
+
+        SDL_SetCursor(cursor);
+        if (_cursor != null)
+        {
+            SDL_DestroyCursor(_cursor);
+        }
+
+        _cursor = cursor;
+    }
 
     /// <summary>Mouse captured for looking around (relative motion, hidden cursor).</summary>
     public void CaptureMouse(Capture capture) => SDL_SetWindowRelativeMouseMode(Handle, capture == Capture.On);
@@ -93,6 +139,11 @@ public sealed unsafe class Window : IDisposable
 
     public void Dispose()
     {
+        if (_cursor != null)
+        {
+            SDL_DestroyCursor(_cursor);
+        }
+
         SDL_DestroyWindow(Handle);
         SDL_Quit();
     }

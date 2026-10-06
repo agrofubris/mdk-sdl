@@ -28,6 +28,11 @@ public sealed class LevelMusic(SoundMixer mixer, IReadOnlyDictionary<string, str
     private Track _current = new();
     private Track _fading = new();
     private string _arena = "";
+    private string _ambience = "";
+    private int _ambienceVoice;
+
+    /// <summary>Arena to its ambient loop, played under the music (the 1996 demo's <c>Cmi.ArenaAmbience</c>).</summary>
+    public IReadOnlyDictionary<string, string> Ambience { get; init; } = new Dictionary<string, string>();
 
     /// <summary>The track fading in or playing (not a sound, as <c>NONE</c>: silence), and its volume.</summary>
     public string? Playing => _current.Name;
@@ -53,6 +58,23 @@ public sealed class LevelMusic(SoundMixer mixer, IReadOnlyDictionary<string, str
 
         _arena = arena;
         Switch(TrackOf(arena));
+        if (Ambience.Count != 0)
+        {
+            PlayAmbience(Ambience.GetValueOrDefault(arena, ""));
+        }
+    }
+
+    /// <summary>The arena's ambient loop replaces the last one (none: silence).</summary>
+    private void PlayAmbience(string name)
+    {
+        if (name == _ambience)
+        {
+            return;
+        }
+
+        mixer.StopVoice(_ambienceVoice);
+        _ambience = name;
+        _ambienceVoice = name.Length == 0 ? 0 : mixer.PlayLooped(name);
     }
 
     /// <summary>One frame of the fades: the current track up, the fading one down and stopped below 0.</summary>

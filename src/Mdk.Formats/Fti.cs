@@ -51,7 +51,7 @@ public sealed class ArchiveIndex
 {
     public sealed record Entry(int Offset, int Size);
 
-    public byte[] Bytes { get; private init; } = [];
+    public byte[] Bytes { get; private set; } = [];
     public Dictionary<string, Entry> Entries { get; } = [];
 
     public static ArchiveIndex Read(byte[] bytes, int nameLength)
@@ -74,6 +74,13 @@ public sealed class ArchiveIndex
         }
 
         return index;
+    }
+
+    /// <summary>Adds or replaces an entry, its bytes after the others.</summary>
+    internal void Add(string name, byte[] data)
+    {
+        Entries[name] = new Entry(Bytes.Length, data.Length);
+        Bytes = [.. Bytes, .. data];
     }
 
     public byte[] GetBytes(string name)

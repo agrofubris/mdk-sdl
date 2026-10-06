@@ -34,3 +34,23 @@ public sealed class DataTheoryAttribute : TheoryAttribute
         }
     }
 }
+
+/// <summary>Whether the 1996 beta demo is installed (godot-mdk docs/beta96.md; <c>MDK_BETA_DIR</c>).</summary>
+internal static class BetaData
+{
+    public const string Missing = "The 1996 beta demo not found: set MDK_BETA_DIR";
+
+    public static readonly BetaDemo? Demo = BetaDemo.Find(MdkData.Find());
+}
+
+/// <summary>A fact reading the 1996 demo's files: skipped when it's missing.</summary>
+public sealed class BetaFactAttribute : FactAttribute
+{
+    public BetaFactAttribute()
+    {
+        if (BetaData.Demo == null)
+        {
+            Skip = BetaData.Missing;
+        }
+    }
+}

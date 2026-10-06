@@ -19,14 +19,17 @@ public sealed class Sni
     /// <summary>In file order.</summary>
     public List<KeyValuePair<string, Entry>> Entries { get; } = [];
 
-    private Sni(byte[] bytes)
+    /// <summary>The 1996 demo's archives: <c>u32 size</c>, then the count; names in lower case.</summary>
+    private const int BetaDirectoryOffset = 4;
+
+    private Sni(byte[] bytes, int directory = DirectoryOffset)
     {
         Bytes = bytes;
-        var r = new BinReader(bytes, DirectoryOffset);
+        var r = new BinReader(bytes, directory);
         var count = r.U32();
         for (var i = 0; i < count; i++)
         {
-            var name = r.Name(12);
+            var name = directory == DirectoryOffset ? r.Name(12) : r.Name(12).ToUpperInvariant();
             int flags = r.U16();
             int volume = r.U16();
             var offset = 4 + (int)r.U32();
@@ -35,6 +38,9 @@ public sealed class Sni
     }
 
     public static Sni Load(string path) => new(File.ReadAllBytes(path));
+
+    /// <summary>An archive of the 1996 demo (<see cref="BetaDemo"/>).</summary>
+    internal static Sni ParseBeta(byte[] bytes) => new(bytes, BetaDirectoryOffset);
 
     public bool IsSound(Entry entry) => Bytes.AsSpan(entry.Offset, Riff.Length).SequenceEqual(Riff);
 

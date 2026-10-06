@@ -52,7 +52,15 @@ public sealed class KurtSprite
         [Kurt.State.SlideBrake] = ("K_BSLIDE", Repeat.Loop),
         [Kurt.State.Hang] = ("K_HANG", Repeat.Once),
         [Kurt.State.HardLand] = ("K_CRASHL", Repeat.Once),
+        [Kurt.State.RollLeft] = ("K_ROLLL", Repeat.Once),
+        [Kurt.State.RollRight] = ("K_ROLLR", Repeat.Once),
+        [Kurt.State.HelmetOn] = (Helmet, Repeat.Once),
+        [Kurt.State.HelmetOff] = (Helmet, Repeat.Once),
     };
+
+    /// <summary>The 1996 demo's frames: the helmet (played backwards when it comes off), backing up.</summary>
+    private const string Helmet = "K_HELM";
+    private const string BackUp = "K_BCKUP";
 
     private enum Repeat { Once, Loop }
 
@@ -109,7 +117,8 @@ public sealed class KurtSprite
 
         var pixel = 2f * depth * MathF.Tan(float.DegreesToRadians(fieldOfView) / 2f) / ViewHeight;
         var right = Vector3.Normalize(Vector3.Cross(forward, up));
-        var flip = kurt.Current == Kurt.State.Side && kurt.StrafeSpeed < 0f ? -1f : 1f;
+        // K_ROLLL and K_ROLLR are the same file, a roll to the right: mirrored for the left.
+        var flip = (kurt.Current == Kurt.State.Side && kurt.StrafeSpeed < 0f) || kurt.Current == Kurt.State.RollLeft ? -1f : 1f;
         var (name, frame) = Pick(kurt);
         var quad = new Quad(kurt.Feet, right * (pixel * flip), up * pixel);
         DrawFrame(_mesh, name, frame, quad, 0, 0);
@@ -155,6 +164,11 @@ public sealed class KurtSprite
         }
 
         var (name, repeat) = Animations[kurt.Current];
+        if (kurt.BackingUp && FrameCount(BackUp) > 0)
+        {
+            name = BackUp;
+        }
+
         var count = Animation(name).FrameCount;
         var frame = (int)MathF.Floor(kurt.AnimationFrame);
         if (kurt.Current == Kurt.State.Chute && frame >= ChuteOpenedFrame)
@@ -165,7 +179,7 @@ public sealed class KurtSprite
         }
 
         frame = repeat == Repeat.Loop ? ((frame % count) + count) % count : Math.Clamp(frame, 0, count - 1);
-        return (name, frame);
+        return (name, kurt.Current == Kurt.State.HelmetOff ? count - 1 - frame : frame);
     }
 
     private int Texture(string name, int frame, Texture image)

@@ -1,3 +1,5 @@
+using Mdk.Formats.Scripts;
+
 namespace Mdk.Formats;
 
 /// <summary><c>LEVELn.CMI</c>: level scripts and global models. After the header, 4 directories,
@@ -8,7 +10,7 @@ namespace Mdk.Formats;
 /// 2  object type scripts      HMO_1$XH1_DOOR
 /// 3  arenas                   record: pascal NONE?, pascal music, u32 script
 /// </code></summary>
-public sealed class Cmi
+public sealed partial class Cmi
 {
     private const int DirectoryOffset = 0x14;
     private const int FileBase = 4;
@@ -16,7 +18,9 @@ public sealed class Cmi
     private readonly Dictionary<string, Model> _models = [];
     private readonly List<int> _entries = [];
 
-    public byte[] Bytes { get; }
+    public byte[] Bytes { get; private set; }
+    /// <summary>The bytecode of the scripts: the retail one, or the 1996 demo's (<see cref="BetaDemo"/>).</summary>
+    public ScriptDialect Dialect { get; }
     /// <summary>Name to absolute file offset (0 = none), per directory.</summary>
     public Dictionary<string, int> AlienScripts { get; } = [];
     public Dictionary<string, int> ModelOffsets { get; } = [];
@@ -25,9 +29,16 @@ public sealed class Cmi
     /// <summary>Arena to its music (a sound of <c>LEVELnO.SNI</c>, or <c>NONE</c>).</summary>
     public Dictionary<string, string> ArenaMusic { get; } = [];
 
-    private Cmi(byte[] bytes)
+    private Cmi(byte[] bytes, ScriptDialect dialect = ScriptDialect.Retail)
     {
         Bytes = bytes;
+        Dialect = dialect;
+        if (dialect == ScriptDialect.Beta1996)
+        {
+            ParseBeta();
+            return;
+        }
+
         var r = new BinReader(bytes, DirectoryOffset);
         foreach (var directory in new[] { AlienScripts, ModelOffsets, ObjectScripts, ArenaScripts })
         {

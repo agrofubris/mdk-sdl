@@ -7,7 +7,7 @@ using Mdk.Game.Flow;
 namespace Mdk.Game.Menu;
 
 /// <summary>How the main menu opens (command line): its first page.</summary>
-public enum MenuPage { Main, Options, Controls }
+public enum MenuPage { Main, Options, Controls, BetaLevels }
 
 /// <summary>The main menu (main_menu.gd): <c>MDK12.FLC</c> plays behind it each time it opens
 /// (0x4260e4), its last frame stays, then the slideshow; <c>MDKOPT</c> is the background when the
@@ -18,6 +18,7 @@ public enum MenuPage { Main, Options, Controls }
 ///   New Game
 ///   Level: n      (where a new game starts, 1-6)
 ///   Saved Game    (the list of saves)
+///   Beta Levels   (the 1996 demo's, when it's found)
 ///   Options
 ///   Quit          (Esc: "Really Quit?")
 /// </code></summary>
@@ -43,6 +44,13 @@ public sealed class MainMenu : IScreen
     private const char DebugStream = 'S';
     private const int DebugStreamIndex = 0;
     private const int DebugCountLimit = 100;
+    /// <summary>The page of the 1996 demo's levels (<see cref="ShowBetaLevels"/>): its title and the
+    /// levels' names.</summary>
+    private const string BetaTitle = "Beta Levels";
+    private static readonly Dictionary<int, string> BetaLevelNames = new()
+    {
+        [1] = "96 Level 1: City", [3] = "96 Level 3: Wheel Boss", [6] = "96 Level 6: Olympus",
+    };
 
     /// <summary>The page shown, for Esc.</summary>
     private enum Page { Main, Quit, Other }
@@ -100,6 +108,10 @@ public sealed class MainMenu : IScreen
         else if (first == MenuPage.Controls)
         {
             _items.ShowControls(ShowOptions);
+        }
+        else if (first == MenuPage.BetaLevels && ui.Beta != null)
+        {
+            ShowBetaLevels();
         }
     }
 
@@ -242,6 +254,11 @@ public sealed class MainMenu : IScreen
         _items.AddItem(_ui.Fti.GetText("OPT1", "New Game"), NewGame);
         _items.AddItem(LevelText(), NextLevel);
         _items.AddItem(_ui.Fti.GetText("OPT2", "Saved Game"), ShowSaves);
+        if (_ui.Beta != null)
+        {
+            _items.AddItem(BetaTitle, ShowBetaLevels);
+        }
+
         _items.AddItem(_ui.Fti.GetText("OPT3", "Options"), ShowOptions);
         _items.AddItem(_ui.Fti.GetText("OPT4", "Quit"), () => _next = Event.Quit);
 
@@ -298,6 +315,30 @@ public sealed class MainMenu : IScreen
             ShowMain();
         });
         Print();
+    }
+
+    /// <summary>The 1996 demo's levels (godot-mdk docs/beta96.md), a page of the port's own.</summary>
+    private void ShowBetaLevels()
+    {
+        _items.Clear();
+        _page = Page.Other;
+        _items.AddTitle(BetaTitle);
+        foreach (var level in BetaDemo.Levels)
+        {
+            _items.AddItem(BetaLevelNames[level], () => PlayBeta(level));
+        }
+
+        _items.AddItem("Back", ShowMain);
+        Print();
+    }
+
+    /// <summary>The demo's levels start at once: it has no briefing or fall.</summary>
+    private void PlayBeta(int level)
+    {
+        _state.NewGame(0);
+        _state.Level = BetaDemo.NumberOf(level);
+        _state.Carry = null;
+        _next = Event.Play;
     }
 
     /// <summary>The briefing, the fall, then the level.</summary>

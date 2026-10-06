@@ -222,8 +222,12 @@ public sealed class Game : IDisposable
                 AfterLevel(Scripts.ScriptRuntime.GameOver.Yes);
                 break;
             case Event.KurtDied:
-                // The level is saved as LASTGAME; the menu's "Continue" starts it again.
-                _saves.Write(SaveGames.LastGame, _state.Save(SaveKind.LevelStart));
+                // The level is saved as LASTGAME; the menu's "Continue" starts it again (not the 1996 demo's).
+                if (!BetaDemo.IsBeta(_state.Level))
+                {
+                    _saves.Write(SaveGames.LastGame, _state.Save(SaveKind.LevelStart));
+                }
+
                 _state.Splash = true;
                 Handle(Event.Menu);
                 break;

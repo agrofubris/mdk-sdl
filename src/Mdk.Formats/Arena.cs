@@ -18,6 +18,11 @@ public sealed class Arena
     public const int PaletteColors = 112;
     private const int BspNodeSize = 44;
     private const int MaterialNameLength = 10;
+    /// <summary>The 1996 demo's world section (<see cref="BetaDemo"/>): 16-character material names,
+    /// 36-byte BSP nodes (<c>f32 plane[4]</c>, ten <c>s16</c>; the first six taken as the retail ones).</summary>
+    private const int BetaBspNodeSize = 36;
+    private const int BetaMaterialNameLength = 16;
+    private const int Alignment = 4;
 
     public string Name = "";
     /// <summary>The arena's palette colours (RGB); empty for corridors.</summary>
@@ -42,6 +47,9 @@ public sealed class Arena
     public uint[] TriangleFlags = [];
     /// <summary>Node 0 is the root; children have higher indices.</summary>
     public BspNode[] Nodes = [];
+    /// <summary>The flag of triangles that only stop Kurt: not drawn, passed by the scripts' rays
+    /// (the 1996 demo's 2); 0 for none.</summary>
+    public uint ClipFlag;
 
     public int TriangleCount => TriangleMaterials.Length;
 
@@ -67,6 +75,16 @@ public sealed class Arena
     {
         var arena = new Arena { Name = name };
         arena.ParseWorld(bytes, offset);
+        return arena;
+    }
+
+    /// <summary>A world section of the 1996 demo (<c>ARENAS/name.BSP</c>); its material names, in
+    /// lower case, are made upper case.</summary>
+    public static Arena ParseBetaWorld(string name, byte[] bytes)
+    {
+        var arena = new Arena { Name = name };
+        arena.ParseWorld(bytes, 0, BetaMaterialNameLength, BetaBspNodeSize);
+        arena.Materials = arena.Materials.Select(m => m.ToUpperInvariant()).ToList();
         return arena;
     }
 
@@ -97,17 +115,17 @@ public sealed class Arena
         }
     }
 
-    private void ParseWorld(byte[] bytes, int baseOffset)
+    private void ParseWorld(byte[] bytes, int baseOffset, int nameLength = MaterialNameLength, int nodeSize = BspNodeSize)
     {
         var r = new BinReader(bytes, baseOffset);
         var materialCount = r.U32();
         for (var i = 0; i < materialCount; i++)
         {
-            Materials.Add(r.Name(MaterialNameLength));
+            Materials.Add(r.Name(nameLength));
         }
 
-        // Names are 10 bytes: an odd count pads to 4.
-        if (materialCount % 2 == 1)
+        // Names of 10 bytes: an odd count pads to 4.
+        if (materialCount * nameLength % Alignment != 0)
         {
             r.Skip(2);
         }
@@ -115,7 +133,7 @@ public sealed class Arena
         Nodes = new BspNode[r.U32()];
         for (var i = 0; i < Nodes.Length; i++)
         {
-            var next = r.Pos + BspNodeSize;
+            var next = r.Pos + nodeSize;
             var normal = r.Vec3();
             var d = r.F32();
             int negative = r.S16();

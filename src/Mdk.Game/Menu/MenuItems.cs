@@ -82,6 +82,7 @@ public sealed class MenuItems
         _fonts = fonts;
         _clickGain = clickGain;
         _click = Ui.SoundOf(ui.Fti.GetBytes("SND_PUSH"));
+        MenuCursor.Apply(ui);
         var path = ui.Data.PathOf(OptionSounds);
         if (!File.Exists(path))
         {

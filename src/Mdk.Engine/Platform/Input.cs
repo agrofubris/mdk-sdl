@@ -15,6 +15,8 @@ public enum Key
     Fly,
     /// <summary>Sniper mode on or off, and its zoom.</summary>
     Sniper, ZoomIn, ZoomOut,
+    /// <summary>The 1996 demo's levels: rolls, and teleports (held with a digit).</summary>
+    RollLeft, RollRight, Teleport,
 }
 
 /// <summary>Keys of the menus and prompts: fixed, whatever the game's bindings.</summary>
@@ -61,7 +63,26 @@ public sealed class Input
         [SDL_Scancode.SDL_SCANCODE_EQUALS] = Key.ZoomIn,
         [SDL_Scancode.SDL_SCANCODE_PAGEDOWN] = Key.ZoomOut,
         [SDL_Scancode.SDL_SCANCODE_MINUS] = Key.ZoomOut,
+        [SDL_Scancode.SDL_SCANCODE_Z] = Key.RollLeft,
+        [SDL_Scancode.SDL_SCANCODE_C] = Key.RollRight,
+        [SDL_Scancode.SDL_SCANCODE_T] = Key.Teleport,
+        [SDL_Scancode.SDL_SCANCODE_LALT] = Key.Teleport,
+        [SDL_Scancode.SDL_SCANCODE_RALT] = Key.Teleport,
     };
+
+    /// <summary>The digit keys, of the number row and the keypad, 0 to 9.</summary>
+    private static readonly SDL_Scancode[][] DigitKeys =
+    [
+        [SDL_Scancode.SDL_SCANCODE_0, SDL_Scancode.SDL_SCANCODE_1, SDL_Scancode.SDL_SCANCODE_2, SDL_Scancode.SDL_SCANCODE_3,
+            SDL_Scancode.SDL_SCANCODE_4, SDL_Scancode.SDL_SCANCODE_5, SDL_Scancode.SDL_SCANCODE_6, SDL_Scancode.SDL_SCANCODE_7,
+            SDL_Scancode.SDL_SCANCODE_8, SDL_Scancode.SDL_SCANCODE_9],
+        [SDL_Scancode.SDL_SCANCODE_KP_0, SDL_Scancode.SDL_SCANCODE_KP_1, SDL_Scancode.SDL_SCANCODE_KP_2, SDL_Scancode.SDL_SCANCODE_KP_3,
+            SDL_Scancode.SDL_SCANCODE_KP_4, SDL_Scancode.SDL_SCANCODE_KP_5, SDL_Scancode.SDL_SCANCODE_KP_6, SDL_Scancode.SDL_SCANCODE_KP_7,
+            SDL_Scancode.SDL_SCANCODE_KP_8, SDL_Scancode.SDL_SCANCODE_KP_9],
+    ];
+
+    /// <summary>No digit pressed (<see cref="Digit"/>).</summary>
+    public const int NoDigit = -1;
 
     /// <summary>The keys of mouse buttons: the left one fires, the right one toggles sniper mode.</summary>
     private static readonly Dictionary<MouseButton, Key> DefaultButtons = new()
@@ -130,6 +151,8 @@ public sealed class Input
     public bool AnyPressed { get; private set; }
     /// <summary>The name of the key or mouse button pressed this frame (for <see cref="Bind"/>), or "".</summary>
     public string LastControl { get; private set; } = "";
+    /// <summary>The digit (0-9) pressed this frame, or <see cref="NoDigit"/>.</summary>
+    public int Digit { get; private set; } = NoDigit;
 
     public bool IsDown(Key key) => _down.Contains(key) || _buttons.Contains(key) || _held.Contains(key);
 
@@ -168,6 +191,7 @@ public sealed class Input
         Typed = "";
         AnyPressed = false;
         LastControl = "";
+        Digit = NoDigit;
     }
 
     /// <summary>Binds a key or mouse button (by its name, as <see cref="LastControl"/> gives it) to
@@ -262,6 +286,7 @@ public sealed class Input
         {
             AnyPressed = true;
             LastControl = SDL3.SDL_GetScancodeName(scancode) ?? "";
+            Digit = DigitKeys.Select(row => Array.IndexOf(row, scancode)).FirstOrDefault(d => d != NoDigit, Digit);
         }
 
         if (!_keys.TryGetValue(scancode, out var key))
