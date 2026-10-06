@@ -21,7 +21,13 @@ public sealed unsafe class Window : IDisposable
         {
             throw new InvalidOperationException($"SDL_CreateWindow: {SDL_GetError()}");
         }
+
+        // Typed text (names of saved games, cheats).
+        SDL_StartTextInput(Handle);
     }
+
+    /// <summary>The window fills the screen or not.</summary>
+    public void SetFullscreen(Fullscreen mode) => SDL_SetWindowFullscreen(Handle, mode == Fullscreen.On);
 
     /// <summary>Mouse captured for looking around (relative motion, hidden cursor).</summary>
     public void CaptureMouse(Capture capture) => SDL_SetWindowRelativeMouseMode(Handle, capture == Capture.On);
@@ -38,10 +44,10 @@ public sealed unsafe class Window : IDisposable
                 case SDL_EventType.SDL_EVENT_QUIT:
                     return false;
                 case SDL_EventType.SDL_EVENT_KEY_DOWN:
-                    input.SetKey(e.key.scancode, Input.State.Down);
+                    input.SetKey(e.key.scancode, Input.State.Down, e.key.repeat ? Repeat.Yes : Repeat.No);
                     break;
                 case SDL_EventType.SDL_EVENT_KEY_UP:
-                    input.SetKey(e.key.scancode, Input.State.Up);
+                    input.SetKey(e.key.scancode, Input.State.Up, Repeat.No);
                     break;
                 case SDL_EventType.SDL_EVENT_MOUSE_BUTTON_DOWN:
                     input.SetButton(Button(e.button.button), Input.State.Down);
@@ -51,6 +57,10 @@ public sealed unsafe class Window : IDisposable
                     break;
                 case SDL_EventType.SDL_EVENT_MOUSE_MOTION:
                     input.AddMouseMotion(e.motion.xrel, e.motion.yrel);
+                    input.SetPointer(e.motion.x, e.motion.y);
+                    break;
+                case SDL_EventType.SDL_EVENT_TEXT_INPUT:
+                    input.AddText(e.text.GetText() ?? "");
                     break;
                 case SDL_EventType.SDL_EVENT_MOUSE_WHEEL:
                     input.AddWheel(e.wheel.y);
@@ -65,6 +75,9 @@ public sealed unsafe class Window : IDisposable
     {
         SDL_BUTTON_LEFT => MouseButton.Left,
         SDL_BUTTON_RIGHT => MouseButton.Right,
+        SDL_BUTTON_MIDDLE => MouseButton.Middle,
+        SDL_BUTTON_X1 => MouseButton.Back,
+        SDL_BUTTON_X2 => MouseButton.Forward,
         _ => MouseButton.Other,
     };
 
@@ -76,3 +89,5 @@ public sealed unsafe class Window : IDisposable
 }
 
 public enum Capture { Off, On }
+
+public enum Fullscreen { Off, On }

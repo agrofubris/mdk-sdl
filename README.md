@@ -1,7 +1,7 @@
 # MDK in C# and SDL3
 
 ![Status: work in progress](https://img.shields.io/badge/status-work%20in%20progress-orange)
-![Progress: about 55%](https://img.shields.io/badge/progress-~55%25-yellow)
+![Progress: about 60%](https://img.shields.io/badge/progress-~60%25-yellow)
 ![.NET 10](https://img.shields.io/badge/.NET-10-512bd4?logo=dotnet&logoColor=white)
 ![SDL3](https://img.shields.io/badge/SDL-3-blue)
 
@@ -24,7 +24,11 @@ chain gun, throws his items, gets hurt, knocked down and dies, and the HUD shows
 inventory, messages and the target's health bar. Aliens blow up into pieces, sparks fly, slime
 bleeds and the fans lift Kurt. He snipes through the scope with every kind of round and calls
 Bones' air strike. Only Kurt's arena and the one behind an open door are drawn and solid, as in
-the original. There are no menus, saves, rides or level transitions yet: it's not a game yet. The [Godot port](https://github.com/nemo22/mdk-godot) is far more complete for now.
+the original. The game starts with the splash and the main menu (options, key bindings, saved
+games) and plays the levels in order with their loading screens, briefings, the end of each level,
+the statistics and the save prompt; when Kurt dies, "Continue" starts the level again. The fall
+before each level, the stream after it, the rides and full saves (F2) aren't ported yet. The
+[Godot port](https://github.com/nemo22/mdk-godot) is more complete for now.
 
 ## Progress
 
@@ -38,10 +42,10 @@ the original. There are no menus, saves, rides or level transitions yet: it's no
 | Script VM, aliens, objects, doors, effects, fans | ███████░░░ 70% |
 | Weapons, items, sniper mode | ████████░░ 80% |
 | HUD (health, inventory, messages, health bar) | ███████░░░ 70% |
-| Menus, saves, level flow | ░░░░░░░░░░ 0% |
+| Menus, saves, level flow | ███████░░░ 70% |
 | The fall and the stream between levels, rides | ░░░░░░░░░░ 0% |
-| Videos (decoders done, no player yet) | ███░░░░░░░ 30% |
-| **Overall** | **about 55%** |
+| Videos: the menu's FLC and slideshow, the end movies | ████████░░ 80% |
+| **Overall** | **about 60%** |
 
 The plan is in [docs/architecture.md](docs/architecture.md#roadmap).
 
@@ -52,24 +56,43 @@ example `C:\GOG Games\MDK\mdk-sdl`), install MDK in the default GOG or Steam loc
 `MDK_DATA_DIR` environment variable.
 
 ```
-mdk.exe --level=3
+mdk.exe
 ```
 
-- `--level=N`: the level, 3 to 8 (the game plays them in the order 7, 6, 3, 4, 8, 5).
+- No option: the splash, then the main menu.
+- `--level=N`: play level N (3 to 8) at once, without the menu (the game plays them in the order
+  7, 6, 3, 4, 8, 5).
+- `--menu`: the main menu without the splash (`--splash` with it); `--options`, `--controls` open
+  those pages.
+- `--stats=N`: the screens after level N (`--phase=1-4` starts at a page: 1 the Score-O-matic, 2
+  the intermission, 3 the briefing, 4 the debriefing; `--counts=shots,hits,sniper,sniper
+  hits,kills,enemies,heads`, `--towns=bits`); `--briefing=N` its briefing alone; `--end` the end
+  movies.
+- `--load=NAME`: load a saved game; `--save=NAME`: save the first level when it starts (tests).
 - `--at=x,y,z[,yaw]`: where Kurt starts (MDK coordinates).
 - `--fly`: start with the flying camera.
 - `--mute`: no sound.
 - Tests: `--screenshot=file.bmp` (after `--wait=seconds` of game time, then quit),
-  `--walk=seconds`, `--jump`, `--fire`, `--give=SW_HBOMB,...` (pickups to start with), `--use`
+  `--walk=seconds`, `--delay=seconds` (held keys start later), `--jump`, `--fire`, `--give=SW_HBOMB,...` (pickups to start with), `--use`
   (uses the item after 1 second), `--profile` (prints the objects of Kurt's arena every second),
   `--sniper[=zoom[,pitch]]` (sniper mode once Kurt stands), `--zoom=seconds` (zooms in),
-  `--sniper-fire` (one sniper round), `--strike[=dive]` (Bones' full-screen strike).
+  `--sniper-fire` (one sniper round), `--strike[=dive]` (Bones' full-screen strike), `--die` (Kurt
+  dies after 1 second), `--event=N` (a `special_event` after 1 second: 1 ends the level). With
+  `--screenshot` but without `--level`, the screen shown after `--wait` seconds (menu,
+  statistics...) is saved.
+
+Settings (volumes, music filter, mouse, fullscreen, difficulty, gore, key bindings) and saved games
+are kept in `%LOCALAPPDATA%/mdk-sdl` (`settings.cfg`, `saves/*.sav`; `MDK_USER_DIR` overrides the
+folder). `LASTGAME` (written when Kurt dies) is deleted at start, as in the original.
 
 Controls: W/S or Up/Down to run, A/D to strafe, the mouse or Left/Right to turn, Space to jump
 (hold it while falling to open the chute), Shift for turbo, Ctrl or the left mouse button to fire,
 Enter to use the item, Tab or [ ] to select it (or 1-5), the right mouse button for sniper mode
 (the mouse wheel or PageUp/PageDown zoom, Tab or [ ] select the ammo), F1 for the flying camera (E/Q to go up and
-down), F12 for a screenshot, Esc to quit.
+down), F12 for a screenshot, Esc for the pause menu (resume, options, main menu, quit). The bindings
+can be changed in Options, Controls. In the menus: the arrows or the mouse, Enter or a click, Esc
+back. Typing `TOOSCARYFORME` in a level turns gore on or off, `SEETHEWHOLEGAME` the main menu's
+debug keys (3-8 start that level, D the statistics with random counts).
 
 ## Building
 
@@ -96,6 +119,7 @@ sh tests/combat_test.sh
 sh tests/scripts_test.sh
 sh tests/sniper_test.sh
 sh tests/effects_test.sh
+sh tests/flow_test.sh
 ```
 
 ## Layout
@@ -103,7 +127,8 @@ sh tests/effects_test.sh
 - `src/Mdk.Formats`: MDK's file formats, no dependencies.
 - `src/Mdk.Engine`: SDL3 behind a small API: the renderer (SDL_GPU), the audio mixer, the window
   and input.
-- `src/Mdk.Game`: the game: levels, collisions, Kurt, the camera, the sound mixer's laws, scripts.
+- `src/Mdk.Game`: the game: levels, collisions, Kurt, the camera, the sound mixer's laws, scripts,
+  the game's flow (`Flow/`: screens, settings, saves) and its menus (`Menu/`).
 - `src/Mdk.App`: the program and its command line.
 - `shaders/`: HLSL shaders, compiled to DXIL at build time.
 - `docs/`: [the architecture and roadmap](docs/architecture.md). The knowledge base about MDK

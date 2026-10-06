@@ -2,14 +2,25 @@ using System.Globalization;
 using System.Numerics;
 using Mdk.Formats;
 using Mdk.Game;
+using Mdk.Game.Flow;
+using Mdk.Game.Menu;
 using Mdk.Game.Scripts;
 
-// MDK in C# and SDL3: Kurt walks a level (WASD/arrows, mouse, Space jumps, Shift runs, Ctrl or the
-// left mouse button fires, Enter uses the item, Tab/[/] and 1-5 select it, the right mouse button
-// toggles sniper mode (wheel or PageUp/PageDown zoom, Tab/[/] select the ammo), F1 flying camera
-// with E/Q up and down, F12 screenshot, Esc quits).
+// MDK in C# and SDL3: the splash, the main menu, then the levels in the order 7, 6, 3, 4, 8, 5 with
+// their loading screens, briefings, statistics and saves. In a level: WASD/arrows, mouse, Space
+// jumps, Shift runs, Ctrl or the left mouse button fires, Enter uses the item, Tab/[/] and 1-5
+// select it, the right mouse button toggles sniper mode (wheel or PageUp/PageDown zoom, Tab/[/]
+// select the ammo), F1 flying camera with E/Q up and down, F12 screenshot, Esc the pause menu.
 //
-//   --level=N               level 3-8 (default 3)
+//   --level=N               play level 3-8 at once (no menu)
+//   --menu                  the main menu without the splash (--splash: with it)
+//   --options, --controls   the menu's options or controls page
+//   --stats=N               the screens after level N (--phase=1-4 starts at a page,
+//                           --counts=shots,hits,sniper,sniper hits,kills,enemies,heads, --towns=bits)
+//   --briefing=N            the briefing of level N
+//   --end                   the end movies
+//   --load=NAME             load a saved game
+//   --save=NAME             save the first level when it starts (tests)
 //   --at=x,y,z[,yaw]        Kurt's feet (MDK coordinates) and yaw in degrees
 //   --pitch=degrees         flying camera pitch (positive looks up)
 //   --fly                   start with the flying camera
@@ -17,17 +28,20 @@ using Mdk.Game.Scripts;
 //   --screenshot=file.bmp   save a frame after --wait seconds of game time, print Kurt, quit (tests)
 //   --wait=seconds          game time before the screenshot
 //   --walk=seconds          hold "forward" for this long (tests)
+//   --delay=seconds         start the held keys this late (tests; as the Godot port's --delay)
 //   --jump                  hold "jump" (tests)
 //   --fire                  hold "fire" (tests)
 //   --give=SW_HBOMB,...     pickups Kurt starts with (tests)
 //   --use                   press "use" after 1 second (tests)
+//   --die                   Kurt is hurt to death after 1 second (tests)
+//   --event=N               a special_event after 1 second: 1 ends the level (tests)
 //   --profile               print the scripted objects once per second of game time (tests)
 //   --sniper[=zoom[,pitch]] sniper mode once Kurt stands (zoom 1 to 0.25, pitch positive down; tests)
 //   --zoom=seconds          hold "zoom in" in sniper mode (tests)
 //   --sniper-fire           fire one sniper round once the clip is loaded (tests)
 //   --strike[=dive]         Bones' full-screen strike after 1 second (dive: the plane only; tests)
 
-const int DefaultLevel = 3;
+const int DefaultLevel = 7;
 
 var options = args.Where(a => a.StartsWith("--"))
     .Select(a => a[2..].Split('=', 2))
@@ -49,16 +63,18 @@ if (options.TryGetValue("at", out var at))
     yaw = v.Length > 3 ? v[3] : null;
 }
 
-var level = options.TryGetValue("level", out var levelText) ? int.Parse(levelText) : DefaultLevel;
+int? Number(string name) => options.TryGetValue(name, out var text) ? int.Parse(text, CultureInfo.InvariantCulture) : null;
+var level = Number("level") ?? Number("stats") ?? Number("briefing") ?? DefaultLevel;
 var pitch = options.TryGetValue("pitch", out var pitchText) ? float.Parse(pitchText, CultureInfo.InvariantCulture) : 0f;
 options.TryGetValue("screenshot", out var screenshot);
 var sound = options.ContainsKey("mute") ? SoundMode.Muted : SoundMode.On;
 float Seconds(string name) => options.TryGetValue(name, out var text) ? float.Parse(text, CultureInfo.InvariantCulture) : 0f;
-Viewer.Run(data, new ViewerOptions(level, position, yaw, pitch, sound)
+var viewer = new ViewerOptions(level, position, yaw, pitch, sound)
 {
     Screenshot = screenshot,
     Wait = Seconds("wait"),
     Walk = Seconds("walk"),
+    Delay = Seconds("delay"),
     Jump = options.ContainsKey("jump"),
     Fire = options.ContainsKey("fire"),
     Give = options.TryGetValue("give", out var give) ? give.Split(',') : [],
@@ -69,5 +85,28 @@ Viewer.Run(data, new ViewerOptions(level, position, yaw, pitch, sound)
     Zoom = Seconds("zoom"),
     SniperFire = options.ContainsKey("sniper-fire"),
     Strike = options.TryGetValue("strike", out var strike) ? (strike == "dive" ? StrikeScene.Plane.Only : StrikeScene.Plane.WithPilot) : null,
+    Die = options.ContainsKey("die"),
+    Event = Number("event"),
+};
+
+// Test options of a level (and --screenshot without --menu) skip the menu, as in the Godot port.
+var start = options.ContainsKey("end") ? Start.EndMovie
+    : options.ContainsKey("stats") ? Start.Statistics
+    : options.ContainsKey("briefing") ? Start.Briefing
+    : options.ContainsKey("level") || (screenshot != null && !options.ContainsKey("menu")) ? Start.Level
+    : Start.Menu;
+var page = options.ContainsKey("controls") ? MenuPage.Controls : options.ContainsKey("options") ? MenuPage.Options : MenuPage.Main;
+using var game = new Game(data, new GameOptions(start, viewer)
+{
+    Page = page,
+    Splash = !options.ContainsKey("menu") || options.ContainsKey("splash"),
+    Phase = Number("phase") is { } phase ? (StatsScreen.Phase)phase : null,
+    Counts = options.TryGetValue("counts", out var counts) ? counts.Split(',').Select(c => int.Parse(c, CultureInfo.InvariantCulture)).ToList() : [],
+    Towns = Number("towns"),
+    Load = options.GetValueOrDefault("load"),
+    Save = options.GetValueOrDefault("save"),
+    Screenshot = screenshot,
+    Wait = Seconds("wait"),
 });
+game.Run();
 return 0;

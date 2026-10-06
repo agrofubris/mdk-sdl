@@ -143,6 +143,47 @@ public sealed unsafe partial class Renderer : IDisposable
 
         _skyPipeline = CreatePipeline("sky", Pass.DoubleSided, Geometry.Screen);
         _canvasMesh = CreateDynamicMesh(CanvasQuads * QuadVertices);
+
+        // Texture 0 is bound for flat colours, so it must outlive every scope (Release).
+        CreateRgbaTexture(1, 1, new byte[BytesPerPixel]);
+    }
+
+    /// <summary>A point of the window (in its coordinates) on the canvas.</summary>
+    public Vector2 CanvasPoint(float x, float y)
+    {
+        int width, height;
+        SDL_GetWindowSize(_window.Handle, &width, &height);
+        return height <= 0 ? Vector2.Zero : new Vector2(x, y) * (CanvasHeight / height);
+    }
+
+    /// <summary>The textures and meshes created so far; <see cref="Release"/> frees those created after.</summary>
+    public readonly record struct Scope(int Textures, int Buffers);
+
+    public Scope Mark() => new(_textures.Count, _buffers.Count);
+
+    /// <summary>Frees the textures and meshes created after <paramref name="scope"/> (a screen of
+    /// the game ends): their ids are reused.</summary>
+    public void Release(Scope scope)
+    {
+        SDL_WaitForGPUIdle(_device);
+        for (var i = _textures.Count - 1; i >= scope.Textures; i--)
+        {
+            SDL_ReleaseGPUTexture(_device, (SDL_GPUTexture*)_textures[i]);
+            _textures.RemoveAt(i);
+        }
+
+        for (var i = _buffers.Count - 1; i >= scope.Buffers; i--)
+        {
+            SDL_ReleaseGPUBuffer(_device, (SDL_GPUBuffer*)_buffers[i]);
+            if (_dynamic.Remove(i, out var dynamic))
+            {
+                SDL_ReleaseGPUTransferBuffer(_device, (SDL_GPUTransferBuffer*)dynamic.Transfer);
+            }
+
+            _buffers.RemoveAt(i);
+        }
+
+        Panorama = null;
     }
 
     /// <summary>The canvas's width for the window's aspect.</summary>
@@ -326,6 +367,10 @@ public sealed unsafe partial class Renderer : IDisposable
         _textures.Add((IntPtr)texture);
         return _textures.Count - 1;
     }
+
+    /// <summary>New pixels for a texture of the same size (a video's frame, a fading palette).</summary>
+    public void UpdateTexture(int texture, int width, int height, byte[] pixels) =>
+        Upload((SDL_GPUTexture*)_textures[texture], (uint)width, (uint)height, pixels);
 
     /// <summary>A 256-colour palette, RGBA8.</summary>
     public int CreatePalette(byte[] rgba) => CreateRgbaTexture(PaletteSize, 1, rgba);

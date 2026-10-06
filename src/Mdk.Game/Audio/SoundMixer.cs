@@ -68,6 +68,9 @@ public sealed class SoundMixer(AudioDevice device, Func<string, SoundMixer.Entry
 
     public int PlayOn(string name, Func<Vector3> position, Start start = Start.New) => Launch(name, start, position);
 
+    /// <summary>Plays the music (on the music bus, without position).</summary>
+    public int PlayMusic(string name) => Launch(name, Start.New, null, Repeat.AsStored, Bus.Music);
+
     /// <summary>Plays a sound without position, looping even if its SNI entry doesn't (Kurt's chain gun).</summary>
     public int PlayLooped(string name) => Launch(name, Start.New, null, Repeat.Forever);
 
@@ -126,7 +129,7 @@ public sealed class SoundMixer(AudioDevice device, Func<string, SoundMixer.Entry
         }
     }
 
-    private int Launch(string name, Start start, Func<Vector3>? position, Repeat repeat = Repeat.AsStored)
+    private int Launch(string name, Start start, Func<Vector3>? position, Repeat repeat = Repeat.AsStored, Bus bus = Bus.Effects)
     {
         var entry = sounds(name);
         if (entry == null || (start == Start.Once && IsPlaying(name)))
@@ -140,7 +143,7 @@ public sealed class SoundMixer(AudioDevice device, Func<string, SoundMixer.Entry
         }
 
         var sound = repeat == Repeat.Forever ? Looped(name, entry.Sound) : entry.Sound;
-        var id = device.Play(sound, Gain(entry.Volume));
+        var id = device.Play(sound, Gain(entry.Volume), 1f, 0f, bus);
         if (id == 0)
         {
             return 0;

@@ -5,6 +5,8 @@ using Mdk.Engine.Audio;
 using Mdk.Engine.Platform;
 using Mdk.Engine.Render;
 using Mdk.Formats;
+using Mdk.Game.Flow;
+using Mdk.Game.Menu;
 using Mdk.Game.Audio;
 using Mdk.Game.Collision;
 using Mdk.Game.Hud;
@@ -24,6 +26,8 @@ public sealed record ViewerOptions(int Level, Vector3? Position, float? Yaw, flo
     public float Wait { get; init; }
     /// <summary>Hold "forward" this many seconds from the start.</summary>
     public float Walk { get; init; }
+    /// <summary>Seconds before the held keys start (like the Godot port's --delay).</summary>
+    public float Delay { get; init; }
     public bool Jump { get; init; }
     /// <summary>Hold "fire".</summary>
     public bool Fire { get; init; }
@@ -41,21 +45,24 @@ public sealed record ViewerOptions(int Level, Vector3? Position, float? Yaw, flo
     public bool SniperFire { get; init; }
     /// <summary>Bones' full-screen strike after a second.</summary>
     public StrikeScene.Plane? Strike { get; init; }
+    /// <summary>Kurt is hurt to death after a second.</summary>
+    public bool Die { get; init; }
+    /// <summary>A special_event after a second (1 ends the level).</summary>
+    public int? Event { get; init; }
 }
 
 public enum SoundMode { On, Muted }
 
-/// <summary>Plays a level: Kurt walks it (F1 switches to a flying camera), the scripts run.
+/// <summary>Plays a level: Kurt walks it (F1 switches to a flying camera), the scripts run. Esc
+/// opens the pause menu. It ends when Kurt dies, the level ends (after the tornado) or the game ends.
 /// <code>
 ///   input ──► Kurt (60 steps/s) ──► scripts (30 ticks/s) ──► camera ──► level, objects, sky, Kurt ──► frame
 ///                └── mixer (listener at the camera)
 /// </code></summary>
-public static class Viewer
+public sealed class Viewer : IScreen
 {
-    private const int WindowWidth = 1280;
-    private const int WindowHeight = 960;
     /// <summary>Kurt moves in fixed steps; the tests' frames are steps too.</summary>
-    private const float Step = 1f / 60f;
+    public const float Step = 1f / 60f;
     /// <summary>Steps caught up at most after a slow frame.</summary>
     private const int MaxSteps = 10;
     /// <summary>The start is slightly below the landing pad (the original lands Kurt by chute).</summary>
@@ -65,168 +72,338 @@ public static class Viewer
     /// <summary>The test's "use" is held from 1 second on, for 0.1 (game time).</summary>
     private const float UseStart = 1f;
     private const float UseTime = 0.1f;
+    /// <summary>The tests' --die and --event happen after 1 second (game time).</summary>
+    private const float TestStart = 1f;
+    private const int FatalDamage = 1000;
+    /// <summary>The game goes on this long after the level ended, longer when it's lost (main.gd).</summary>
+    private const float EndDelay = 0.5f;
+    private const float GameOverDelay = 5f;
+    /// <summary>Cheats typed in a level (0x42c5f0): gore on or off, and the main menu's debug keys.</summary>
+    private const string GoreCheat = "TOOSCARYFORME";
+    private const string DebugCheat = "SEETHEWHOLEGAME";
 
-    public static void Run(MdkData data, ViewerOptions options)
+    private readonly Ui _ui;
+    private readonly ViewerOptions _options;
+    private readonly GameState _state;
+    private readonly Renderer _renderer;
+    private readonly AudioDevice _audio;
+    private readonly LevelData _level;
+    private readonly LevelView _view;
+    private readonly SoundMixer _mixer;
+    private readonly ArenaSpace _space;
+    private readonly KurtSprite _sprite;
+    private readonly Kurt.Kurt _kurt;
+    private readonly ScriptRuntime _scripts;
+    private readonly HudView _hud;
+    private readonly ObjectView _objects;
+    private readonly EffectsView _effects;
+    private readonly Dictionary<string, ObjectView.Look> _looks = [];
+    private readonly SniperView _sniper;
+    private readonly SniperTest _sniperTest;
+    private readonly FollowCamera _follow = new();
+    private readonly FreeCamera _fly;
+    private readonly PauseMenu _pause;
+    private readonly bool _test;
+    private bool _flying;
+    private float _time;
+    private float _pending;
+    private float _strikeTime;
+    private string _typed = "";
+    private Event _next = Event.None;
+    /// <summary>The level ended: the event that follows once the delay is over.</summary>
+    private (Event Event, float Delay)? _ending;
+
+    public Viewer(Ui ui, ViewerOptions options, GameState state)
     {
         var loading = Stopwatch.StartNew();
-        var level = new LevelData(data, options.Level);
-        using var window = new Window($"MDK - level {options.Level}", WindowWidth, WindowHeight);
-        using var renderer = new Renderer(window);
-        using var audio = new AudioDevice(options.Sound == SoundMode.Muted ? Output.Muted : Output.Speakers);
+        _ui = ui;
+        _options = options;
+        _state = state;
+        _renderer = ui.Renderer;
+        _audio = ui.Audio;
+        var data = ui.Data;
+        _level = new LevelData(data, options.Level);
+        var level = _level;
+        var renderer = _renderer;
         var groups = new TriangleGroups();
-        var view = new LevelView(renderer, level, groups);
-        var mixer = new SoundMixer(audio, SoundBank.ForLevel(data, options.Level).Get);
+        _view = new LevelView(renderer, level, groups);
+        _mixer = new SoundMixer(_audio, SoundBank.ForLevel(data, options.Level).Get);
         var cmi = Cmi.Load(data.PathOf($"TRAVERSE/LEVEL{level.Number}/LEVEL{level.Number}.CMI"));
-        PlayMusic(mixer, cmi, level);
+        PlayMusic(_mixer, cmi, level);
         renderer.Panorama = CreatePanorama(renderer, level.Dti);
 
-        var space = new ArenaSpace();
+        _space = new ArenaSpace();
         foreach (var arena in level.Arenas.Where(a => level.IsReachable(a.Name)))
         {
-            space.Add(arena);
+            _space.Add(arena);
         }
 
         var sprites = Bni.Load(data.PathOf("TRAVERSE/TRAVSPRT.BNI"));
-        var sprite = new KurtSprite(renderer, sprites, level.Dti.Palette);
-        var kurt = new Kurt.Kurt(space, mixer, sprite.FrameCount)
+        _sprite = new KurtSprite(renderer, sprites, level.Dti.Palette);
+        _kurt = new Kurt.Kurt(_space, _mixer, _sprite.FrameCount)
         {
             Feet = options.Position ?? level.Dti.StartPosition + new Vector3(0f, 0f, StartDrop),
             Yaw = options.Yaw ?? level.Dti.StartAngle,
         };
-        var scripts = new ScriptRuntime(level, cmi, sprites, space, groups, mixer, kurt);
-        var start = (kurt.Feet, kurt.Yaw);
-        kurt.Died += () => Respawn(kurt, scripts, space, start);
+
+        // The difficulty decides the town's timer: before the scripts.
+        _kurt.Inventory.Difficulty = ui.Settings.Difficulty;
+        _scripts = new ScriptRuntime(level, cmi, sprites, _space, groups, _mixer, _kurt)
+        {
+            Option = ui.Settings.Gore ? 1 : 0,
+        };
+        _scripts.AirStrike.UsedUp = state.StrikeUsed;
+        _kurt.Died += OnDied;
+        _scripts.LevelEnded += over => _ending = over == ScriptRuntime.GameOver.Yes ? (Event.GameOver, GameOverDelay) : (Event.LevelEnded, EndDelay);
+        _scripts.GameFinished += () => _next = Event.GameFinished;
 
         // The HUD; pickups show their names (0x46c448).
-        var hud = new HudView(renderer, sprites, level.Dti.Palette, Fti.Load(data.PathOf("MISC/MDKFONT.FTI")));
-        scripts.Messages = hud.Messages;
-        kurt.Inventory.PickedUp += name => hud.Messages.Push(name, Messages.FlagZoom, PickupMessageSeconds);
+        _hud = new HudView(renderer, sprites, level.Dti.Palette, ui.Fti);
+        _scripts.Messages = _hud.Messages;
+        _kurt.Inventory.PickedUp += name => _hud.Messages.Push(name, Messages.FlagZoom, PickupMessageSeconds);
 
         foreach (var pickup in options.Give)
         {
-            kurt.Collect(pickup);
+            _kurt.Collect(pickup);
         }
-        scripts.ArenaEntered += view.Enter;
-        var objects = new ObjectView(renderer, new MaterialResolver(renderer, level.Dti));
-        var effects = new EffectsView(renderer, new MaterialResolver(renderer, level.Dti), level);
-        var looks = new Dictionary<string, ObjectView.Look>();
-        var sniper = new SniperView(renderer, objects, level, hud);
-        var sniperTest = new SniperTest(options);
-        var follow = new FollowCamera();
-        var fly = new FreeCamera { Pitch = options.Pitch };
-        var flying = options.Fly;
-        Console.WriteLine($"Level {options.Level}: {level.Arenas.Count} arenas, {view.TriangleCount} triangles, loaded in {loading.ElapsedMilliseconds} ms");
+        _scripts.ArenaEntered += _view.Enter;
+        _objects = new ObjectView(renderer, new MaterialResolver(renderer, level.Dti));
+        _effects = new EffectsView(renderer, new MaterialResolver(renderer, level.Dti), level);
+        _sniper = new SniperView(renderer, _objects, level, _hud);
+        _sniperTest = new SniperTest(options);
+        _fly = new FreeCamera { Pitch = options.Pitch };
+        _flying = options.Fly;
+        _pause = new PauseMenu(ui);
+        Console.WriteLine($"Level {options.Level}: {level.Arenas.Count} arenas, {_view.TriangleCount} triangles, loaded in {loading.ElapsedMilliseconds} ms");
 
-        var input = new Input();
-        var test = options.Screenshot != null;
-        var clock = Stopwatch.StartNew();
-        var time = 0f;
-        var pending = 0f;
-        window.CaptureMouse(test ? Capture.Off : Capture.On);
-        var strikeTime = 0f;
-        while (window.PumpEvents(input) && !(input.WasPressed(Key.Escape) && scripts.Strike is not { Active: true }))
+        _test = options.Screenshot != null;
+        ui.Window.CaptureMouse(_test ? Capture.Off : Capture.On);
+    }
+
+    /// <summary>The counts of the level (for the statistics).</summary>
+    public GameStats Stats => _scripts.Stats;
+
+    /// <summary>Kurt's health when the level ended (the save after LEVEL8 keeps it).</summary>
+    public int Health => _kurt.Health;
+
+    public Event Frame(float elapsed, string? screenshot)
+    {
+        var input = _ui.Input;
+
+        // The pause menu: the game waits under it.
+        if (_pause.Open)
         {
-            var elapsed = test ? Step : (float)clock.Elapsed.TotalSeconds;
-            clock.Restart();
+            DrawScene(elapsed);
+            var paused = _pause.Update(elapsed);
+            _renderer.Present(SceneView(), SkyColour(_level.Dti), screenshot);
+            CaptureMouse();
+            return paused;
+        }
 
-            // The full-screen strike: the game waits (Esc skips it); tests count its time.
-            var skip = input.WasPressed(Key.Escape) ? SniperView.StrikeSkip.Now : SniperView.StrikeSkip.No;
-            if (sniper.DrawStrike(scripts, skip, elapsed) is { } strikeView)
-            {
-                strikeTime += elapsed;
-                var shot = SavePath(options, input, time + strikeTime);
-                renderer.Present(strikeView, SkyColour(level.Dti), shot);
-                if (shot != null && test)
-                {
-                    Console.WriteLine($"Saved {shot} (strike)");
-                    return;
-                }
+        if (input.WasPressed(MenuKey.Back) && _scripts.Strike is not { Active: true })
+        {
+            _pause.Show();
+            _ui.Window.CaptureMouse(Capture.Off);
+            return Event.None;
+        }
 
-                continue;
-            }
-            if (input.WasPressed(Key.Fly))
+        // The full-screen strike: the game waits (Esc skips it); tests count its time.
+        var skip = input.WasPressed(Key.Escape) ? SniperView.StrikeSkip.Now : SniperView.StrikeSkip.No;
+        if (_sniper.DrawStrike(_scripts, skip, elapsed) is { } strikeView)
+        {
+            _strikeTime += elapsed;
+            var shot = SavePath(_options, input, _time + _strikeTime) ?? screenshot;
+            _renderer.Present(strikeView, SkyColour(_level.Dti), shot);
+            if (shot != null && _test)
             {
-                flying = !flying;
-                fly.Position = follow.Position;
-                fly.Yaw = kurt.Yaw;
-            }
-
-            // Tests ignore the real mouse.
-            if (test)
-            {
-                input.ClearMouse();
+                Console.WriteLine($"Saved {shot} (strike)");
+                return Event.Quit;
             }
 
-            // Kurt in fixed steps; the tests' keys by game time.
-            pending = MathF.Min(pending + elapsed, Step * MaxSteps);
-            while (pending >= Step)
+            return Event.None;
+        }
+
+        if (input.WasPressed(Key.Fly))
+        {
+            _flying = !_flying;
+            _fly.Position = _follow.Position;
+            _fly.Yaw = _kurt.Yaw;
+        }
+
+        // Tests ignore the real mouse.
+        if (_test)
+        {
+            input.ClearMouse();
+        }
+
+        TypeCheats(input.Typed);
+        if (input.WasPressed(MenuKey.Snapshot))
+        {
+            // TODO F2's full save (snapshot.gd, script_runtime.gd snapshot/restore, save_prompt.gd)
+            Console.WriteLine("Full saves (F2) aren't ported yet");
+        }
+
+        RunSteps(input, elapsed);
+        if (_ending is { } ending)
+        {
+            _ending = ending with { Delay = ending.Delay - elapsed };
+            if (_ending.Value.Delay <= 0f)
             {
-                pending -= Step;
-                time += Step;
-                input.Hold(Key.Forward, time <= options.Walk ? Input.State.Down : Input.State.Up);
-                input.Hold(Key.Jump, options.Jump ? Input.State.Down : Input.State.Up);
-                input.Hold(Key.Fire, options.Fire ? Input.State.Down : Input.State.Up);
-                input.Hold(Key.UseItem, options.Use && time >= UseStart && time <= UseStart + UseTime ? Input.State.Down : Input.State.Up);
-                sniperTest.Step(kurt, scripts, input, time);
-                if (flying)
-                {
-                    fly.Update(input, Step);
-                }
-                else
-                {
-                    kurt.Update(input, Step);
-                    follow.Update(kurt, ArenaPitch(level, space, kurt.Feet), input, Step);
-                }
-
-                input.ClearMouse();
-                scripts.Update(Step);
-                space.SetSolid(scripts.SolidArenas);
-                if (MathF.Floor(time * Kurt.Kurt.Ticks) > MathF.Floor((time - Step) * Kurt.Kurt.Ticks))
-                {
-                    hud.Tick(HudStateOf(kurt, scripts));
-                }
-
-                if (options.Profile && MathF.Floor(time) > MathF.Floor(time - Step))
-                {
-                    Profile(scripts, time);
-                }
-            }
-
-            var camera = flying ? fly.View(renderer.AspectRatio)
-                : kurt.Sniping ? FollowCamera.SniperView(kurt, renderer.AspectRatio) : follow.View(renderer.AspectRatio);
-            mixer.ListenerPosition = camera.Position;
-            mixer.ListenerRight = flying ? fly.Right : Vector3.Normalize(Vector3.Cross(follow.Forward, Vector3.UnitZ));
-            // In sniper mode the sounds are heard through the scope.
-            mixer.ScopeZoom = kurt.Sniping && !flying ? kurt.Scope.Zoom : 0f;
-            mixer.ListenerForward = kurt.SniperForward;
-            mixer.ListenerUp = FollowCamera.UpOf(kurt.SniperForward);
-            mixer.Update(elapsed);
-            audio.Update(elapsed);
-            scripts.Eye = camera.Position;
-            view.Draw(scripts.DrawnArenas);
-            DrawObjects(objects, scripts, level, looks);
-            sniper.Draw(kurt, scripts, elapsed);
-            effects.Draw(scripts, camera);
-            sprite.Draw(kurt, camera.Position, flying ? fly.Forward : follow.Forward, flying ? Vector3.UnitZ : follow.Up,
-                flying ? FreeCamera.FieldOfView : FollowCamera.FieldOfView);
-
-            hud.Messages.Update(elapsed);
-            hud.Draw(HudStateOf(kurt, scripts));
-
-            var save = SavePath(options, input, time);
-            renderer.Present(camera, SkyColour(level.Dti), save);
-            if (save == null)
-            {
-                continue;
-            }
-
-            Console.WriteLine($"Saved {save}");
-            if (test)
-            {
-                Report(kurt, space);
-                return;
+                _next = ending.Event;
             }
         }
+
+        var camera = DrawScene(elapsed);
+        var save = SavePath(_options, input, _time) ?? screenshot;
+        _renderer.Present(camera, SkyColour(_level.Dti), save);
+        if (save == null)
+        {
+            return _next;
+        }
+
+        Console.WriteLine($"Saved {save}");
+        if (!_test)
+        {
+            return _next;
+        }
+
+        Report(_kurt, _space);
+        return Event.Quit;
+    }
+
+    /// <summary>Kurt in fixed steps; the tests' keys by game time.</summary>
+    private void RunSteps(Input input, float elapsed)
+    {
+        var options = _options;
+        _pending = MathF.Min(_pending + elapsed, Step * MaxSteps);
+        while (_pending >= Step)
+        {
+            _pending -= Step;
+            _time += Step;
+            var started = _time >= options.Delay;
+            input.Hold(Key.Forward, started && _time <= options.Delay + options.Walk ? Input.State.Down : Input.State.Up);
+            input.Hold(Key.Jump, started && options.Jump ? Input.State.Down : Input.State.Up);
+            input.Hold(Key.Fire, started && options.Fire ? Input.State.Down : Input.State.Up);
+            input.Hold(Key.UseItem, options.Use && _time >= UseStart && _time <= UseStart + UseTime ? Input.State.Down : Input.State.Up);
+            RunTests();
+            _sniperTest.Step(_kurt, _scripts, input, _time);
+            if (_flying)
+            {
+                _fly.Update(input, Step);
+            }
+            else
+            {
+                _kurt.Update(input, Step);
+                _follow.Update(_kurt, ArenaPitch(_level, _space, _kurt.Feet), input, Step);
+            }
+
+            input.ClearMouse();
+            _scripts.Update(Step);
+            _space.SetSolid(_scripts.SolidArenas);
+            if (MathF.Floor(_time * Kurt.Kurt.Ticks) > MathF.Floor((_time - Step) * Kurt.Kurt.Ticks))
+            {
+                _hud.Tick(HudStateOf(_kurt, _scripts));
+            }
+
+            if (options.Profile && MathF.Floor(_time) > MathF.Floor(_time - Step))
+            {
+                Profile(_scripts, _time);
+            }
+        }
+    }
+
+    /// <summary>The tests' --die (Kurt is hurt to death) and --event (a special_event: 1 ends the level).</summary>
+    private void RunTests()
+    {
+        if (_time < TestStart || _time - Step >= TestStart)
+        {
+            return;
+        }
+
+        if (_options.Die)
+        {
+            _kurt.Hurt(FatalDamage);
+        }
+
+        if (_options.Event is { } value)
+        {
+            _scripts.SpecialEvent(_scripts.GetArenaState(_scripts.CurrentArena).Controller, value);
+        }
+    }
+
+    /// <summary>The camera, the scene, the HUD and the sounds' listener.</summary>
+    private View DrawScene(float elapsed)
+    {
+        var camera = SceneView();
+        _mixer.ListenerPosition = camera.Position;
+        _mixer.ListenerRight = _flying ? _fly.Right : Vector3.Normalize(Vector3.Cross(_follow.Forward, Vector3.UnitZ));
+        // In sniper mode the sounds are heard through the scope.
+        _mixer.ScopeZoom = _kurt.Sniping && !_flying ? _kurt.Scope.Zoom : 0f;
+        _mixer.ListenerForward = _kurt.SniperForward;
+        _mixer.ListenerUp = FollowCamera.UpOf(_kurt.SniperForward);
+        _mixer.Update(elapsed);
+        _scripts.Eye = camera.Position;
+        _view.Draw(_scripts.DrawnArenas);
+        DrawObjects(_objects, _scripts, _level, _looks);
+        _sniper.Draw(_kurt, _scripts, elapsed);
+        _effects.Draw(_scripts, camera);
+        _sprite.Draw(_kurt, camera.Position, _flying ? _fly.Forward : _follow.Forward, _flying ? Vector3.UnitZ : _follow.Up,
+            _flying ? FreeCamera.FieldOfView : FollowCamera.FieldOfView);
+
+        _hud.Messages.Update(elapsed);
+        _hud.Draw(HudStateOf(_kurt, _scripts));
+        return camera;
+    }
+
+    private View SceneView() => _flying ? _fly.View(_renderer.AspectRatio)
+        : _kurt.Sniping ? FollowCamera.SniperView(_kurt, _renderer.AspectRatio) : _follow.View(_renderer.AspectRatio);
+
+    /// <summary>The mouse looks around again once the pause menu closes.</summary>
+    private void CaptureMouse()
+    {
+        if (!_pause.Open)
+        {
+            _ui.Window.CaptureMouse(_test ? Capture.Off : Capture.On);
+        }
+    }
+
+    /// <summary>Letters typed in a level: <c>TOOSCARYFORME</c> turns gore on or off (not saved),
+    /// <c>SEETHEWHOLEGAME</c> the main menu's debug keys (0x5742bc).</summary>
+    private void TypeCheats(string typed)
+    {
+        foreach (var c in typed.ToUpperInvariant().Where(char.IsAsciiLetterUpper))
+        {
+            _typed = (_typed + c)[Math.Max(0, _typed.Length + 1 - DebugCheat.Length)..];
+            if (_typed.EndsWith(GoreCheat, StringComparison.Ordinal))
+            {
+                _typed = "";
+                _scripts.Option = 1 - _scripts.Option;
+                Console.WriteLine($"Gore {(_scripts.Option != 0 ? "on" : "off")}");
+            }
+            else if (_typed.EndsWith(DebugCheat, StringComparison.Ordinal))
+            {
+                _typed = "";
+                _state.DebugKeys = !_state.DebugKeys;
+                Console.WriteLine($"Debug keys {(_state.DebugKeys ? "on" : "off")}");
+            }
+        }
+    }
+
+    /// <summary>Kurt died (damp_control 0x466b40): the death is counted and the game goes back to the
+    /// main menu, whose "Continue" starts the level again.</summary>
+    private void OnDied()
+    {
+        Console.WriteLine("Kurt died");
+        _state.Level = _level.Number;
+        _state.Deaths++;
+        _state.StrikeUsed = _scripts.AirStrike.UsedUp;
+        _next = Event.KurtDied;
+    }
+
+    public void Dispose()
+    {
+        _audio.StopAll();
+        _ui.Window.CaptureMouse(Capture.Off);
     }
 
     /// <summary>What the HUD shows of Kurt and the object he shoots at.</summary>
@@ -237,15 +414,6 @@ public static class Viewer
         var (barHealth, barMax) = scripts.GetBar();
         return new HudState(kurt.Health, kurt.HurtFlash, kurt.WhiteFlash, kurt.Current == Kurt.Kurt.State.Dead,
             slots, inventory.Selected, inventory.SuperChainGun, barHealth, barMax);
-    }
-
-    /// <summary>Kurt died: he starts again where the level started.</summary>
-    // TODO load the last saved game (LASTGAME) like the original, once saves are ported
-    private static void Respawn(Kurt.Kurt kurt, ScriptRuntime scripts, ArenaSpace space, (Vector3 Feet, float Yaw) start)
-    {
-        Console.WriteLine("Kurt died");
-        kurt.Revive();
-        scripts.TeleportKurt(space.ArenaAt(start.Feet) ?? "", start.Feet, start.Yaw);
     }
 
     /// <summary>The visible objects, each with its arena's palette and textures.</summary>
@@ -328,7 +496,7 @@ public static class Viewer
     private static void PlayMusic(SoundMixer mixer, Cmi cmi, LevelData level)
     {
         var arena = level.Dti.Arenas[level.Dti.StartArena].Name;
-        if (cmi.ArenaMusic.TryGetValue(arena, out var music) && mixer.Play(music) != 0)
+        if (cmi.ArenaMusic.TryGetValue(arena, out var music) && mixer.PlayMusic(music) != 0)
         {
             Console.WriteLine($"Music: {music}");
         }
