@@ -631,6 +631,11 @@ public sealed class Viewer : IScreen
                 $"  cutscene {scripts.Cutscene:x} shot {scripts.CameraMode} camera ({Rounded(c.X)}, {Rounded(c.Y)}, {Rounded(c.Z)}) yaw {scripts.CameraYaw:0} pitch {scripts.CameraPitch:0}"));
         }
 
+        if (scripts.Items.Twisters.Count != 0)
+        {
+            Console.WriteLine($"  twisters {scripts.Items.Twisters.Count}, ribbon triangles {scripts.Items.Twisters.Sum(t => t.Ribbon.Triangles().Count / 3)}");
+        }
+
         foreach (var obj in scripts.Objects.Where(o => o.RopeMask != 0 && !o.Dead))
         {
             Console.WriteLine($"  rope {obj.TypeName}_{obj.InstanceId} lines {RopeView.LinesOf(obj).Count / 2} colour {obj.RopeColor}");
