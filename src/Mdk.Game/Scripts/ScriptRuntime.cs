@@ -287,6 +287,8 @@ public sealed partial class ScriptRuntime
     private List<string> _drawnArenas = [];
     private int _nextInstance = 1000;
     private Vector3 _previousKurtPosition;
+    /// <summary>A teleport into an arena set the previous position before the first tick.</summary>
+    private bool _teleported;
     private float _time;
     private int _tickCount;
 
@@ -429,6 +431,7 @@ public sealed partial class ScriptRuntime
 
             // No move crosses a connection (0x41bce4 sets 0x5739cc too).
             _previousKurtPosition = position;
+            _teleported = true;
         }
 
         Kurt.Teleport(position, yaw);
@@ -747,8 +750,8 @@ public sealed partial class ScriptRuntime
             }
         }
 
-        // The first tick (also after loading a game) has no move.
-        if (_tickCount == 0)
+        // The first tick (also after loading a game) has no move, unless a teleport set where it starts.
+        if (_tickCount == 0 && !_teleported)
         {
             _previousKurtPosition = KurtPosition;
         }

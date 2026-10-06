@@ -81,6 +81,20 @@ public class ArenaSwitchTests
         Assert.Equal(Vector3.Zero, runtime.KurtVelocity);
     }
 
+    /// <summary>Found by the soak tour: teleported onto a doorway before the first tick, Kurt was
+    /// pushed through it, but the first tick forgot the teleport and took his new place as the
+    /// previous one; he stayed in the room while in the corridor and fell out when it went.</summary>
+    [DataFact]
+    public void FirstTickKeepsTeleport()
+    {
+        var runtime = CreateRuntime();
+        runtime.TeleportKurt(Room, new Vector3(0f, Doorway, Floor), 90f);
+
+        StepTo(runtime, Doorway + 3f);
+
+        Assert.Equal(Corridor, runtime.CurrentArena);
+    }
+
     /// <summary>An arena no connection leads to isn't solid until a script teleports Kurt into it
     /// (level.gd enter_arena): then it's in Kurt's space.</summary>
     [DataFact]
