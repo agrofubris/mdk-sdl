@@ -1,3 +1,4 @@
+using System.Globalization;
 using SDL;
 
 namespace Mdk.Engine.Platform;
@@ -46,6 +47,7 @@ public sealed class Input
         [SDL_Scancode.SDL_SCANCODE_LCTRL] = Key.Fire,
         [SDL_Scancode.SDL_SCANCODE_RCTRL] = Key.Fire,
         [SDL_Scancode.SDL_SCANCODE_RETURN] = Key.UseItem,
+        [SDL_Scancode.SDL_SCANCODE_E] = Key.UseItem,
         [SDL_Scancode.SDL_SCANCODE_TAB] = Key.ItemNext,
         [SDL_Scancode.SDL_SCANCODE_RIGHTBRACKET] = Key.ItemNext,
         [SDL_Scancode.SDL_SCANCODE_LEFTBRACKET] = Key.ItemPrevious,
@@ -54,8 +56,6 @@ public sealed class Input
         [SDL_Scancode.SDL_SCANCODE_3] = Key.Item3,
         [SDL_Scancode.SDL_SCANCODE_4] = Key.Item4,
         [SDL_Scancode.SDL_SCANCODE_5] = Key.Item5,
-        [SDL_Scancode.SDL_SCANCODE_E] = Key.Up,
-        [SDL_Scancode.SDL_SCANCODE_Q] = Key.Down,
         [SDL_Scancode.SDL_SCANCODE_ESCAPE] = Key.Escape,
         [SDL_Scancode.SDL_SCANCODE_F12] = Key.Screenshot,
         [SDL_Scancode.SDL_SCANCODE_F1] = Key.Fly,
@@ -68,6 +68,13 @@ public sealed class Input
         [SDL_Scancode.SDL_SCANCODE_T] = Key.Teleport,
         [SDL_Scancode.SDL_SCANCODE_LALT] = Key.Teleport,
         [SDL_Scancode.SDL_SCANCODE_RALT] = Key.Teleport,
+    };
+
+    /// <summary>The flying camera's keys: fixed, whatever the bindings (E also uses items).</summary>
+    private static readonly Dictionary<SDL_Scancode, Key> FlyKeys = new()
+    {
+        [SDL_Scancode.SDL_SCANCODE_E] = Key.Up,
+        [SDL_Scancode.SDL_SCANCODE_Q] = Key.Down,
     };
 
     /// <summary>The digit keys, of the number row and the keypad, 0 to 9.</summary>
@@ -84,11 +91,14 @@ public sealed class Input
     /// <summary>No digit pressed (<see cref="Digit"/>).</summary>
     public const int NoDigit = -1;
 
-    /// <summary>The keys of mouse buttons: the left one fires, the right one toggles sniper mode.</summary>
+    /// <summary>The keys of mouse buttons: the left one fires, the right one toggles sniper mode,
+    /// the wheel picks items.</summary>
     private static readonly Dictionary<MouseButton, Key> DefaultButtons = new()
     {
         [MouseButton.Left] = Key.Fire,
         [MouseButton.Right] = Key.Sniper,
+        [MouseButton.WheelUp] = Key.ItemPrevious,
+        [MouseButton.WheelDown] = Key.ItemNext,
     };
 
     private static readonly Dictionary<SDL_Scancode, MenuKey> MenuKeys = new()
@@ -108,15 +118,18 @@ public sealed class Input
         [SDL_Scancode.SDL_SCANCODE_F2] = MenuKey.Snapshot,
     };
 
-    /// <summary>Names of mouse buttons as bindings (<see cref="Bind"/>).</summary>
+    /// <summary>Names of mouse buttons as bindings (<see cref="Bind"/>); others are
+    /// <see cref="ButtonPrefix"/> and their number ("Mouse 4").</summary>
     private static readonly Dictionary<MouseButton, string> ButtonNames = new()
     {
         [MouseButton.Left] = "Left mouse",
         [MouseButton.Right] = "Right mouse",
         [MouseButton.Middle] = "Middle mouse",
-        [MouseButton.Back] = "Mouse 4",
-        [MouseButton.Forward] = "Mouse 5",
+        [MouseButton.WheelUp] = "Wheel up",
+        [MouseButton.WheelDown] = "Wheel down",
     };
+
+    private const string ButtonPrefix = "Mouse ";
 
     /// <summary>The bindings: the defaults, changed by <see cref="Bind"/>.</summary>
     private readonly Dictionary<SDL_Scancode, Key> _keys = new(DefaultKeys);
@@ -127,6 +140,10 @@ public sealed class Input
     private readonly HashSet<Key> _down = [];
     /// <summary>Keys held by mouse buttons, apart from the keyboard's.</summary>
     private readonly HashSet<Key> _buttons = [];
+    /// <summary>Keys held by the fixed flying camera keys.</summary>
+    private readonly HashSet<Key> _fly = [];
+    /// <summary>Keys the wheel holds until a game step uses them (<see cref="ClearMouse"/>).</summary>
+    private readonly HashSet<Key> _wheel = [];
     private readonly HashSet<Key> _pressed = [];
     /// <summary>Keys held by the program (tests), whatever the keyboard does.</summary>
     private readonly HashSet<Key> _held = [];
@@ -154,7 +171,8 @@ public sealed class Input
     /// <summary>The digit (0-9) pressed this frame, or <see cref="NoDigit"/>.</summary>
     public int Digit { get; private set; } = NoDigit;
 
-    public bool IsDown(Key key) => _down.Contains(key) || _buttons.Contains(key) || _held.Contains(key);
+    public bool IsDown(Key key) =>
+        _down.Contains(key) || _buttons.Contains(key) || _fly.Contains(key) || _wheel.Contains(key) || _held.Contains(key);
 
     /// <summary>Holds or releases a key from the program (automated tests).</summary>
     public void Hold(Key key, State state)
@@ -198,17 +216,17 @@ public sealed class Input
     /// <paramref name="key"/>, instead of its other bindings. Returns false for an unknown name.</summary>
     public bool Bind(Key key, string control)
     {
-        var button = ButtonNames.FirstOrDefault(b => b.Value == control);
-        var scancode = button.Value == null ? SDL3.SDL_GetScancodeFromName(control) : SDL_Scancode.SDL_SCANCODE_UNKNOWN;
-        if (button.Value == null && scancode == SDL_Scancode.SDL_SCANCODE_UNKNOWN)
+        var button = ParseButton(control);
+        var scancode = button == null ? SDL3.SDL_GetScancodeFromName(control) : SDL_Scancode.SDL_SCANCODE_UNKNOWN;
+        if (button == null && scancode == SDL_Scancode.SDL_SCANCODE_UNKNOWN)
         {
             return false;
         }
 
         Unbind(key);
-        if (button.Value != null)
+        if (button is { } bound)
         {
-            _buttonKeys[button.Key] = key;
+            _buttonKeys[bound] = key;
             return true;
         }
 
@@ -247,11 +265,34 @@ public sealed class Input
         {
             if (bound == key)
             {
-                return ButtonNames.GetValueOrDefault(button, "-");
+                return ButtonName(button);
             }
         }
 
         return "-";
+    }
+
+    /// <summary>A mouse button's binding name: "Left mouse", "Mouse 8".</summary>
+    private static string ButtonName(MouseButton button) =>
+        ButtonNames.GetValueOrDefault(button) ?? ButtonPrefix + ((int)button).ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>The mouse button of a binding name, or null.</summary>
+    private static MouseButton? ParseButton(string control)
+    {
+        var named = ButtonNames.FirstOrDefault(b => b.Value == control);
+        if (named.Value != null)
+        {
+            return named.Key;
+        }
+
+        if (!control.StartsWith(ButtonPrefix, StringComparison.Ordinal)
+            || !byte.TryParse(control[ButtonPrefix.Length..], NumberStyles.None, CultureInfo.InvariantCulture, out var number)
+            || number == 0)
+        {
+            return null;
+        }
+
+        return (MouseButton)number;
     }
 
     private void Unbind(Key key)
@@ -273,6 +314,7 @@ public sealed class Input
         MouseX = 0f;
         MouseY = 0f;
         Wheel = 0f;
+        _wheel.Clear();
     }
 
     internal void SetKey(SDL_Scancode scancode, State state, Repeat repeat)
@@ -289,6 +331,7 @@ public sealed class Input
             Digit = DigitKeys.Select(row => Array.IndexOf(row, scancode)).FirstOrDefault(d => d != NoDigit, Digit);
         }
 
+        SetFlyKey(scancode, state);
         if (!_keys.TryGetValue(scancode, out var key))
         {
             return;
@@ -312,7 +355,7 @@ public sealed class Input
         if (state == State.Down)
         {
             AnyPressed = true;
-            LastControl = ButtonNames.GetValueOrDefault(button, "");
+            LastControl = ButtonName(button);
             AddClick(button);
         }
 
@@ -333,7 +376,39 @@ public sealed class Input
         }
     }
 
-    internal void AddWheel(float notches) => Wheel += notches;
+    /// <summary>Wheel notches: they zoom in sniper mode (<see cref="Wheel"/>) and press the wheel's
+    /// bindings until the next game step.</summary>
+    internal void AddWheel(float notches)
+    {
+        Wheel += notches;
+        if (notches == 0f)
+        {
+            return;
+        }
+
+        var button = notches > 0f ? MouseButton.WheelUp : MouseButton.WheelDown;
+        LastControl = ButtonName(button);
+        if (_buttonKeys.TryGetValue(button, out var key) && _wheel.Add(key))
+        {
+            _pressed.Add(key);
+        }
+    }
+
+    private void SetFlyKey(SDL_Scancode scancode, State state)
+    {
+        if (!FlyKeys.TryGetValue(scancode, out var key))
+        {
+            return;
+        }
+
+        if (state == State.Up)
+        {
+            _fly.Remove(key);
+            return;
+        }
+
+        _fly.Add(key);
+    }
 
     internal void AddMouseMotion(float x, float y)
     {
@@ -363,8 +438,13 @@ public sealed class Input
     }
 }
 
-/// <summary>Mouse buttons, independent of SDL.</summary>
-internal enum MouseButton { Left, Right, Middle, Back, Forward, Other }
+/// <summary>Mouse buttons by SDL's numbers (any number is a button); the wheel's two directions
+/// are buttons too, out of SDL's byte range.</summary>
+internal enum MouseButton
+{
+    Left = 1, Middle = 2, Right = 3, Back = 4, Forward = 5,
+    WheelUp = byte.MaxValue + 1, WheelDown = byte.MaxValue + 2,
+}
 
 /// <summary>Whether a key event is the keyboard's auto-repeat.</summary>
 internal enum Repeat { No, Yes }

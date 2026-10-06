@@ -94,9 +94,6 @@ public sealed class Viewer : IScreen
     /// <summary>The game goes on this long after the level ended, longer when it's lost (main.gd).</summary>
     private const float EndDelay = 0.5f;
     private const float GameOverDelay = 5f;
-    /// <summary>Cheats typed in a level (0x42c5f0): gore on or off, and the main menu's debug keys.</summary>
-    private const string GoreCheat = "TOOSCARYFORME";
-    private const string DebugCheat = "SEETHEWHOLEGAME";
 
     private readonly Ui _ui;
     private readonly ViewerOptions _options;
@@ -133,7 +130,7 @@ public sealed class Viewer : IScreen
     private float _time;
     private float _pending;
     private float _strikeTime;
-    private string _typed = "";
+    private readonly Cheats _cheats;
     private Event _next = Event.None;
     /// <summary>The level ended: the event that follows once the delay is over.</summary>
     private (Event Event, float Delay)? _ending;
@@ -142,6 +139,9 @@ public sealed class Viewer : IScreen
     {
         var loading = Stopwatch.StartNew();
         _ui = ui;
+        _cheats = new Cheats(ui.Settings, state);
+        // The menus' wheel and mouse don't reach Kurt.
+        ui.Input.ClearMouse();
         _options = options;
         _state = state;
         _renderer = ui.Renderer;
@@ -266,6 +266,12 @@ public sealed class Viewer : IScreen
     public Event Frame(float elapsed, string? screenshot)
     {
         var input = _ui.Input;
+
+        // While the game waits, the mouse and the wheel don't pile up for Kurt.
+        if (_snapshotPrompt != null || _pause.Open)
+        {
+            input.ClearMouse();
+        }
 
         // F2's name prompt: the game waits under it.
         if (_snapshotPrompt != null)
@@ -609,17 +615,14 @@ public sealed class Viewer : IScreen
     {
         foreach (var c in typed.ToUpperInvariant().Where(char.IsAsciiLetterUpper))
         {
-            _typed = (_typed + c)[Math.Max(0, _typed.Length + 1 - DebugCheat.Length)..];
-            if (_typed.EndsWith(GoreCheat, StringComparison.Ordinal))
+            var cheat = _cheats.Type(c);
+            if (cheat == Cheats.Cheat.Gore)
             {
-                _typed = "";
-                _scripts.Option = 1 - _scripts.Option;
-                Console.WriteLine($"Gore {(_scripts.Option != 0 ? "on" : "off")}");
+                _scripts.Option = _ui.Settings.Gore ? 1 : 0;
+                Console.WriteLine($"Gore {(_ui.Settings.Gore ? "on" : "off")}");
             }
-            else if (_typed.EndsWith(DebugCheat, StringComparison.Ordinal))
+            else if (cheat == Cheats.Cheat.DebugKeys)
             {
-                _typed = "";
-                _state.DebugKeys = !_state.DebugKeys;
                 Console.WriteLine($"Debug keys {(_state.DebugKeys ? "on" : "off")}");
             }
         }

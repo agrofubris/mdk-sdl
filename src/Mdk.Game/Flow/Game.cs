@@ -38,6 +38,8 @@ public sealed record GameOptions(Start Start, ViewerOptions Level)
     public int? Health { get; init; }
     /// <summary>The look instead of the settings' (--enhanced, --original; tests).</summary>
     public Graphics? Graphics { get; init; }
+    /// <summary>Gore instead of the settings' (the original's -bloodyes, -nobloodno).</summary>
+    public bool? Gore { get; init; }
 }
 
 /// <summary>The game: its screens one after the other, as the original's game states.
@@ -96,6 +98,11 @@ public sealed class Game : IDisposable
         if (options.Graphics is { } graphics)
         {
             settings.Graphics = graphics;
+        }
+
+        if (options.Gore is { } gore)
+        {
+            settings.Gore = gore;
         }
 
         settings.Apply(_audio, _window, _renderer, _input);

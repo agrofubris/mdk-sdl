@@ -127,15 +127,8 @@ public sealed unsafe class Window : IDisposable
         return true;
     }
 
-    private static MouseButton Button(byte button) => button switch
-    {
-        SDL_BUTTON_LEFT => MouseButton.Left,
-        SDL_BUTTON_RIGHT => MouseButton.Right,
-        SDL_BUTTON_MIDDLE => MouseButton.Middle,
-        SDL_BUTTON_X1 => MouseButton.Back,
-        SDL_BUTTON_X2 => MouseButton.Forward,
-        _ => MouseButton.Other,
-    };
+    /// <summary><see cref="MouseButton"/> keeps SDL's numbers.</summary>
+    private static MouseButton Button(byte button) => (MouseButton)button;
 
     public void Dispose()
     {

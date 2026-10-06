@@ -29,6 +29,7 @@ using Mdk.Game.Scripts;
 //   --fly                   start with the flying camera
 //   --mute                  no sound (tests)
 //   --enhanced, --original  the enhanced or the original look instead of the settings' (tests)
+//   --bloodyes, --nobloodno gore on or off instead of the settings' (the original's -bloodyes, -nobloodno)
 //   --hidden                no window, frames drawn off screen (tests; also MDK_HIDDEN=1)
 //   --screenshot=file.bmp   save a frame after --wait seconds of game time, print Kurt, quit (tests)
 //   --wait=seconds          game time before the screenshot
@@ -146,6 +147,7 @@ using var game = new Game(data, new GameOptions(start, viewer)
     Wait = Seconds("wait"),
     Health = Number("health"),
     Graphics = options.ContainsKey("enhanced") ? Graphics.Enhanced : options.ContainsKey("original") ? Graphics.Original : null,
+    Gore = options.ContainsKey("bloodyes") ? true : options.ContainsKey("nobloodno") ? false : null,
 });
 game.Run();
 return 0;

@@ -53,10 +53,10 @@ public enum Output { Speakers, Muted }
 ///   voices ──resample, gain, pan──► mix buffer ──► SDL audio stream ──► device
 /// </code>
 /// <see cref="Update"/> tops the stream up once a frame. Voices go through a bus (music or
-/// effects) and the master volume; a streamed voice plays what is pushed to it (a movie's sound).
+/// effects), the master volume and a limiter; a streamed voice plays what is pushed to it (a movie's sound).
 /// <code>
 ///   effects voices ─────────────────────┐
-///   music voices ──low-pass (option)─────┼──master──► stream
+///   music voices ──low-pass (option)─────┼──master──limiter──► stream
 /// </code></summary>
 public sealed unsafe class AudioDevice : IDisposable
 {
@@ -88,6 +88,7 @@ public sealed unsafe class AudioDevice : IDisposable
     private float[] _music = [];
     private readonly float[] _busGains = [1f, 1f];
     private (float Left, float Right) _filtered;
+    private readonly Limiter _limiter = new(OutputRate);
     private int _nextId = 1;
 
     /// <summary>The volume of everything (0-1).</summary>
@@ -216,6 +217,7 @@ public sealed unsafe class AudioDevice : IDisposable
         }
 
         AddMusic(mix, music, frames);
+        _limiter.Process(mix);
 
         if (_stream == null)
         {
