@@ -20,12 +20,38 @@ Each layer talks only to the one below it.
  Mdk.Engine   Render (Renderer: meshes, index textures, palettes, panorama)
     │         Audio (AudioDevice: software mixer of voices, music and effects buses, streamed voices)
     │         Platform (Window, Input: game keys (rebindable), menu keys, pointer, text, embedded SDL3)
- SDL3         SDL_GPU (Direct3D 12, DXIL shaders), events
+ SDL3         SDL_GPU (Direct3D 12 / Vulkan / Metal), events
 ```
 
 - `Mdk.Formats` has no dependencies: bytes in, data out.
 - `Mdk.Engine` hides SDL: the game sees meshes, materials, keys.
-- Shaders (`shaders/*.hlsl`) are compiled by the Windows SDK's `dxc` at build time and embedded.
+- Shaders (`shaders/*.hlsl`) are compiled at build time to each format whose tool is found, and
+  embedded; the renderer creates its device with the first embedded format a GPU driver takes.
+- `Mdk.Formats` finds data files whatever their case (`CaseInsensitivePath`: the GOG installation
+  has `MISC/mdkfont.fti`, the game asks for `MISC/MDKFONT.FTI`).
+
+## Platforms
+
+One native executable per platform (Native AOT). It embeds SDL3's library for its runtime
+(`native/SDL3.dll`, `libSDL3.so`, `libSDL3.dylib`), unpacked once to the user's local data folder
+(`Platform/NativeLibraries.cs`), and the shaders.
+
+```
+ shaders/*.hlsl ──dxc──────────► DXIL ───► Direct3D 12 (Windows)
+        │
+        └──────dxc -spirv──────► SPIR-V ─► Vulkan (Linux; Windows with SDL_GPU_DRIVER=vulkan)
+                                   │
+                                   └──spirv-cross──► MSL ─► Metal (macOS)
+```
+
+- Bindings (SDL_GPU's rules, `shaders/bindings.hlsli`): HLSL registers in spaces 1-3 for DXIL;
+  SPIR-V combines each texture with its sampler at set 2, binding = register; spirv-cross keeps
+  the SPIR-V bindings as Metal indices (`--msl-decoration-binding`).
+- A missing tool skips its format; CI requires its platform's (`-p:RequiredShaders`).
+- CI (`.github/workflows/build.yml`): Windows (DXIL, SPIR-V), Linux (SPIR-V), macOS (SPIR-V,
+  MSL) build, test without the game data (`[DataFact]` tests are skipped) and publish; a `v*` tag
+  releases the archives. Shader tools: the DirectXShaderCompiler release (Windows, Linux), the
+  Vulkan SDK (macOS).
 
 ## Rendering (original look)
 

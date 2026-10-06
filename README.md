@@ -56,9 +56,13 @@ The plan is in [docs/architecture.md](docs/architecture.md#roadmap).
 
 ## Running
 
-Windows x64 for now. Put the program (or this folder) inside the MDK installation folder (for
+Windows x64, Linux x64 and macOS (Apple silicon): one executable each, `mdk.exe` or `mdk` (see
+[Building](#building)). It is played on Windows; the Linux and macOS builds are only built and
+started on CI so far. Put the program (or this folder) inside the MDK installation folder (for
 example `C:\GOG Games\MDK\mdk-sdl`), install MDK in the default GOG or Steam location, or set the
-`MDK_DATA_DIR` environment variable.
+`MDK_DATA_DIR` environment variable. On Linux and macOS copy the installed game's folder (from
+Windows, Wine or the GOG installer); file names match whatever their case. macOS keeps a downloaded
+program in quarantine: `xattr -d com.apple.quarantine mdk`.
 
 ```
 mdk.exe
@@ -96,7 +100,8 @@ mdk.exe
   statistics...) is saved.
 
 Settings (volumes, music filter, mouse, fullscreen, difficulty, gore, key bindings) and saved games
-are kept in `%LOCALAPPDATA%/mdk-sdl` (`settings.cfg`, `saves/*.sav`; `MDK_USER_DIR` overrides the
+are kept in `%LOCALAPPDATA%/mdk-sdl` (Linux: `~/.local/share/mdk-sdl`, macOS:
+`~/Library/Application Support/mdk-sdl`; `settings.cfg`, `saves/*.sav`; `MDK_USER_DIR` overrides the
 folder). `LASTGAME` (written when Kurt dies) is deleted at start, as in the original.
 
 Controls: W/S or Up/Down to run, A/D to strafe, the mouse or Left/Right to turn, Space to jump
@@ -110,20 +115,37 @@ debug keys (3-8 start that level, D the statistics with random counts).
 
 ## Building
 
-Needs the .NET 10 SDK and the Windows SDK (its `dxc` compiles the shaders).
+Needs the .NET 10 SDK and the shader compiler of the platform's GPU API (SDL_GPU):
+
+| Platform | GPU API | Shaders | Tools |
+| --- | --- | --- | --- |
+| Windows | Direct3D 12 | DXIL | `dxc` of the Windows SDK, or of the [DirectXShaderCompiler release](https://github.com/microsoft/DirectXShaderCompiler/releases) |
+| Linux (Windows with `SDL_GPU_DRIVER=vulkan`) | Vulkan | SPIR-V | `dxc` of the DirectXShaderCompiler release or of the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home) |
+| macOS | Metal | MSL | `dxc` (SPIR-V) and `spirv-cross` of the Vulkan SDK |
+
+The build compiles every format whose tool runs and skips the others (it prints `Shaders: DXIL
+true, SPIR-V false, MSL false`); the program uses the first one its GPU driver takes. The tools are
+looked for at the Windows SDK's place (DXIL), in `$VULKAN_SDK/bin`, then on the PATH; or name them:
+`-p:Dxc=...` (DXIL), `-p:DxcSpirv=...`, `-p:SpirvCross=...`. `-p:RequiredShaders="spirv msl"` fails
+the build without those formats.
 
 ```
 dotnet build
-src/Mdk.App/bin/Debug/net10.0/mdk.exe --level=3
+src/Mdk.App/bin/Debug/net10.0/mdk --level=3
 ```
 
-One native executable (Native AOT, also needs the Visual Studio C++ tools): `sh tools/publish.sh`
-gives `publish/mdk.exe` (about 5 MB). SDL3 is embedded in it and unpacked once to
-`%LOCALAPPDATA%/mdk-sdl`.
+One native executable (Native AOT; also needs the Visual Studio C++ tools on Windows, clang and
+zlib on Linux, Xcode on macOS): `sh tools/publish.sh [win-x64|linux-x64|osx-arm64|osx-x64]` (this
+machine's by default) gives `publish/mdk` or `publish/mdk.exe` (about 7 MB). SDL3 is embedded in it
+and unpacked once to the user's local data folder (above).
+
+GitHub Actions (`.github/workflows/build.yml`) builds and tests every push on Windows, Linux and
+macOS and publishes the three executables as the run's artifacts; a `v*` tag makes a release of
+them.
 
 ## Tests
 
-With the game data installed:
+With the game data installed (without it `dotnet test` skips the tests that read it):
 
 ```
 dotnet test
@@ -150,11 +172,13 @@ sh tests/end_level_test.sh
   the game's flow (`Flow/`: screens, settings, saves), its menus (`Menu/`), the stream (`Stream/`)
   and the fall (`Fall/`).
 - `src/Mdk.App`: the program and its command line.
-- `shaders/`: HLSL shaders, compiled to DXIL at build time.
+- `shaders/`: HLSL shaders, compiled to DXIL, SPIR-V and MSL at build time (`bindings.hlsli`:
+  SDL_GPU's bindings).
 - `docs/`: [the architecture and roadmap](docs/architecture.md). The knowledge base about MDK
   itself (formats, engine, scripts, BSP) is in the
   [Godot port's docs](https://github.com/nemo22/mdk-godot/tree/main/docs).
 - `tests/`, `tools/`: tests, the opcode table generator and the publish script.
+- `.github/workflows/`: CI builds and releases.
 
 ## Legal
 
