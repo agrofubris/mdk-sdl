@@ -1,7 +1,7 @@
 # MDK in C# and SDL3
 
 ![Status: work in progress](https://img.shields.io/badge/status-work%20in%20progress-orange)
-![Progress: about 60%](https://img.shields.io/badge/progress-~60%25-yellow)
+![Progress: about 75%](https://img.shields.io/badge/progress-~75%25-yellow)
 ![.NET 10](https://img.shields.io/badge/.NET-10-512bd4?logo=dotnet&logoColor=white)
 ![SDL3](https://img.shields.io/badge/SDL-3-blue)
 
@@ -18,7 +18,7 @@ original's box sweeps.
 > copy of the original game (available for example on GOG). Without the original game data the
 > port won't run.
 
-**Status: early work in progress.** Every level loads, Kurt walks it and the level scripts run:
+**Status: work in progress, not yet played through.** Every level loads, Kurt walks it and the level scripts run:
 aliens spawn, walk and fly their paths, doors open, pickups fall on their chutes. Kurt fires his
 chain gun, throws his items, gets hurt, knocked down and dies, and the HUD shows his health,
 inventory, messages and the target's health bar. Aliens blow up into pieces, sparks fly, slime
@@ -47,9 +47,10 @@ makes a full save of the level, and the Score-O-matic spins its heads. The
 | Weapons, items, sniper mode | ████████░░ 80% |
 | HUD (health, inventory, messages, health bar) | ███████░░░ 70% |
 | Menus, saves, level flow | ████████░░ 80% |
-| The fall and the stream between levels, rides | ███████░░░ 70% |
+| The fall and the stream between levels, rides | ████████░░ 80% |
 | Videos: the menu's FLC and slideshow, the end movies | ████████░░ 80% |
-| **Overall** | **about 60%** |
+| Playtesting and bug fixing | ██░░░░░░░░ 20% |
+| **Overall** | **about 75%** |
 
 The plan is in [docs/architecture.md](docs/architecture.md#roadmap).
 
