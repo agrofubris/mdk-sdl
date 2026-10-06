@@ -42,7 +42,7 @@ public sealed partial class Kurt
     /// sliding or throwing. Kurt stops firing and shows SNIPERON (state 803).</summary>
     public void EnterSniper()
     {
-        if (!OnFloor || Sliding || Health == 0 || Knocked || Current is State.Dead or State.Throw)
+        if (!CanSnipe)
         {
             return;
         }
@@ -57,6 +57,8 @@ public sealed partial class Kurt
         mixer.Play("SNIPERON");
         _breathVoice = mixer.PlayLooped("BREATH");
     }
+
+    private bool CanSnipe => OnFloor && !Sliding && Health != 0 && !Knocked && Current is not (State.Dead or State.Throw);
 
     /// <summary>Leaves sniper mode (0x4645c8).</summary>
     public void LeaveSniper(SniperExit exit = SniperExit.Silent)
@@ -86,7 +88,20 @@ public sealed partial class Kurt
             if (Sniping)
             {
                 LeaveSniper(SniperExit.WithSound);
-                return false;
+                if (!BetaMoves || frameCount(State.HelmetOff) == 0)
+                {
+                    return false;
+                }
+
+                // The demo's helmet comes off (state 900).
+                SetState(State.HelmetOff);
+                return true;
+            }
+
+            if (BetaMoves && CanSnipe && frameCount(State.HelmetOn) != 0)
+            {
+                PutHelmetOn();
+                return true;
             }
 
             EnterSniper();

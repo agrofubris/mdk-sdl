@@ -162,6 +162,9 @@ public sealed class MdkObject
     /// <summary>Per kind parameter (obj+0x302): projectile lifetime, jump time... and its timer (obj+0x306).</summary>
     public float Parameter;
     public float ParameterTimer;
+    /// <summary>Taken off Kurt's health when this projectile touches him, which ends it: the 1996
+    /// demo's bolts have no script to do it.</summary>
+    public int TouchDamage;
 
     // Path state (obj+0xe6...obj+0x100).
     public int Path;

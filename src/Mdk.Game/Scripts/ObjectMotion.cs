@@ -997,6 +997,11 @@ public sealed class ObjectMotion(ScriptRuntime runtime)
         {
             obj.ContactFlags |= MdkObject.ContactTouchedKurt;
             obj.Position = point;
+            if (obj.TouchDamage > 0)
+            {
+                runtime.HurtKurt(obj.TouchDamage);
+                runtime.Kill(obj);
+            }
         }
         else
         {

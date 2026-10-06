@@ -11,7 +11,8 @@ public sealed class MdkData
 
     private MdkData(string dir) => Dir = dir;
 
-    /// <summary>The installation, or null: <c>MDK_DATA_DIR</c>, the folders above the program, GOG and Steam folders.</summary>
+    /// <summary>The installation, or null: <c>MDK_DATA_DIR</c>, <c>mdk</c> in <see cref="LocalPaths"/>,
+    /// the folders above the program, GOG and Steam folders.</summary>
     public static MdkData? Find()
     {
         var candidates = new List<string>();
@@ -19,6 +20,12 @@ public sealed class MdkData
         if (!string.IsNullOrEmpty(env))
         {
             candidates.Add(env);
+        }
+
+        var local = LocalPaths.Get(LocalPaths.Game);
+        if (local.Length != 0)
+        {
+            candidates.Add(local);
         }
 
         // The project folder placed within the MDK folder: walk up from the executable.

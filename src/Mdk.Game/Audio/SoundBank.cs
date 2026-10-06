@@ -19,6 +19,9 @@ public sealed class SoundBank(IReadOnlyList<Sni> archives)
         ]);
     }
 
+    /// <summary>A level of the 1996 demo: its own archives only (sounds it lacks stay silent).</summary>
+    public static SoundBank ForBeta(BetaDemo beta, int number) => new(beta.LoadSounds(BetaDemo.LevelOf(number)));
+
     public SoundMixer.Entry? Get(string name)
     {
         if (_cache.TryGetValue(name, out var entry))

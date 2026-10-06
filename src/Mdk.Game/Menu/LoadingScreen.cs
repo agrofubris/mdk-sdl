@@ -24,6 +24,13 @@ public static class LoadingScreen
         view.Layout(ScreenView.Fit.Height);
         var path = ui.Data.PathOf($"MISC/LOAD_{level}.LBB");
         var bytes = File.Exists(path) ? File.ReadAllBytes(path) : [];
+
+        // The 1996 demo's screens have the same layout.
+        if (BetaDemo.IsBeta(level) && ui.Beta != null)
+        {
+            bytes = ui.Beta.LoadingScreen(BetaDemo.LevelOf(level));
+        }
+
         if (bytes.Length > PaletteSize)
         {
             var rgb = bytes[..PaletteSize];

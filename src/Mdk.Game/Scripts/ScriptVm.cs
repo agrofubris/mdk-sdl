@@ -29,6 +29,11 @@ public sealed class ScriptVm(ScriptRuntime runtime, ScriptDecoder decoder)
     private const float PitchErrorScale = 4f;
     private const int FlagBits = 31;
     private const int VariableCount = 4;
+    /// <summary>The 1996 demo's <c>fire</c> (<see cref="FireBolt"/>): a <c>BOLT</c> at 75 units a
+    /// second that takes 10 off Kurt's health (0x4e2ec).</summary>
+    private const string BetaBolt = "BOLT";
+    private const float BetaBoltSpeed = 75f;
+    private const int BetaBoltDamage = 10;
 
     /// <summary>Opcodes seen that aren't implemented (opcode to count), for debugging.</summary>
     public readonly Dictionary<int, int> Unimplemented = [];
@@ -1629,6 +1634,20 @@ public sealed class ScriptVm(ScriptRuntime runtime, ScriptDecoder decoder)
                 break;
             case 239: // set_27c (not identified)
                 break;
+
+            // The 1996 demo's own opcodes (ScriptDecoder.Beta.cs).
+            case BetaOpcodes.FollowPath:
+                FollowBetaPath(obj, I(o[0]));
+                break;
+            case BetaOpcodes.Fire:
+                FireBolt(obj, o);
+                break;
+            case BetaOpcodes.IfAlarmEnded:
+                return Branch(obj, ins, runtime.AlarmEndedTicks > 0);
+            case BetaOpcodes.IfField108:
+                return Branch(obj, ins, false);
+            case BetaOpcodes.Nothing:
+                break;
             default:
                 Unimplemented[ins.Opcode] = Unimplemented.GetValueOrDefault(ins.Opcode) + 1;
                 if (ins.Action != null)
@@ -1892,6 +1911,48 @@ public sealed class ScriptVm(ScriptRuntime runtime, ScriptDecoder decoder)
 
         var origin = I(o[4]) != 0 ? obj.Position - motion.PathPosition(path, time) : V(L(o[5]));
         motion.StartPath(obj, path, time, origin);
+    }
+
+    /// <summary>The 1996 demo's <c>follow_path</c> (0x47f6c): a path stopped by opcode 21 goes on from
+    /// where it stopped, another one starts at its first frame. The object turns along the path,
+    /// whose positions are absolute, and goes round it again and again (0x32ff8).</summary>
+    private void FollowBetaPath(MdkObject obj, int path)
+    {
+        if (path == 0)
+        {
+            obj.Path = 0;
+            return;
+        }
+
+        if (obj.Path == path)
+        {
+            obj.PathStop = -1;
+            return;
+        }
+
+        obj.Flags &= ~(MdkObject.FlagPathPushes | MdkObject.FlagPathOnce | MdkObject.FlagNoTurning);
+        runtime.Motion.StartPath(obj, path, 0f, Vector3.Zero);
+    }
+
+    /// <summary>The 1996 demo's <c>fire</c>: <c>[origin, aim, range, accuracy, ?]</c>. A bolt leaves a
+    /// reference point or a part, aimed at the target when <c>aim</c> is set (with aim_target's
+    /// error), else along the object's yaw; it has no script, flies <c>range</c> units and hurts Kurt
+    /// when it touches him.</summary>
+    private void FireBolt(MdkObject obj, object?[] o)
+    {
+        if (runtime.Fire(obj, L(o[0]), BetaBolt, 0) is not { } bolt)
+        {
+            return;
+        }
+
+        if (I(o[1]) != 0)
+        {
+            Aim(bolt, F(o[3]), Aiming.Always);
+        }
+
+        bolt.Speed = BetaBoltSpeed;
+        bolt.Parameter = F(o[2]) / BetaBoltSpeed;
+        bolt.TouchDamage = BetaBoltDamage;
     }
 
     /// <summary>Whether aim_target turns only when the target is more than 2 units away across.</summary>

@@ -12,19 +12,27 @@ public sealed class TextureArchive
     private const uint KindAnimatedMask = 0xFFFF0000;
     /// <summary>Standalone files start with a size word.</summary>
     private const int FileBase = 4;
+    /// <summary>The name and size before the count; the 1996 demo's archives have none.</summary>
+    private const int Header = 16;
+
+    /// <summary>The 1996 demo's names are in lower case; the port's in upper case.</summary>
+    internal enum Names { AsStored, Upper }
 
     public Dictionary<string, Texture> Textures { get; } = [];
     /// <summary>Name to palette index (or special value of 256 and up).</summary>
     public Dictionary<string, int> Colors { get; } = [];
 
-    public static TextureArchive Parse(byte[] bytes, int baseOffset)
+    public static TextureArchive Parse(byte[] bytes, int baseOffset) => Parse(bytes, baseOffset, Header, Names.AsStored);
+
+    /// <summary>An archive whose count is <paramref name="header"/> bytes after <paramref name="baseOffset"/>.</summary>
+    internal static TextureArchive Parse(byte[] bytes, int baseOffset, int header, Names names)
     {
         var archive = new TextureArchive();
-        var r = new BinReader(bytes, baseOffset + 16);
+        var r = new BinReader(bytes, baseOffset + header);
         var count = r.U32();
         for (var i = 0; i < count; i++)
         {
-            var name = r.Name(8);
+            var name = names == Names.Upper ? r.Name(8).ToUpperInvariant() : r.Name(8);
             var kind = r.U32();
             var value = r.U32();
             r.F32();

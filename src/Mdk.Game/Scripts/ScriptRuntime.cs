@@ -319,7 +319,7 @@ public sealed partial class ScriptRuntime
         Mixer = mixer;
         _space = space;
         _groups = groups;
-        Vm = new ScriptVm(this, new ScriptDecoder(cmi.Bytes));
+        Vm = new ScriptVm(this, ScriptDecoder.For(cmi));
         Motion = new ObjectMotion(this);
         Behaviors = new ObjectBehaviors(this);
         foreach (var arena in level.Arenas)
@@ -330,8 +330,8 @@ public sealed partial class ScriptRuntime
 
         FindConnections();
 
-        // No town to save in the last level.
-        if (GameStats.IndexOf(level.Number) != LastLevelIndex)
+        // No town to save in the last level, nor in the 1996 demo's.
+        if (GameStats.IndexOf(level.Number) != LastLevelIndex && !IsBeta)
         {
             TownTicks = TownTicksByDifficulty[(int)Kurt.Inventory.Difficulty];
         }
@@ -695,6 +695,7 @@ public sealed partial class ScriptRuntime
         }
 
         AlarmTicks = Math.Max(AlarmTicks - 1, 0);
+        AlarmEndedTicks = Math.Max(AlarmEndedTicks - 1, 0);
         CameraTrackTicks = Math.Max(CameraTrackTicks - 1, 0);
         Shake = 0f;
         UpdateBar();
@@ -708,7 +709,9 @@ public sealed partial class ScriptRuntime
         }
 
         // Kurt changes arena only through a connection of his (0x41c550); a teleport puts him anywhere.
-        var arena = CurrentArena.Length == 0 ? _space.ArenaAt(KurtPosition) ?? "" : CrossedArena(_previousKurtPosition, KurtPosition);
+        // The 1996 demo's connections have no direction: there the arenas' boxes decide.
+        var arena = IsBeta ? BetaArena()
+            : CurrentArena.Length == 0 ? _space.ArenaAt(KurtPosition) ?? "" : CrossedArena(_previousKurtPosition, KurtPosition);
         if (arena.Length != 0 && arena != CurrentArena)
         {
             // Crossing into another arena: the one left stays as the active second arena.
@@ -1434,6 +1437,7 @@ public sealed partial class ScriptRuntime
     public void Kill(MdkObject obj, float yaw = 0f)
     {
         obj.Health = 0;
+        NoteAlarmEnded(obj);
         if (obj.DeathScript == 0)
         {
             Explode(obj, yaw);
@@ -1834,6 +1838,11 @@ public sealed partial class ScriptRuntime
         var direction = Heading(origin, center);
         Stats.ShotHits++;
         obj.HitEvent = -1;
+        if (IsBeta && part < 0 && BetaHitPart(obj, origin) is var hit and >= 0)
+        {
+            obj.HitEvent = hit + 1;
+        }
+
         if (part >= 0 && part < obj.PartHealth.Length)
         {
             obj.PartHealth[part] -= damage;
@@ -1986,7 +1995,7 @@ public sealed partial class ScriptRuntime
             return null;
         }
 
-        var triangle = bsp.Segment(from, to, Bsp.SegmentMode.Any, out var point);
+        var triangle = bsp.Segment(from, to, Bsp.SegmentMode.Any, out var point, Bsp.Clip.PassesThrough);
         return triangle == Bsp.None ? null : new RayHit(point, TriangleNormal(bsp.Arena, triangle), arena, TriangleGroup(bsp.Arena, triangle));
     }
 
@@ -2589,7 +2598,7 @@ public sealed partial class ScriptRuntime
                 continue;
             }
 
-            var triangle = bsp.Segment(from, to, Bsp.SegmentMode.Any, out var point);
+            var triangle = bsp.Segment(from, to, Bsp.SegmentMode.Any, out var point, Bsp.Clip.PassesThrough);
             var distance = Vector3.DistanceSquared(from, point);
             if (triangle == Bsp.None || distance >= bestDistance)
             {
@@ -2800,6 +2809,12 @@ public sealed partial class ScriptRuntime
         if (offset == 0)
         {
             return null;
+        }
+
+        // The 1996 demo's scripts point at animations in the file.
+        if (IsBeta)
+        {
+            return Cmi.GetBetaAnimation(offset);
         }
 
         var bytes = Cmi.Bytes;

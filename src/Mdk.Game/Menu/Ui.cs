@@ -23,6 +23,8 @@ public sealed class Ui(MdkData data, Window window, Renderer renderer, AudioDevi
     public string UserFolder => userFolder;
     public Fti Fti { get; } = Fti.Load(data.PathOf("MISC/MDKFONT.FTI"));
     public ScreenView View { get; } = new(renderer);
+    /// <summary>The 1996 demo, when it's found (its levels are extras).</summary>
+    public BetaDemo? Beta { get; } = BetaDemo.Find(data);
 
     /// <summary>The settings changed: applied, and saved.</summary>
     public void ApplySettings()

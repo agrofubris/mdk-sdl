@@ -37,7 +37,8 @@ makes a full save of the level, and the Score-O-matic spins its heads. Each aren
 the original's fades, scripts animate textures, switch the sky and film cutscenes, sniper rounds
 leave bullet holes, and ropes, twisters' ribbons and the glass panes' outlines are drawn. An
 enhanced look (Options, Graphics) filters the textures, lights the levels with a sun and its
-shadows, and adds ambient occlusion, a little glow and a haze; anti-aliasing smooths the edges. The
+shadows, and adds ambient occlusion, a little glow and a haze; anti-aliasing smooths the edges. The three
+levels of the 1996 beta demo play as extras ([below](#the-1996-beta-demo)). The
 [Godot port](https://github.com/nemo22/mdk-godot) is more complete for now.
 
 ## Progress
@@ -67,7 +68,16 @@ Windows x64, Linux x64 and macOS (Apple silicon): one executable each, `mdk.exe`
 [Building](#building)). It is played on Windows; the Linux and macOS builds are only built and
 started on CI so far. Put the program (or this folder) inside the MDK installation folder (for
 example `C:\GOG Games\MDK\mdk-sdl`), install MDK in the default GOG or Steam location, or set the
-`MDK_DATA_DIR` environment variable. On Linux and macOS copy the installed game's folder (from
+`MDK_DATA_DIR` environment variable, or name the folder in a file `mdk_paths.cfg` next to the
+program:
+
+```
+[paths]
+mdk="C:/GOG Games/MDK"
+beta="C:/Games/MDK (1996-08-06) (beta demo)"
+```
+
+On Linux and macOS copy the installed game's folder (from
 Windows, Wine or the GOG installer); file names match whatever their case. macOS keeps a downloaded
 program in quarantine: `xattr -d com.apple.quarantine mdk`.
 
@@ -77,9 +87,9 @@ mdk.exe
 
 - No option: the splash, then the main menu.
 - `--level=N`: play level N (3 to 8) at once, without the menu (the game plays them in the order
-  7, 6, 3, 4, 8, 5).
-- `--menu`: the main menu without the splash (`--splash` with it); `--options`, `--controls` open
-  those pages.
+  7, 6, 3, 4, 8, 5); 961, 963 and 966 are the 1996 demo's.
+- `--menu`: the main menu without the splash (`--splash` with it); `--options`, `--controls`,
+  `--beta-levels` open those pages.
 - `--stats=N`: the screens after level N (`--phase=1-4` starts at a page: 1 the Score-O-matic, 2
   the intermission, 3 the briefing, 4 the debriefing; `--counts=shots,hits,sniper,sniper
   hits,kills,enemies,heads`, `--towns=bits`); `--briefing=N` its briefing alone; `--end` the end
@@ -104,7 +114,8 @@ mdk.exe
   dies after 1 second), `--event=N` (a `special_event` after 1 second: 1 ends the level). After
   `--delay`: `--teleport=ARENA,x,y,z`, `--kill=TYPE` (kills the first object of that type),
   `--ride=TYPE` (Kurt on that walker), `--bomber[=drop]` (level 7: calls the `XE`, boards it, and
-  with `drop` drops a bomb once unlocked). With
+  with `drop` drops a bomb once unlocked), `--beta-teleport=N` (the 1996 demo's teleport N),
+  `--roll=left|right` (holds a roll of the demo's levels). With
   `--screenshot` but without `--level`, the screen shown after `--wait` seconds (menu,
   statistics...) is saved. `--soak[=seed]`: random but seeded keys on every screen (menu keys
   too when it starts in the menus), 0.1 s a frame; in a level Kurt is healed and problems print
@@ -122,8 +133,23 @@ Enter to use the item, Tab or [ ] to select it (or 1-5), the right mouse button 
 (the mouse wheel or PageUp/PageDown zoom, Tab or [ ] select the ammo), F1 for the flying camera (E/Q to go up and
 down), F2 for a full save, F12 for a screenshot, Esc for the pause menu (resume, options, main menu, quit). The bindings
 can be changed in Options, Controls. In the menus: the arrows or the mouse, Enter or a click, Esc
-back. Typing `TOOSCARYFORME` in a level turns gore on or off, `SEETHEWHOLEGAME` the main menu's
-debug keys (3-8 start that level, D the statistics with random counts).
+back; the mouse cursor is the original's arrow. Typing `TOOSCARYFORME` in a level turns gore on or
+off, `SEETHEWHOLEGAME` the main menu's debug keys (3-8 start that level, F the fall before LEVEL8,
+S the stream after LEVEL7, D the statistics with random counts).
+
+### The 1996 beta demo
+
+`MDKDEMO.EXE` of 6 August 1996, a non-interactive DOS demo, has three levels in earlier versions of
+the game's formats: the city (961), `HMO_1` (963) and `OLYM_1` (966). The port plays them (see the
+Godot port's [docs/beta96.md](https://github.com/nemo22/mdk-godot/blob/main/docs/beta96.md)). It
+isn't part of the port: you need your own unpacked copy, besides the retail game (menus, fonts and
+sprites come from it). Tell the port where it is (the folder with `TRAVERSE` and `MDKDEMO.EXE`):
+`beta` in `mdk_paths.cfg` (above), the `MDK_BETA_DIR` environment variable, or a folder `BETA96` or
+`MDK (1996-08-06) (beta demo)` in or next to the game's folder or the program's. The main menu then
+has a "Beta Levels" page; `--level=961` starts one at once (no briefing, fall or stream). They show
+the demo's Kurt and health display; Kurt dies as in the retail game, and no "Continue" is saved.
+Their own keys: Z and C roll left and right, T or Alt with a digit takes the demo's teleports (the
+city needs T + 4 to reach the top of `ARENA_4`); the sniper key puts the helmet on first.
 
 ## Building
 
@@ -176,6 +202,7 @@ sh tests/snapshot_test.sh
 sh tests/end_level_test.sh
 sh tests/visuals_test.sh
 sh tests/enhanced_test.sh
+sh tests/beta_test.sh
 sh tests/soak_test.sh short
 ```
 
@@ -183,6 +210,7 @@ sh tests/soak_test.sh short
 stream and menu with random keys and reports exceptions, hangs and `Soak problem` lines.
 `MDK_REFERENCE=<another build's mdk> sh tests/enhanced_test.sh` also checks that the original look
 is that build's, pixel for pixel.
+`tests/beta_test.sh` and the demo's unit test are skipped without the 1996 demo.
 
 ## Layout
 

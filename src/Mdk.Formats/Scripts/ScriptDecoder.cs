@@ -17,7 +17,7 @@ public readonly record struct Variable(int Kind, int Index);
 
 /// <summary>Decodes MDK script bytecode (<c>LEVELn.CMI</c>), like the Godot port's
 /// <c>script_decoder.gd</c> and <c>mdk_script_dis.py</c> (validated against every script).</summary>
-public sealed class ScriptDecoder(byte[] bytes)
+public sealed partial class ScriptDecoder(byte[] bytes)
 {
     public const int End = 0xFF;
     private const int FileBase = 4;
@@ -38,6 +38,11 @@ public sealed class ScriptDecoder(byte[] bytes)
         if (_cache.TryGetValue(pc, out var cached))
         {
             return cached;
+        }
+
+        if (_dialect == ScriptDialect.Beta1996)
+        {
+            return _cache[pc] = DecodeBeta(pc);
         }
 
         int opcode = bytes[pc];

@@ -59,7 +59,13 @@ public sealed record ViewerOptions(int Level, Vector3? Position, float? Yaw, flo
     /// <summary>The soak test's seed: random keys (<see cref="SoakKeys"/>) and checks (<see cref="SoakTest"/>) until the screenshot.</summary>
     public int? Soak { get; init; }
     public SoakRoute Route { get; init; }
+    /// <summary>After the delay: one of the 1996 demo's teleports, a roll held (tests).</summary>
+    public int? BetaTeleport { get; init; }
+    public BetaRoll? Roll { get; init; }
 }
+
+/// <summary>A roll of the 1996 demo's levels.</summary>
+public enum BetaRoll { Left, Right }
 
 public enum SoundMode { On, Muted }
 
@@ -120,6 +126,8 @@ public sealed class Viewer : IScreen
     private readonly CutsceneCamera _cutscene = new();
     private readonly FreeCamera _fly;
     private readonly PauseMenu _pause;
+    /// <summary>The 1996 demo, in its levels.</summary>
+    private readonly BetaDemo? _beta;
     private readonly bool _test;
     private bool _flying;
     private float _time;
@@ -139,16 +147,19 @@ public sealed class Viewer : IScreen
         _renderer = ui.Renderer;
         _audio = ui.Audio;
         var data = ui.Data;
-        _level = new LevelData(data, options.Level);
+        _beta = BetaDemo.IsBeta(options.Level) ? ui.Beta ?? throw new InvalidOperationException("The 1996 demo wasn't found") : null;
+        _level = _beta != null ? new LevelData(_beta, options.Level) : new LevelData(data, options.Level);
         var level = _level;
         var renderer = _renderer;
         var groups = new TriangleGroups();
         var graphics = ui.Settings.Graphics;
         _view = new LevelView(renderer, level, groups, EnhancedLook.Surfaces(graphics));
-        var bank = SoundBank.ForLevel(data, options.Level);
+        var bank = _beta != null ? SoundBank.ForBeta(_beta, options.Level) : SoundBank.ForLevel(data, options.Level);
         _mixer = new SoundMixer(_audio, bank.Get);
-        var cmi = Cmi.Load(data.PathOf($"TRAVERSE/LEVEL{level.Number}/LEVEL{level.Number}.CMI"));
-        _music = new LevelMusic(_mixer, cmi.ArenaMusic);
+        var cmi = _beta != null
+            ? _beta.LoadCmi(BetaDemo.LevelOf(options.Level))
+            : Cmi.Load(data.PathOf($"TRAVERSE/LEVEL{level.Number}/LEVEL{level.Number}.CMI"));
+        _music = new LevelMusic(_mixer, cmi.ArenaMusic) { Ambience = cmi.ArenaAmbience };
         renderer.Panorama = CreatePanorama(renderer, level.Dti) with { Sampling = EnhancedLook.Sky(graphics) };
         renderer.Lighting = graphics == Graphics.Enhanced ? EnhancedLook.Lighting(level.Dti) : null;
 
@@ -158,7 +169,9 @@ public sealed class Viewer : IScreen
             _space.Add(arena);
         }
 
+        // The 1996 demo's levels show its Kurt and its health display.
         var sprites = Bni.Load(data.PathOf("TRAVERSE/TRAVSPRT.BNI"));
+        _beta?.AddSprites(sprites);
         _sprite = new KurtSprite(renderer, sprites, level.Dti.Palette, EnhancedLook.Sprites(graphics));
         foreach (var name in KurtSprite.LevelAnimations)
         {
@@ -169,6 +182,7 @@ public sealed class Viewer : IScreen
         {
             Feet = options.Position ?? level.Dti.StartPosition + new Vector3(0f, 0f, StartDrop),
             Yaw = options.Yaw ?? level.Dti.StartAngle,
+            BetaMoves = _beta != null,
         };
 
         // The level starts in Kurt's arena, its music at once (0x41ba68: BSPShow(Kurt's)): the
@@ -306,6 +320,11 @@ public sealed class Viewer : IScreen
         }
 
         TypeCheats(input.Typed);
+        if (input.Digit != Input.NoDigit && input.IsDown(Key.Teleport))
+        {
+            BetaTeleport(input.Digit);
+        }
+
         if (input.WasPressed(MenuKey.Snapshot))
         {
             OpenSnapshot();
@@ -408,6 +427,36 @@ public sealed class Viewer : IScreen
         input.Hold(Key.Jump, started && options.Jump ? Input.State.Down : Input.State.Up);
         input.Hold(Key.Fire, started && options.Fire ? Input.State.Down : Input.State.Up);
         input.Hold(Key.UseItem, options.Use && _time >= UseStart && _time <= UseStart + UseTime ? Input.State.Down : Input.State.Up);
+        if (options.Roll is { } roll)
+        {
+            input.Hold(roll == BetaRoll.Left ? Key.RollLeft : Key.RollRight, started ? Input.State.Down : Input.State.Up);
+        }
+
+        if (options.BetaTeleport is { } teleport && started && _time - Step < options.Delay)
+        {
+            BetaTeleport(teleport);
+        }
+    }
+
+    /// <summary>The 1996 demo's teleports (<see cref="BetaDemo.LoadTeleports"/>), on a digit while T or
+    /// Alt is held (the digits alone pick items): the lines of this level's arenas, in order. The city
+    /// has no other way up to the top of <c>ARENA_4</c>.</summary>
+    private void BetaTeleport(int index)
+    {
+        if (_beta == null)
+        {
+            return;
+        }
+
+        var teleports = _beta.LoadTeleports().Where(t => _level.Arenas.Any(a => a.Name == t.Arena)).ToList();
+        if (index >= teleports.Count)
+        {
+            return;
+        }
+
+        var (arena, position) = teleports[index];
+        _scripts.TeleportKurt(arena, position, _kurt.Yaw);
+        Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"Teleport {index}: {arena} {position.X} {position.Y} {position.Z}"));
     }
 
     /// <summary>The tests' --die (Kurt is hurt to death) and --event (a special_event: 1 ends the level).</summary>

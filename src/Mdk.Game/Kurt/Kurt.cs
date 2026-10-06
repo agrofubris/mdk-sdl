@@ -18,7 +18,9 @@ namespace Mdk.Game.Kurt;
 public sealed partial class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.State, int> frameCount)
 {
     public enum State { Still, Idle, Run, Side, Turn, Jump, RunJump, Fall, Chute, Land, Shot, RunFire, Throw, Knocked, GetUp, Dead,
-        Slip, Slide, SlideFast, SlideBrake, Hang, HardLand }
+        Slip, Slide, SlideFast, SlideBrake, Hang, HardLand,
+        /// <summary>The 1996 demo's moves (Kurt.Beta.cs).</summary>
+        RollLeft, RollRight, HelmetOn, HelmetOff }
 
     public const float Ticks = 30f;
 
@@ -149,6 +151,12 @@ public sealed partial class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.S
 
         UpdateKnockDamage(delta);
         var turbo = input.IsDown(Key.Turbo);
+        if (InBetaMove)
+        {
+            UpdateBetaMove(delta);
+            return;
+        }
+
         if (UpdateSniper(input, turbo, delta) || UpdateSlide(input, delta))
         {
             return;
@@ -158,6 +166,11 @@ public sealed partial class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.S
         {
             // States from 800 on: no walking (damp_control).
             UpdateSpecial(delta);
+            return;
+        }
+
+        if (StartRoll(input))
+        {
             return;
         }
 
@@ -634,7 +647,7 @@ public sealed partial class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.S
     {
         var u = MathF.Abs(ForwardSpeed) / Ticks * 1.5f;
         var rate = u <= 1f ? 0.75f * u + 0.25f : 0.25f * u + 0.75f;
-        return ForwardSpeed < 0f ? -rate : rate;
+        return ForwardSpeed < 0f && !BackingUp ? -rate : rate;
     }
 
     private void SetState(State state)

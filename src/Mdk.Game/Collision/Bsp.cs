@@ -25,6 +25,10 @@ public sealed class Bsp(Arena arena)
         Floor,
     }
 
+    /// <summary>Whether a segment test stops at the triangles that only stop Kurt (<see cref="Arena.ClipFlag"/>):
+    /// the scripts' rays pass them.</summary>
+    public enum Clip { Stops, PassesThrough }
+
     /// <summary>A sweep's contact: the node (its plane) and triangle hit, the box centre there,
     /// and whether the sweep went on sliding from it.</summary>
     public readonly record struct Contact(int Node, int Triangle, Vector3 Point, bool Final);
@@ -45,6 +49,8 @@ public sealed class Bsp(Arena arena)
     private float _margin, _slideLimit, _tBest;
     private bool _canSlide, _slide;
     private int _hitTriangle, _hitNode;
+    /// <summary>The flags of the triangles the current segment test passes through.</summary>
+    private uint _passed = NotSolid;
 
     public Arena Arena { get; } = arena;
 
@@ -334,9 +340,10 @@ public sealed class Bsp(Arena arena)
     }
 
     /// <summary>The nearest triangle a segment crosses (front-to-back walk 0x421470), or <see cref="None"/>.</summary>
-    public int Segment(Vector3 a, Vector3 b, SegmentMode mode, out Vector3 point)
+    public int Segment(Vector3 a, Vector3 b, SegmentMode mode, out Vector3 point, Clip clip = Clip.Stops)
     {
         point = b;
+        _passed = clip == Clip.PassesThrough ? NotSolid | Arena.ClipFlag : NotSolid;
         if (Arena.Nodes.Length == 0)
         {
             return None;
@@ -484,7 +491,7 @@ public sealed class Bsp(Arena arena)
         var (ua, va) = abs.X >= abs.Y && abs.X >= abs.Z ? (1, 2) : abs.Y >= abs.Z ? (0, 2) : (0, 1);
         for (var t = first; t < first + count; t++)
         {
-            if ((Arena.TriangleFlags[t] & NotSolid) != 0)
+            if ((Arena.TriangleFlags[t] & _passed) != 0)
             {
                 continue;
             }

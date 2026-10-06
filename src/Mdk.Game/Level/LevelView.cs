@@ -268,6 +268,12 @@ public sealed class LevelView
         var bySurface = new Dictionary<Material, (Texture? Texture, List<int> Triangles)>();
         foreach (var t in group.Triangles)
         {
+            // The 1996 demo's triangles that only stop Kurt.
+            if ((arena.TriangleFlags[t] & arena.ClipFlag) != 0)
+            {
+                continue;
+            }
+
             var value = group.Material ?? arena.TriangleMaterials[t];
             var surface = _resolver.Resolve(value, arena.Materials, view.Palette, view.Archives, Pass.Solid);
             if (surface is not { } s)

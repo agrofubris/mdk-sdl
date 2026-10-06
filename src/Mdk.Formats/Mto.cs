@@ -23,7 +23,17 @@ public sealed class Mto
         }
     }
 
+    /// <summary>Arenas read from elsewhere (the 1996 demo's loose files, <see cref="BetaDemo"/>).</summary>
+    internal Mto() => _bytes = [];
+
     public static Mto Load(string path) => new(File.ReadAllBytes(path));
+
+    /// <summary>Adds an arena read from elsewhere.</summary>
+    internal void Add(Arena arena)
+    {
+        ArenaOffsets.Add(new(arena.Name, 0));
+        _arenas[arena.Name] = arena;
+    }
 
     public IEnumerable<string> ArenaNames => ArenaOffsets.Select(e => e.Key);
 

@@ -48,6 +48,23 @@ public sealed class LevelData
         }
     }
 
+    /// <summary>A level of the 1996 demo (961, 963, 966; <see cref="BetaDemo"/>): its arenas, then
+    /// its corridors.</summary>
+    public LevelData(BetaDemo beta, int number)
+    {
+        Number = number;
+        var level = BetaDemo.LevelOf(number);
+        Dti = beta.LoadDti(level);
+        Mto = beta.LoadMto(level);
+        LevelTextures = beta.LoadTextures(level);
+        Arenas.AddRange(Mto.ArenaNames.Select(Mto.GetArena));
+        Arenas.AddRange(beta.LoadCorridors(level));
+        foreach (var arena in Arenas.Where(a => BetaDemo.CheckNodes(a) != 0))
+        {
+            Console.WriteLine($"Warning: {arena.Name}: {BetaDemo.CheckNodes(arena)} BSP nodes don't hold their triangles");
+        }
+    }
+
     /// <summary>The palette an arena draws with: the level's, with the arena's colours (corridors
     /// borrow their arena's: <c>CHMO_1</c> from <c>HMO_1</c>).</summary>
     public Palette PaletteOf(Arena arena)
