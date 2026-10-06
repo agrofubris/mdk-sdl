@@ -65,6 +65,9 @@ public sealed class StreamScreen : IScreen
             $"Stream after LEVEL{level}: {kind}, turn {tube.MaxTurn}, radius {tube.MinRadius}-{tube.MaxRadius}, {_flight.LightCount} lights, ring {last} at {ring.X:0.000} {ring.Y:0.000} {ring.Z:0.000}"));
     }
 
+    /// <summary>Kurt's health in the stream (LEVEL5 starts with it).</summary>
+    public int Health => _flight.Health;
+
     /// <summary>Colours 0-63 are the system palette, 64-255 the stream's <c>PAL</c>.</summary>
     private Palette LoadPalette()
     {

@@ -49,6 +49,14 @@ public sealed class GameState
         Snapshot = save.Kind == SaveKind.Snapshot ? save.State : null;
     }
 
+    /// <summary>LEVEL5 after the Gunter stream: Kurt keeps the stream's health, not the pickups
+    /// (0x4325b0 clears the inventory).</summary>
+    public void EnterLastLevel(int health)
+    {
+        Level = LevelFlow.Next(Level);
+        Carry = new FallCarry(health, []);
+    }
+
     /// <summary>A light save of the level to play (health 100, as the original's).</summary>
     public SaveGame Save(SaveKind kind) =>
         new(kind, Level, SaveGame.FullHealth, Deaths, StrikeUsed, DateTime.Now.ToString("s"));

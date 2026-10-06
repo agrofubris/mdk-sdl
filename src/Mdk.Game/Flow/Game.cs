@@ -309,8 +309,8 @@ public sealed class Game : IDisposable
                 Handle(Event.Statistics);
                 break;
             case LevelFlow.After.LastLevel:
-                // LEVEL5 follows at once, after a save prompt (kind 3, "6").
-                _state.Level = LevelFlow.Next(level);
+                // LEVEL5 follows at once, after a save prompt (kind 3, "6"), with the stream's health.
+                _state.EnterLastLevel((_screen as Stream.StreamScreen)?.Health ?? SaveGame.FullHealth);
                 Show(() => new SavePromptScreen(_ui, _saves, _state.Save(SaveKind.LevelStart), LevelFlow.SaveName(_state.Level)));
                 break;
             default:

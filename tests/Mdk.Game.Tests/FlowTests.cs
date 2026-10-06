@@ -86,6 +86,18 @@ public class FlowTests
     }
 
     [Fact]
+    public void GunterStreamCarriesHealthOnly()
+    {
+        var state = new GameState { Level = 8 };
+
+        state.EnterLastLevel(37);
+
+        Assert.Equal(5, state.Level);
+        Assert.Equal(37, state.Carry?.Health);
+        Assert.Empty(state.Carry!.Pickups);
+    }
+
+    [Fact]
     public void SaveRoundTrip()
     {
         var save = new SaveGame(SaveKind.BeforeLevel, 4, 100, 2, true, "2026-10-06T10:00:00");
