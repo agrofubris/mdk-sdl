@@ -22,7 +22,7 @@ public readonly record struct HudState(
 
 /// <summary>The in-game HUD, drawn like the original (0x41e128) on the 360-high canvas: the health
 /// in the <c>SC_STAT</c> panel (bottom right, <c>SNIP_TXT</c> digits, blinking at 20 or less,
-/// 0x420830), the inventory for 2 seconds after it changes (5 slots at the bottom left, 0x46cce4),
+/// 0x420830), the inventory outside sniper mode (5 slots at the bottom left, 0x46cce4),
 /// the health bar of the object Kurt shoots at (top left, 0x41e3c8), the red and white flashes,
 /// the skull when he's dead, and the messages.
 /// <code>
@@ -35,8 +35,6 @@ public sealed class HudView
 {
     /// <summary>The super chain gun's item number: its slot shows the ticks left, never selected.</summary>
     public const int SuperChainGun = 6;
-    /// <summary>The inventory stays on screen this long after a change (0x574328, ticks).</summary>
-    private const int InventoryTicks = 60;
     private const int BlinkMask = 31;
     private const int BlinkOn = 16;
     private const int LowHealth = 20;
@@ -72,8 +70,6 @@ public sealed class HudView
     private readonly Vector4 _barFill;
     private readonly Vector4 _barFrame;
     private int _blink;
-    private int _inventoryTicks;
-    private string _lastInventory = "";
 
     public Messages Messages { get; }
     /// <summary>Sniper mode's screen, which replaces the HUD while it shows.</summary>
@@ -119,20 +115,10 @@ public sealed class HudView
     private static Vector4 Colour(Palette palette, int index) =>
         new Vector4(palette.Rgba[index * 4], palette.Rgba[index * 4 + 1], palette.Rgba[index * 4 + 2], byte.MaxValue) / byte.MaxValue;
 
-    /// <summary>Once a tick: the blink and the inventory's display time.</summary>
+    /// <summary>Once a tick: the blink.</summary>
     public void Tick(HudState state)
     {
         _blink = (_blink + 1) & BlinkMask;
-        var inventory = state.Selected + "|" + string.Join(",", state.Slots.Select(s => $"{s.Item}:{s.Count}"));
-        if (inventory != _lastInventory)
-        {
-            _lastInventory = inventory;
-            _inventoryTicks = InventoryTicks;
-        }
-        else if (_inventoryTicks > 0)
-        {
-            _inventoryTicks--;
-        }
     }
 
     public void Draw(HudState state)
@@ -164,10 +150,9 @@ public sealed class HudView
             DrawNumber(state.Health, centre);
         }
 
-        if (_inventoryTicks > 0)
-        {
-            DrawInventory(state);
-        }
+        // Always shown: 0x46cce4 resets its timer (0x574328) to 60 every frame outside sniper mode,
+        // so the super chain gun's ticks count down on screen while Kurt fires.
+        DrawInventory(state);
 
         DrawBar(state.BarHealth, state.BarMax);
         Messages.Draw(width);

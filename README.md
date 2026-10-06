@@ -195,6 +195,7 @@ sh tests/kurt_moves_test.sh
 sh tests/combat_test.sh
 sh tests/scripts_test.sh
 sh tests/sniper_test.sh
+sh tests/hud_test.sh
 sh tests/effects_test.sh
 sh tests/flow_test.sh
 sh tests/stream_test.sh
