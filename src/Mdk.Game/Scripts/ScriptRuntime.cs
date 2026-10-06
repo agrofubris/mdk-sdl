@@ -466,9 +466,15 @@ public sealed partial class ScriptRuntime
             return;
         }
 
-        if (arena != CurrentArena)
+        // Loaded (arena_load 0x419d00): Kurt's arena, or a new second one.
+        if (arena == CurrentArena)
+        {
+            PullDoors(arena);
+        }
+        else if (arena != SecondArena)
         {
             SecondArena = arena;
+            PullDoors(arena);
         }
 
         SecondActive = true;
@@ -489,7 +495,28 @@ public sealed partial class ScriptRuntime
         }
 
         SecondArena = arena;
+        PullDoors(arena);
         SecondActive = false;
+    }
+
+    /// <summary>An arena being loaded takes the doors leading to it from its neighbours (arena_load
+    /// 0x419d00), except from Kurt's arena and the active second one: e.g. loading DANT_2 from
+    /// CDANT_2 moves the door CDANT_1 → DANT_2 into DANT_2, where Kurt will meet it.</summary>
+    private void PullDoors(string arena)
+    {
+        foreach (var record in ArenaRecords(arena))
+        {
+            if (record.Type != LevelData.Connection || !_connections.TryGetValue((arena, record.Id), out var other)
+                || other == CurrentArena || (SecondActive && other == SecondArena))
+            {
+                continue;
+            }
+
+            foreach (var door in Objects.Where(o => !o.Dead && (o.Flags & MdkObject.FlagDoor) != 0 && o.Arena == other && o.Connects == arena))
+            {
+                ObjectBehaviors.MoveDoor(door);
+            }
+        }
     }
 
     /// <summary>Only Kurt's arena and the active second one are drawn, with their objects (0x41e344).
@@ -739,6 +766,7 @@ public sealed partial class ScriptRuntime
                 Kurt.EnterArena();
             }
 
+            SecondActive = true;
             CurrentArena = arena;
             ShowArena(arena);
         }
