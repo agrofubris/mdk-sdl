@@ -1137,10 +1137,20 @@ public sealed class ScriptVm(ScriptRuntime runtime, ScriptDecoder decoder)
                 }
 
                 break;
-            case 173: // teleport_player_keep: to another arena keeping the place, or by an offset
-                // The Godot port tests its first operand for emptiness, which a list never is: nothing happens.
-                // TODO teleport by ["", arena, x, y, z, yaw] once its meaning is checked
-                break;
+            case 173: // teleport_player_keep: as teleport_player, from Kurt's place and yaw (0x454556)
+            {
+                // [arena] keeps them; ["", arena, dx, dy, dz, dyaw] adds an offset (LEVEL4's
+                // CMEAT_6 lifts Kurt 1971 up into MEAT_7).
+                var keep = L(o[0]);
+                var name = (string)keep[0]!;
+                var shifted = name.Length == 0;
+                var offset = shifted ? V(keep, 2) : Vector3.Zero;
+                var turn = shifted ? F(keep[5]) : 0f;
+                runtime.TeleportKurt(shifted ? (string)keep[1]! : name, runtime.KurtPosition + offset, runtime.KurtYaw + turn);
+                obj.Restart = 0;
+                ClearStack(obj);
+                return Yield;
+            }
             case 103: // if_kurt_in_box: each axis between its min and max (corners given backwards never hold)
             {
                 var kurt = runtime.KurtPosition;
