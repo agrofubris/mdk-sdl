@@ -31,14 +31,17 @@ public enum Pass
     Overlay,
 }
 
+/// <summary>How a blended pass meets what's behind: mixed by alpha, or added (scaled by alpha).</summary>
+public enum Blend { Alpha, Add }
+
 /// <summary>What a mesh's vertices make: triangles (three each) or lines (two each, one pixel wide).</summary>
 public enum Primitive { Triangles, Lines }
 
 /// <summary>A surface: an index texture through a palette, a flat colour, or a mirror showing the
 /// panorama <paramref name="RowShift"/> rows lower or higher; <paramref name="Shading"/> picks the
-/// original look or the enhanced one.</summary>
+/// original look or the enhanced one; <paramref name="Blend"/> applies to the blended passes.</summary>
 public readonly record struct Material(int Texture, int Palette, Vector4 Colour, int FrameCount, Pass Pass, float RowShift = 0f,
-    Shading Shading = Shading.Original)
+    Shading Shading = Shading.Original, Blend Blend = Blend.Alpha)
 {
     public const int None = -1;
 
@@ -105,7 +108,8 @@ public sealed unsafe partial class Renderer : IDisposable
     /// look's ambient occlusion) or the sun's (its shadows, biased).</summary>
     private enum Output { Colour, Depth, Shadow }
 
-    private readonly record struct PipelineKey(string Program, Pass Pass, Primitive Primitive, Geometry Geometry, uint Samples, Output Output);
+    private readonly record struct PipelineKey(string Program, Pass Pass, Primitive Primitive, Geometry Geometry, uint Samples, Output Output,
+        Blend Blend = Blend.Alpha);
 
     /// <summary>A shader format and the extension of its embedded programs (shaders/palette.vs.dxil).</summary>
     private readonly record struct ShaderFormat(SDL_GPUShaderFormat Format, string Extension);
@@ -235,6 +239,10 @@ public sealed unsafe partial class Renderer : IDisposable
     /// <summary>Fills a rectangle of the canvas with a colour (alpha blends it).</summary>
     public void FillRect(RectangleF target, Vector4 colour) =>
         AddQuad(target, Vector2.Zero, Vector2.Zero, Material.Flat(colour, Pass.Overlay));
+
+    /// <summary>Adds a colour, scaled by its alpha, to a rectangle of the canvas (clamped at white).</summary>
+    public void AddRect(RectangleF target, Vector4 colour) =>
+        AddQuad(target, Vector2.Zero, Vector2.Zero, Material.Flat(colour, Pass.Overlay) with { Blend = Blend.Add });
 
     /// <summary>A rectangle's outline, <paramref name="width"/> units thick, inside it.</summary>
     public void FrameRect(RectangleF target, float width, Vector4 colour)
@@ -367,7 +375,7 @@ public sealed unsafe partial class Renderer : IDisposable
 
     private SDL_GPUGraphicsPipeline* CreatePipeline(PipelineKey key)
     {
-        var (program, pass, primitive, geometry, samples, output) = key;
+        var (program, pass, primitive, geometry, samples, output, blend) = key;
         var vertexShader = LoadShader(program + ".vs", SDL_GPUShaderStage.SDL_GPU_SHADERSTAGE_VERTEX, 0);
         var fragmentShader = LoadShader(program + ".ps", SDL_GPUShaderStage.SDL_GPU_SHADERSTAGE_FRAGMENT, SamplerCount(program));
         var bufferDescription = new SDL_GPUVertexBufferDescription
@@ -388,7 +396,7 @@ public sealed unsafe partial class Renderer : IDisposable
             {
                 enable_blend = blended,
                 src_color_blendfactor = SDL_GPUBlendFactor.SDL_GPU_BLENDFACTOR_SRC_ALPHA,
-                dst_color_blendfactor = SDL_GPUBlendFactor.SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+                dst_color_blendfactor = blend == Blend.Add ? SDL_GPUBlendFactor.SDL_GPU_BLENDFACTOR_ONE : SDL_GPUBlendFactor.SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
                 color_blend_op = SDL_GPUBlendOp.SDL_GPU_BLENDOP_ADD,
                 src_alpha_blendfactor = SDL_GPUBlendFactor.SDL_GPU_BLENDFACTOR_ONE,
                 dst_alpha_blendfactor = SDL_GPUBlendFactor.SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
@@ -681,7 +689,7 @@ public sealed unsafe partial class Renderer : IDisposable
         var material = command.Material;
         var mode = ModeOf(command);
         var program = material.Pass == Pass.Mirror ? "mirror" : mode != null ? "enhanced" : "palette";
-        SDL_BindGPUGraphicsPipeline(pass, Pipeline(new PipelineKey(program, material.Pass, command.Primitive, Geometry.Mesh, _passSamples, Output.Colour)));
+        SDL_BindGPUGraphicsPipeline(pass, Pipeline(new PipelineKey(program, material.Pass, command.Primitive, Geometry.Mesh, _passSamples, Output.Colour, material.Blend)));
 
         var binding = new SDL_GPUBufferBinding { buffer = (SDL_GPUBuffer*)_buffers[command.Mesh] };
         SDL_BindGPUVertexBuffers(pass, 0, &binding, 1);

@@ -52,6 +52,12 @@ echo "$OUT" | grep "^Stream\|^Menu"
 echo "$OUT" | grep -q "^Stream: Kurt died at segment 40,"; check "death in the Gunter tube" $?
 echo "$OUT" | grep -q "^Menu:"; check "menu after death" $?
 
+# Then red is added to the scene as it darkens (0x4352ac): not one flat colour.
+rm -f "$SHOT"
+run --stream=8 --health=1 --wait=7.9 > /dev/null
+VALUES=$(tail -c +55 "$SHOT" 2>/dev/null | od -An -v -tu1 | tr -s ' ' '\n' | sort -u | wc -l)
+[ "$VALUES" -ge 16 ]; check "red added to the dying scene" $?
+
 rm -f "$SHOT"
 [ $FAILED = 0 ] && echo PASSED && exit 0
 echo FAILED

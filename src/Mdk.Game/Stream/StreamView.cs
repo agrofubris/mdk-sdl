@@ -12,7 +12,7 @@ namespace Mdk.Game.Stream;
 /// the translucent tube far to near, the lights and the planet, the health box and the fade.
 /// <code>
 ///   background quad (far) ─► Kurt, Bones, bonus / Gunter ─► tube (blended, per segment) ─► lights
-///   ─► canvas: health box, fade (red, white, black)
+///   ─► canvas: health box, fade (red added, white, black)
 /// </code>
 /// The tube's vertex colours are ramp indices: an identity index texture is looked up through a
 /// palette holding the ramp twice (1-64, 65-128), so that a triangle across the ramp's wrap
@@ -391,14 +391,14 @@ public sealed class StreamView
     private void DrawImage(Image image, RectangleF source, RectangleF target) =>
         _renderer.DrawImage(image.Texture, _paletteId, image.Size, source, target, Vector4.One);
 
-    /// <summary>The fade over everything: red (❓ added in the original, blended here), then towards
-    /// white, then darkened.</summary>
+    /// <summary>The fade over everything: red added (0x4352ac: R + red, green and blue kept), then
+    /// towards white, then darkened.</summary>
     private void DrawFade(Fade fade)
     {
         var screen = new RectangleF(0f, 0f, _renderer.CanvasWidth, Renderer.CanvasHeight);
         if (fade.Red > 0f)
         {
-            _renderer.FillRect(screen, new Vector4(1f, 0f, 0f, fade.Red));
+            _renderer.AddRect(screen, new Vector4(1f, 0f, 0f, fade.Red));
         }
 
         if (fade.Whiten < 1f)
