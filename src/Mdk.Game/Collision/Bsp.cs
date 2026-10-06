@@ -161,6 +161,13 @@ public sealed class Bsp(Arena arena)
             return;
         }
 
+        // Moving away though dB ≤ dA: rounding of a tiny move far from the origin (1e-5 at y 2648).
+        // The contact would lie far behind the start (5 units, inside the rock).
+        if (t < 0f)
+        {
+            return;
+        }
+
         _p = _a + t * _d;
         var (first, count) = dA < 0f ? (n.BackFirst, n.BackCount) : (n.FrontFirst, n.FrontCount);
         var triangle = TestTriangles(_p, n, first, count);
