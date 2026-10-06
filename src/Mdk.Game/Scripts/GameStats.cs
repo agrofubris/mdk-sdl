@@ -27,6 +27,9 @@ public sealed class GameStats
     public int TownFlags;
     public bool StrikeUsed;
 
+    /// <summary>Whether an object type counts as an enemy (any case).</summary>
+    public static bool IsEnemy(string type) => EnemyTypes.Contains(type.ToUpperInvariant());
+
     /// <summary>An enemy created (0x43bc20) or killed by Kurt (0x43357c).</summary>
     public void CountEnemy(string type, Kill kill)
     {

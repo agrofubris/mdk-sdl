@@ -134,6 +134,11 @@ public sealed partial class Kurt
     /// <summary>Damage by the difficulty, its red flash, and the knock damage (0x46a77c).</summary>
     private void Damage(int damage)
     {
+        if (Mortality == Mortality.God)
+        {
+            return;
+        }
+
         damage = Scaled(damage, Inventory.Difficulty);
         if (damage > 0)
         {

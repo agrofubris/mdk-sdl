@@ -117,7 +117,8 @@ mdk.exe
   `--delay`: `--teleport=ARENA,x,y,z`, `--kill=TYPE` (kills the first object of that type),
   `--ride=TYPE` (Kurt on that walker), `--bomber[=drop]` (level 7: calls the `XE`, boards it, and
   with `drop` drops a bomb once unlocked), `--beta-teleport=N` (the 1996 demo's teleport N),
-  `--roll=left|right` (holds a roll of the demo's levels). With
+  `--roll=left|right` (holds a roll of the demo's levels), `--console="pos;god"` (opens the
+  console and runs those commands). With
   `--screenshot` but without `--level`, the screen shown after `--wait` seconds (menu,
   statistics...) is saved. `--soak[=seed]`: random but seeded keys on every screen (menu keys
   too when it starts in the menus), 0.1 s a frame; in a level Kurt is healed and problems print
@@ -133,11 +134,33 @@ Controls: W/S or Up/Down to run, A/D to strafe, the mouse or Left/Right to turn,
 (hold it while falling to open the chute; running into a ledge while falling grabs it), Shift for turbo, Ctrl or the left mouse button to fire,
 Enter or E to use the item, Tab, [ ] or the mouse wheel to select it (or 1-5), the right mouse button for sniper mode
 (the mouse wheel or PageUp/PageDown zoom, Tab or [ ] select the ammo), F1 for the flying camera (E/Q to go up and
-down), F2 for a full save, F12 for a screenshot, Esc for the pause menu (resume, options, main menu, quit). The bindings
+down), F2 for a full save, F3 for the debug overlay, the key left of 1 for the console, F12 for a screenshot, Esc for the pause menu (resume, options, main menu, quit). The bindings
 can be changed in Options, Controls (to any key, mouse button or wheel direction). In the menus: the arrows or the mouse, Enter or a click, Esc
 back; the mouse cursor is the original's arrow. Typing `TOOSCARYFORME` in a level turns gore on or
 off for the session, `SEETHEWHOLEGAME` the main menu's debug keys (3-8 start that level, F the fall before LEVEL8,
 S the stream after LEVEL7, D the statistics with random counts).
+
+### Console and debug overlay
+
+In a level, F3 shows the debug overlay: frames per second and the frame's time (render,
+physics, scripts, audio), draw calls and triangles, memory (GC heap, working set, collections),
+Kurt's position, yaw and state, the level, his arena and the objects. The key left of 1 (`` ` ``,
+`;` on a Slovak keyboard) opens the console: the game's output above a command line (Tab
+completes a command, Up/Down the history, PageUp/PageDown scroll, Esc closes). The game runs on,
+without the keys.
+
+| Command | |
+| --- | --- |
+| `map <level> [arena]` | play a level, from a floor of that arena |
+| `teleport`, `tp <x y z \| arena [x y z]>` | move Kurt (`tp HMO_4`, `tp 1 2 3`, `tp HMO_4,1,2,3`) |
+| `pos` | where Kurt is, as `--level`, `--at`, `--teleport` and `--console` options |
+| `noclip`, `god` | fly through everything (Space up, Q down); no damage |
+| `give all`, `give <SW_...>` | pickups (`give SW_HBOMB`) |
+| `health <n>`, `kill` | Kurt's health; kill the enemies of his arena |
+| `save <slot>`, `load <slot>` | a full save (as F2), a saved game |
+| `difficulty <easy\|normal\|hard>`, `look <original\|enhanced>`, `aa <off\|2x\|4x>` | settings (saved; the look reloads the level) |
+| `timescale <x>` | game time faster or slower (0 to 10) |
+| `fps`, `help`, `clear`, `quit` | the overlay, the commands, clear the log, quit |
 
 ### The 1996 beta demo
 
@@ -206,6 +229,7 @@ sh tests/end_level_test.sh
 sh tests/visuals_test.sh
 sh tests/enhanced_test.sh
 sh tests/beta_test.sh
+sh tests/console_test.sh
 sh tests/soak_test.sh short
 ```
 

@@ -28,6 +28,8 @@ public sealed class GameState
     public FallCarry? Carry;
     /// <summary>The level's state of a full save being loaded (JSON), until the level restores it.</summary>
     public string? Snapshot;
+    /// <summary>The console's map: the arena the next level starts in (on a floor of it), once.</summary>
+    public string? StartArena;
 
     /// <summary>The index (0-5) of a LEVELn number in the order of play, -1 if none.</summary>
     public static int IndexOf(int level) => Array.IndexOf(Order, level);

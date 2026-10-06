@@ -147,6 +147,11 @@ public sealed partial class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.S
 
         FadeFlashes(delta);
         CameraRoll.Settle(delta);
+        if (UpdateNoclip(input, delta))
+        {
+            return;
+        }
+
         if (Ride != null)
         {
             // No knock-down, chute or ledges while riding.
@@ -437,7 +442,7 @@ public sealed partial class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.S
     private void Fall(float delta)
     {
         FallMove(delta);
-        if (space.Bottom(Feet) is not { } bottom || Feet.Z > bottom + FallOutDepth)
+        if (space.Bottom(Feet) is not { } bottom || Feet.Z > bottom + FallOutDepth || Mortality == Mortality.God)
         {
             return;
         }
