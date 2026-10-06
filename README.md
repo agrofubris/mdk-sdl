@@ -1,7 +1,7 @@
 # MDK in C# and SDL3
 
 ![Status: work in progress](https://img.shields.io/badge/status-work%20in%20progress-orange)
-![Progress: about 75%](https://img.shields.io/badge/progress-~75%25-yellow)
+![Progress: about 77%](https://img.shields.io/badge/progress-~77%25-yellow)
 ![.NET 10](https://img.shields.io/badge/.NET-10-512bd4?logo=dotnet&logoColor=white)
 ![SDL3](https://img.shields.io/badge/SDL-3-blue)
 
@@ -22,7 +22,9 @@ original's box sweeps.
 aliens spawn, walk and fly their paths, doors open, pickups fall on their chutes. Kurt fires his
 chain gun, throws his items, gets hurt, knocked down and dies, and the HUD shows his health,
 inventory, messages and the target's health bar. Aliens blow up into pieces, sparks fly, slime
-bleeds and the fans lift Kurt. He snipes through the scope with every kind of round and calls
+bleeds and the fans lift Kurt. He grabs ledges and climbs them, slides down level 6's wind
+tunnels on his back, gets hurt by hard landings and dies falling out of the arena; the camera
+rolls, shakes and pushes him away from the walls behind him. He snipes through the scope with every kind of round and calls
 Bones' air strike. Only Kurt's arena and the one behind an open door are drawn and solid, as in
 the original. The game starts with the splash and the main menu (options, key bindings, saved
 games) and plays the levels in order with their loading screens, briefings, the end of each level,
@@ -41,7 +43,7 @@ makes a full save of the level, and the Score-O-matic spins its heads. The
 | Data formats: levels, textures, models, sprites, sounds, fonts, scripts, videos | █████████░ 90% |
 | Rendering: arenas, glass, sky, mirrors, Kurt's sprite, effects | ████████░░ 80% |
 | Collisions: the original's BSP | ████████░░ 80% |
-| Kurt: walking, turning, jumping, chute, camera, damage, death | ███████░░░ 70% |
+| Kurt: walking, turning, jumping, chute, ledges, slides, camera, damage, death | █████████░ 90% |
 | Sound mixer (the original's laws) and music | ██████░░░░ 60% |
 | Script VM, aliens, objects, doors, effects, fans | ███████░░░ 70% |
 | Weapons, items, sniper mode | ████████░░ 80% |
@@ -50,7 +52,7 @@ makes a full save of the level, and the Score-O-matic spins its heads. The
 | The fall and the stream between levels, rides | ████████░░ 80% |
 | Videos: the menu's FLC and slideshow, the end movies | ████████░░ 80% |
 | Playtesting and bug fixing | ██░░░░░░░░ 20% |
-| **Overall** | **about 75%** |
+| **Overall** | **about 77%** |
 
 The plan is in [docs/architecture.md](docs/architecture.md#roadmap).
 
@@ -107,7 +109,7 @@ are kept in `%LOCALAPPDATA%/mdk-sdl` (Linux: `~/.local/share/mdk-sdl`, macOS:
 folder). `LASTGAME` (written when Kurt dies) is deleted at start, as in the original.
 
 Controls: W/S or Up/Down to run, A/D to strafe, the mouse or Left/Right to turn, Space to jump
-(hold it while falling to open the chute), Shift for turbo, Ctrl or the left mouse button to fire,
+(hold it while falling to open the chute; running into a ledge while falling grabs it), Shift for turbo, Ctrl or the left mouse button to fire,
 Enter to use the item, Tab or [ ] to select it (or 1-5), the right mouse button for sniper mode
 (the mouse wheel or PageUp/PageDown zoom, Tab or [ ] select the ammo), F1 for the flying camera (E/Q to go up and
 down), F2 for a full save, F12 for a screenshot, Esc for the pause menu (resume, options, main menu, quit). The bindings
@@ -153,6 +155,7 @@ With the game data installed (without it `dotnet test` skips the tests that read
 dotnet test
 sh tests/screenshot_test.sh
 sh tests/kurt_test.sh
+sh tests/kurt_moves_test.sh
 sh tests/combat_test.sh
 sh tests/scripts_test.sh
 sh tests/sniper_test.sh
