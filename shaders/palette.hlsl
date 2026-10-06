@@ -1,5 +1,6 @@
 // Paletted surfaces in the original look: palette indices (R8) looked up in a 256x1 palette,
-// nearest texels, index 0 transparent. Flat-coloured surfaces skip the lookup.
+// nearest texels, index 0 transparent. Flat-coloured surfaces skip the lookup. The vertex colour
+// (white unless given; the stream's tube) multiplies the result.
 // SDL_GPU register spaces: vertex uniforms space1, fragment resources space2, fragment uniforms space3.
 
 #include "bindings.hlsli"
@@ -13,12 +14,14 @@ struct VertexIn
 {
     float3 position : TEXCOORD0;
     float2 uv : TEXCOORD1;
+    float4 colour : TEXCOORD2;
 };
 
 struct VertexOut
 {
     float4 position : SV_Position;
     float2 uv : TEXCOORD0;
+    float4 colour : TEXCOORD1;
 };
 
 VertexOut vs_main(VertexIn input)
@@ -26,6 +29,7 @@ VertexOut vs_main(VertexIn input)
     VertexOut output;
     output.position = mul(view_projection, float4(input.position, 1.0));
     output.uv = input.uv;
+    output.colour = input.colour;
     return output;
 }
 
@@ -48,7 +52,7 @@ float4 ps_main(VertexOut input) : SV_Target
 {
     if (textured == 0)
     {
-        return colour;
+        return colour * input.colour;
     }
 
     float2 uv = input.uv;
@@ -63,5 +67,5 @@ float4 ps_main(VertexOut input) : SV_Target
         discard;
     }
 
-    return float4(palette_texture.Load(int3(index, 0, 0)).rgb, 1.0) * colour;
+    return float4(palette_texture.Load(int3(index, 0, 0)).rgb, 1.0) * colour * input.colour;
 }

@@ -55,7 +55,7 @@ public sealed class StreamScreen : IScreen
         (_otherModel, _otherAnimation) = kind == StreamTube.Kind.Gunter ? ("GUNTA", "GUNTANIM") : ("SWH150", "SWHANM");
 
         var tube = new StreamTube(index, difficulty, kind, random);
-        _view = new StreamView(ui.Renderer, _bni, LoadPalette(), TextureArchive.Load(ui.Data.PathOf(Textures)), tube.Ramp);
+        _view = new StreamView(ui.Renderer, _bni, LoadPalette(), TextureArchive.Load(ui.Data.PathOf(Textures)));
         _flight = new Flight(tube, kind, difficulty, random, health, ClipOf(KurtAnimation), ClipOf(RescueAnimation), ClipOf(_otherAnimation));
 
         _ui.Play(Ui.SoundOf(_bni, WindSound, Looping.Forever));

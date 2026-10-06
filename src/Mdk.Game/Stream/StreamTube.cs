@@ -4,7 +4,7 @@ using Mdk.Game.Kurt;
 namespace Mdk.Game.Stream;
 
 /// <summary>A corner of the tube's wall: its place, its colour in the ramp (0-63) and its distance
-/// level (0-5, see <see cref="StreamTube.AlphaOf"/>).</summary>
+/// level (0-5, see <see cref="StreamTube.Rgba"/>).</summary>
 public readonly record struct TubeVertex(Vector3 Position, int Colour, int Level);
 
 /// <summary>The stream's tube (0x434838; stream_tube.gd): a ring buffer of 32 rings of 16 points,
@@ -51,7 +51,6 @@ public sealed class StreamTube
     private const double ShadeStep = 0.1;
     /// <summary>Vertex alpha (of 256) by distance from the tail (0x5744d8): levels 0-5 every 5 segments.</summary>
     private static readonly int[] Alpha = [0x5A, 0x55, 0x50, 0x3C, 0x28, 0x0F];
-    private const float AlphaUnit = 256f;
     private const int LevelSegments = 5;
     private static int FarLevel => Alpha.Length - 1;
     /// <summary>The ramp (0x491ccc): a start colour, then 8 keys of 8 steps.</summary>
@@ -274,8 +273,13 @@ public sealed class StreamTube
         }
     }
 
-    /// <summary>The alpha (0-1) of a distance level.</summary>
-    public static float AlphaOf(int level) => Alpha[level] / AlphaUnit;
+    /// <summary>A vertex's colour (0x436b00): its ramp colour and its level's alpha (of 256), the
+    /// RGBA table entry <c>64 level + colour</c>, Gouraud-blended across the triangle.</summary>
+    public (byte R, byte G, byte B, byte A) Rgba(TubeVertex v)
+    {
+        var (r, g, b) = _ramp[v.Colour];
+        return (r, g, b, (byte)Alpha[v.Level]);
+    }
 
     /// <summary>Ring <paramref name="n"/>'s distance level: 0 at the tail, one more every 5 segments.</summary>
     private int LevelOf(int n) => n > Tail ? Math.Min((n - Tail - 1) / LevelSegments, FarLevel) : 0;
