@@ -1028,10 +1028,46 @@ public sealed partial class ScriptRuntime
         return fired;
     }
 
-    /// <summary>special_130 (0x45d140): a bullet hole on the texture a sniper round hit.</summary>
-    // TODO port with sniper rounds (needs texture updates on the GPU)
+    /// <summary>special_130 (0x45d140): a bullet hole on the texture of the part a sniper round hit
+    /// last (<see cref="BulletHoles"/>); <see cref="TextureStamped"/> tells the drawing.</summary>
     public void StampBulletHole(MdkObject obj)
     {
+        if (obj.Model is not { } model || obj.ShotPart <= 0 || obj.ShotPart > model.PartList.Count)
+        {
+            return;
+        }
+
+        var part = model.PartList[obj.ShotPart - 1];
+        var vertices = obj.Pose()[obj.ShotPart - 1];
+        if (vertices.Length == 0)
+        {
+            return;
+        }
+
+        // The hit in the model's frame.
+        var local = Vector3.Transform(obj.ShotPoint - obj.Position, Matrix4x4.CreateRotationZ(-float.DegreesToRadians(obj.Yaw))) / obj.Scale;
+        Texture? TextureOf(int value) => value >= 0 && value < model.Materials.Count ? ArenaTexture(obj.Arena, model.Materials[value]) : null;
+        if (BulletHoles.Nearest(part, vertices, local, v => TextureOf(v) != null) is not { } face)
+        {
+            return;
+        }
+
+        var texture = TextureOf(part.TriangleMaterials[face.Triangle])!;
+        var w = face.Weights;
+        var uv = part.TriangleUvs[face.Triangle * 3] * w.X + part.TriangleUvs[face.Triangle * 3 + 1] * w.Y + part.TriangleUvs[face.Triangle * 3 + 2] * w.Z;
+        BulletHoles.Stamp(texture, uv, _sprites.GetImage(Option != 0 ? BulletHoles.Hole : BulletHoles.GorelessHole));
+        TextureStamped?.Invoke(texture);
+    }
+
+    /// <summary>A bullet hole changed a texture's pixels.</summary>
+    public event Action<Texture>? TextureStamped;
+
+    /// <summary>A texture as an arena's objects find it (their archives, see <see cref="LevelData.ArchivesOf"/>).</summary>
+    private Texture? ArenaTexture(string arena, string name)
+    {
+        var found = Level.Arenas.Find(a => a.Name == arena);
+        var archives = found != null ? Level.ArchivesOf(found) : [Level.LevelTextures];
+        return archives.Select(a => a.Textures.GetValueOrDefault(name)).FirstOrDefault(t => t != null);
     }
 
     /// <summary>The first active object of a type (the cutscenes' targets).</summary>

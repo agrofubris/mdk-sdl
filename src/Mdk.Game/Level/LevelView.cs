@@ -78,6 +78,9 @@ public sealed class LevelView
     /// <summary>The outlined edges built (glass frames).</summary>
     public int OutlineCount { get; private set; }
 
+    /// <summary>A texture's pixels changed (a bullet hole): uploaded again.</summary>
+    public void Refresh(Texture texture) => _resolver.Refresh(texture);
+
     /// <summary>Shows an arena Kurt can only reach by a teleport.</summary>
     public void Enter(string arena)
     {

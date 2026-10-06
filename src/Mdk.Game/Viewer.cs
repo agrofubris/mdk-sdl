@@ -192,8 +192,16 @@ public sealed class Viewer : IScreen
             _kurt.Collect(pickup);
         }
         _scripts.ArenaEntered += _view.Enter;
-        _objects = new ObjectView(renderer, new MaterialResolver(renderer, level.Dti));
-        _effects = new EffectsView(renderer, new MaterialResolver(renderer, level.Dti), level);
+        var objectLook = new MaterialResolver(renderer, level.Dti);
+        var effectsLook = new MaterialResolver(renderer, level.Dti);
+        _objects = new ObjectView(renderer, objectLook);
+        _effects = new EffectsView(renderer, effectsLook, level);
+        _scripts.TextureStamped += texture =>
+        {
+            _view.Refresh(texture);
+            objectLook.Refresh(texture);
+            effectsLook.Refresh(texture);
+        };
         _ropes = new RopeView(renderer, level);
         _sniper = new SniperView(renderer, _objects, level, _hud);
         _sniperTest = new SniperTest(options);
