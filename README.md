@@ -125,9 +125,8 @@ mdk.exe
 
 Settings (volumes, music filter, mouse, fullscreen, anti-aliasing, difficulty, graphics, gore, key
 bindings) and saved games
-are kept in `%LOCALAPPDATA%/mdk-sdl` (Linux: `~/.local/share/mdk-sdl`, macOS:
-`~/Library/Application Support/mdk-sdl`; `settings.cfg`, `saves/*.sav`; `MDK_USER_DIR` overrides the
-folder). `LASTGAME` (written when Kurt dies) is deleted at start, as in the original.
+are kept next to the executable (`settings.cfg`, `saves/*.sav`; `MDK_USER_DIR` overrides the
+folder). The first run copies them from where older builds kept them (`%LOCALAPPDATA%/mdk-sdl`). `LASTGAME` (written when Kurt dies) is deleted at start, as in the original.
 
 Controls: W/S or Up/Down to run, A/D to strafe, the mouse or Left/Right to turn, Space to jump
 (hold it while falling to open the chute; running into a ledge while falling grabs it), Shift for turbo, Ctrl or the left mouse button to fire,

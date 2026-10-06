@@ -53,7 +53,10 @@ public sealed class Game : IDisposable
 {
     private const int WindowWidth = 1280;
     private const int WindowHeight = 960;
+    /// <summary>Where older builds kept settings and saves, under the local data folder.</summary>
     private const string UserFolderName = "mdk-sdl";
+    /// <summary>The saves' folder in the user folder (<see cref="SaveGames"/>).</summary>
+    private const string SavesFolder = "saves";
     /// <summary>Overrides the user folder (settings and saves), for tests.</summary>
     private const string UserFolderVariable = "MDK_USER_DIR";
     private const int TownShift = 29;
@@ -84,8 +87,7 @@ public sealed class Game : IDisposable
     public Game(MdkData data, GameOptions options)
     {
         _options = options;
-        var folder = Environment.GetEnvironmentVariable(UserFolderVariable)
-            ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), UserFolderName);
+        var folder = Environment.GetEnvironmentVariable(UserFolderVariable) ?? UserFolder();
         _saves = SaveGames.In(folder);
 
         // The original deletes LASTGAME.SAV when it quits.
@@ -334,6 +336,33 @@ public sealed class Game : IDisposable
         _audio.StopAll();
         _renderer.Release(_scope);
         _screen = create();
+    }
+
+    /// <summary>Settings and saves live next to the executable (a portable install). The first run
+    /// moves over what an older build kept in the local data folder.</summary>
+    private static string UserFolder()
+    {
+        var folder = AppContext.BaseDirectory;
+        var old = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), UserFolderName);
+        if (File.Exists(Settings.PathIn(folder)) || !File.Exists(Settings.PathIn(old)))
+        {
+            return folder;
+        }
+
+        File.Copy(Settings.PathIn(old), Settings.PathIn(folder));
+        var oldSaves = Path.Combine(old, SavesFolder);
+        if (!Directory.Exists(oldSaves))
+        {
+            return folder;
+        }
+
+        var saves = Directory.CreateDirectory(Path.Combine(folder, SavesFolder)).FullName;
+        foreach (var file in Directory.GetFiles(oldSaves))
+        {
+            File.Copy(file, Path.Combine(saves, Path.GetFileName(file)), overwrite: false);
+        }
+
+        return folder;
     }
 
     public void Dispose()

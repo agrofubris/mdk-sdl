@@ -14,6 +14,7 @@ case "$1" in
 esac
 PATH="$PATH:/c/Program Files (x86)/Microsoft Visual Studio/Installer"
 export PATH
-rm -rf publish
+# Only the program is replaced: settings.cfg and saves/ next to it stay.
+rm -f publish/mdk publish/mdk.exe
 dotnet publish src/Mdk.App -c Release -r "$RID" -o publish "$@" || exit 1
 ls -la publish/mdk*

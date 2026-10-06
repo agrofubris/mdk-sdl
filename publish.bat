@@ -8,7 +8,8 @@ cd /d "%~dp0"
 rem The AOT linker finds the C++ tools through vswhere.
 set "PATH=%PATH%;%ProgramFiles(x86)%\Microsoft Visual Studio\Installer"
 
-if exist publish rmdir /s /q publish
+rem Only the program is replaced: settings.cfg and saves\ next to it stay.
+if exist publish\mdk.exe del publish\mdk.exe
 dotnet publish src\Mdk.App -c Release -r win-x64 -o publish %*
 if errorlevel 1 exit /b 1
 
