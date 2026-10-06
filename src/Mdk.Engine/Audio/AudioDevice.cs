@@ -101,7 +101,6 @@ public sealed unsafe class AudioDevice : IDisposable
     /// <summary>Opens the default output; muted or without one, sounds are mixed and dropped.</summary>
     public AudioDevice(Output output)
     {
-        Platform.NativeLibraries.Install();
         if (output == Output.Muted || !SDL_InitSubSystem(SDL_InitFlags.SDL_INIT_AUDIO))
         {
             return;

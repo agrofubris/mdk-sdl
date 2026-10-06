@@ -1,6 +1,6 @@
 #!/bin/sh
-# Builds the single native executable publish/mdk (mdk.exe on Windows; Native AOT, SDL3 and the
-# shaders embedded) for a runtime, this machine's by default. Other options go to dotnet publish.
+# Builds the native executable publish/mdk (mdk.exe on Windows; Native AOT, the shaders embedded)
+# and SDL3's library next to it for a runtime, this machine's by default. Other options go to dotnet publish.
 # Needs the C/C++ linker: the Visual Studio C++ tools on Windows (vswhere is put on the PATH for
 # the AOT linker), clang on Linux, Xcode on macOS.
 # Run from the project folder: sh tools/publish.sh [win-x64|linux-x64|osx-arm64|osx-x64] [options]

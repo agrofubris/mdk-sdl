@@ -17,7 +17,6 @@ public sealed unsafe class Window : IDisposable
     public Window(string title, int width, int height, Visibility visibility = Visibility.Shown)
     {
         Visibility = visibility;
-        NativeLibraries.Install();
         if (!SDL_Init(SDL_InitFlags.SDL_INIT_VIDEO | SDL_InitFlags.SDL_INIT_EVENTS))
         {
             throw new InvalidOperationException($"SDL_Init: {SDL_GetError()}");

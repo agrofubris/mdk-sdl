@@ -3,7 +3,7 @@
     <OutputType>Exe</OutputType>
     <RootNamespace>Mdk.App</RootNamespace>
     <AssemblyName>mdk</AssemblyName>
-    <!-- dotnet publish -c Release -r win-x64: one native exe (SDL3 and shaders embedded). -->
+    <!-- dotnet publish -c Release -r win-x64: one native exe (shaders embedded) and SDL3.dll. -->
     <PublishAot>true</PublishAot>
     <InvariantGlobalization>true</InvariantGlobalization>
     <OptimizationPreference>Speed</OptimizationPreference>

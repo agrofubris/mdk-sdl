@@ -19,7 +19,7 @@ Each layer talks only to the one below it.
     │   └──────────────► Mdk.Formats  (parsers: DTI, MTO, MTI, SNI, FTI, BNI, models; the 1996 demo's)
  Mdk.Engine   Render (Renderer: meshes, index textures, palettes, panorama)
     │         Audio (AudioDevice: software mixer of voices, music and effects buses, streamed voices, master limiter)
-    │         Platform (Window, Input: game keys (rebindable), menu keys, pointer, text, cursor, embedded SDL3)
+    │         Platform (Window, Input: game keys (rebindable), menu keys, pointer, text, cursor, SDL3)
  SDL3         SDL_GPU (Direct3D 12 / Vulkan / Metal), events
 ```
 
@@ -34,9 +34,8 @@ Each layer talks only to the one below it.
 
 ## Platforms
 
-One native executable per platform (Native AOT). It embeds SDL3's library for its runtime
-(`native/SDL3.dll`, `libSDL3.so`, `libSDL3.dylib`), unpacked once to the user's local data folder
-(`Platform/NativeLibraries.cs`), and the shaders.
+One native executable per platform (Native AOT) with the shaders embedded, and SDL3's library
+for its runtime next to it (`SDL3.dll`, `libSDL3.so`, `libSDL3.dylib`).
 
 ```
  shaders/*.hlsl ──dxc──────────► DXIL ───► Direct3D 12 (Windows)

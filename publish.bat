@@ -1,5 +1,5 @@
 @echo off
-rem Builds publish\mdk.exe: one native executable (Native AOT; SDL3 and the shaders embedded).
+rem Builds publish\mdk.exe (Native AOT, the shaders embedded) and SDL3.dll next to it.
 rem Needs the .NET 10 SDK and the Visual Studio C++ tools (the AOT linker).
 rem Usage: publish.bat [dotnet publish options]
 setlocal

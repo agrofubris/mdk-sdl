@@ -13,7 +13,6 @@ public class InputTests
 
     private static Input NewInput()
     {
-        NativeLibraries.Install();
         var input = new Input();
         input.BeginFrame();
         return input;
