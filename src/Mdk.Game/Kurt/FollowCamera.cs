@@ -1,18 +1,21 @@
 using System.Numerics;
 using Mdk.Engine.Platform;
 using Mdk.Engine.Render;
+using Mdk.Game.Collision;
 
 namespace Mdk.Game.Kurt;
 
 /// <summary>The third-person camera behind Kurt (<c>camera_update</c>). Its pitch (positive looks
 /// down) is the arena's (DTI), eased in, plus the mouse's look offset, a tilt in the air and
-/// −40 × the smoothed rise of the feet per tick (climbing looks up, falling down).
+/// −40 × the smoothed rise of the feet per tick (climbing looks up, falling down). It rolls with
+/// Kurt's moves (<see cref="CameraRoll"/>) and shakes (0x573aa8). It never gets closer: a wall or a
+/// solid object between Kurt's head and the camera pushes Kurt away instead (camera_clearance).
 /// <code>
-///        camera ●
-///                 \  pitch
+///        camera ●                   wall │    camera ●         wall │  camera ●
+///                 \  pitch               │  ◄ Kurt      ──►         │     ◄ ◄ Kurt (pushed d · n)
 ///   pivot 4.5 ─────● Kurt's feet + up
 /// </code></summary>
-public sealed class FollowCamera
+public sealed class FollowCamera(ArenaSpace? space = null)
 {
     /// <summary>Vertical field of view in degrees (the Godot port's, matching the original's view).</summary>
     public const float FieldOfView = 71.5f;
@@ -42,6 +45,20 @@ public sealed class FollowCamera
     private const float ClimbKeep = 0.97f;
     private const float ClimbReturn = 0.02f;
     private const float ClimbPitch = 40f;
+    /// <summary>The camera's clearance (0x417ee8): the line of sight from the head (feet + 5.5) is a
+    /// box of ±0.1; where Kurt is pushed needs a floor within 4 above or below his feet, else half
+    /// the push to a side along the wall.</summary>
+    private const float HeadHeight = 5.5f;
+    private static readonly Vector3 SightBox = new(0.1f);
+    private const float PushFloorRange = 4f;
+    private const float PushSide = 0.5f;
+    /// <summary>Screen shake: each tick above 1 the view turns by up to ±1.64 × the shake in pixels of
+    /// the 360-high view (at most ±19 across, ±59 up and down); it drains by 0.25 per tick.</summary>
+    private const float ShakeScale = 16384f * 0.0001f;
+    private static readonly Vector2 ShakeLimit = new(19f, 59f);
+    private const float ShakeDrain = 0.25f;
+    private const float ShakeMin = 1f;
+    private const float ViewHeight = 360f;
 
     private float _arenaPitch = DefaultPitch;
     private float _lookOffset;
@@ -50,11 +67,22 @@ public sealed class FollowCamera
     private float _climb;
     private float? _lastFeetZ;
     private float _climbTime;
+    private float _shake;
+    private float _shakeTime;
+    private readonly Random _random = new();
 
     public Vector3 Position { get; private set; }
     public Vector3 Forward { get; private set; } = Vector3.UnitY;
     public Vector3 Up { get; private set; } = Vector3.UnitZ;
     public Vector3 Right { get; private set; } = Vector3.UnitX;
+    /// <summary>The solid objects of Kurt's arena that block the view (flag 0x1000000): where the line
+    /// of sight first meets one of their parts, or its end.</summary>
+    public Func<Vector3, Vector3, Vector3>? ClipView;
+    /// <summary>The shake's offset this tick (pixels of the 360-high view).</summary>
+    public Vector2 ShakeOffset { get; private set; }
+
+    /// <summary>Shakes the screen at least this much (0x467f7c, opcode 135).</summary>
+    public void RaiseShake(float amount) => _shake = MathF.Max(_shake, amount);
 
     public void Update(Kurt kurt, float arenaPitch, Input input, float delta)
     {
@@ -91,9 +119,119 @@ public sealed class FollowCamera
         var pitch = float.DegreesToRadians(_arenaPitch + _lookOffset + _airPitch - ClimbPitch * _climb + kurt.CameraTilt);
         var facing = kurt.Facing;
         Position = Point(kurt.Feet, facing, pitch, kurt.CameraPivot);
+        if (space != null && !kurt.Sniping && !kurt.Frozen && kurt.Current != Kurt.State.Dead)
+        {
+            Position = Clear(kurt, space, Position);
+        }
+
         Forward = Vector3.Normalize(facing * MathF.Cos(pitch) - Vector3.UnitZ * MathF.Sin(pitch));
         Up = Vector3.Normalize(Vector3.Cross(Vector3.Cross(Forward, Vector3.UnitZ), Forward));
         Right = Vector3.Normalize(Vector3.Cross(Forward, Vector3.UnitZ));
+        UpdateShake(delta);
+        Turn(ShakeOffset * float.DegreesToRadians(FieldOfView) / ViewHeight, float.DegreesToRadians(kurt.CameraRoll.Roll));
+    }
+
+    /// <summary>Turns the view by the shake (radians across and up), then rolls it: a positive roll
+    /// turns its up towards its right.</summary>
+    private void Turn(Vector2 shake, float roll)
+    {
+        if (shake != Vector2.Zero)
+        {
+            Forward = Vector3.Normalize(Forward + Right * MathF.Tan(shake.X) + Up * MathF.Tan(shake.Y));
+            Right = Vector3.Normalize(Vector3.Cross(Forward, Up));
+            Up = Vector3.Normalize(Vector3.Cross(Right, Forward));
+        }
+
+        if (roll == 0f)
+        {
+            return;
+        }
+
+        var (up, right) = (Up, Right);
+        Up = up * MathF.Cos(roll) + right * MathF.Sin(roll);
+        Right = right * MathF.Cos(roll) - up * MathF.Sin(roll);
+    }
+
+    /// <summary>A new random offset each tick while the shake is above 1; it drains by 0.25 a tick.</summary>
+    private void UpdateShake(float delta)
+    {
+        if (_shake <= 0f)
+        {
+            ShakeOffset = Vector2.Zero;
+            return;
+        }
+
+        _shakeTime += delta * Kurt.Ticks;
+        while (_shakeTime >= 1f)
+        {
+            _shakeTime -= 1f;
+            ShakeOffset = Vector2.Zero;
+            if (_shake > ShakeMin)
+            {
+                var amplitude = _shake * ShakeScale;
+                var offset = new Vector2(Random(amplitude), Random(amplitude));
+                ShakeOffset = Vector2.Round(Vector2.Clamp(offset, -ShakeLimit, ShakeLimit));
+            }
+
+            _shake -= ShakeDrain;
+            if (_shake < ShakeDrain)
+            {
+                _shake = 0f;
+            }
+        }
+    }
+
+    private float Random(float amplitude) => (_random.NextSingle() * 2f - 1f) * amplitude;
+
+    /// <summary>The camera's clearance (camera_clearance 0x417ee8): a wall between Kurt's head and the
+    /// camera pushes Kurt d · n away from it (d: how far the camera is past it, n: its horizontal
+    /// normal towards him) if there's floor there (or half of d to a side); then the solid objects in
+    /// the way push him by what they cut off. The camera moves as far as Kurt did.</summary>
+    private Vector3 Clear(Kurt kurt, ArenaSpace arenas, Vector3 camera)
+    {
+        var head = kurt.Feet + Vector3.UnitZ * HeadHeight;
+        if (arenas.Sight(head, camera, SightBox) is var (point, plane))
+        {
+            var normal = new Vector2(plane.Normal.X, plane.Normal.Y);
+            if (plane.Distance(head) < 0f)
+            {
+                normal = -normal;
+            }
+
+            var d = Vector2.Distance(new Vector2(camera.X, camera.Y), new Vector2(point.X, point.Y));
+            if (Push(kurt, arenas, normal * d, new Vector2(normal.Y, -normal.X) * (d * PushSide)) is { } push)
+            {
+                camera += kurt.Shove(new Vector3(push, 0f));
+            }
+        }
+
+        if (ClipView == null)
+        {
+            return camera;
+        }
+
+        var end = ClipView(kurt.Feet + Vector3.UnitZ * HeadHeight, camera);
+        return camera + kurt.Shove(end - camera);
+    }
+
+    /// <summary>The push, or a push to a side, with a floor under it (in the air: the push), or null.</summary>
+    private static Vector2? Push(Kurt kurt, ArenaSpace arenas, Vector2 push, Vector2 side)
+    {
+        if (!kurt.OnFloor)
+        {
+            return push;
+        }
+
+        foreach (var offset in (ReadOnlySpan<Vector2>)[push, push + side, push - side])
+        {
+            var at = kurt.Feet + new Vector3(offset, 0f);
+            if (arenas.Crosses(at + Vector3.UnitZ * PushFloorRange, at - Vector3.UnitZ * PushFloorRange))
+            {
+                return offset;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>The bomber's view (0x4183f0): straight down from <paramref name="height"/> above
