@@ -59,6 +59,12 @@ echo "$DOOR"
 echo "$DOOR" | grep -q "door 51$"; check "door opens" $?
 echo "$OUT" | grep "^Profile 3s" | grep -q "second CDANT_1 (active)"; check "corridor behind the door shown" $?
 
+# Level 4: the end of corridor CMEAT_6 (a box at y 13585-13590) lifts Kurt into MEAT_7, 1971 higher
+# (teleport_player_keep, opcode 173: his place plus 130, 845, 1971).
+OUT=$(run --level=4 --at=-125,13620,-1975,270 --delay=0.5 --walk=2 --wait=4)
+echo "$OUT" | grep "^Kurt at"
+echo "$OUT" | grep "^Kurt at" | grep -q " arena MEAT_7 "; check "corridor lifts Kurt into MEAT_7" $?
+
 [ $FAILED = 0 ] && echo PASSED && exit 0
 echo FAILED
 exit 1
