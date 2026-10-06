@@ -106,6 +106,8 @@ mdk.exe
 - `--mute`: no sound.
 - `--enhanced`, `--original`: the enhanced or the original look instead of the settings' (not
   saved).
+- `--bloodyes`, `--nobloodno`: gore on or off instead of the settings' (not saved; the original's
+  `-bloodyes`, `-nobloodno`).
 - Tests: `--screenshot=file.bmp` (after `--wait=seconds` of game time, then quit),
   `--walk=seconds`, `--delay=seconds` (held keys start later), `--jump`, `--fire`, `--give=SW_HBOMB,...` (pickups to start with), `--use`
   (uses the item after 1 second), `--profile` (prints the objects of Kurt's arena every second),
@@ -134,7 +136,7 @@ Enter or E to use the item, Tab, [ ] or the mouse wheel to select it (or 1-5), t
 down), F2 for a full save, F12 for a screenshot, Esc for the pause menu (resume, options, main menu, quit). The bindings
 can be changed in Options, Controls (to any key, mouse button or wheel direction). In the menus: the arrows or the mouse, Enter or a click, Esc
 back; the mouse cursor is the original's arrow. Typing `TOOSCARYFORME` in a level turns gore on or
-off, `SEETHEWHOLEGAME` the main menu's debug keys (3-8 start that level, F the fall before LEVEL8,
+off for the session, `SEETHEWHOLEGAME` the main menu's debug keys (3-8 start that level, F the fall before LEVEL8,
 S the stream after LEVEL7, D the statistics with random counts).
 
 ### The 1996 beta demo

@@ -34,6 +34,12 @@ echo "$OUT" | grep -q "^Menu: New Game | Level: 1 | Saved Game | Options | Quit$
 OUT=$(run --menu --options --wait=1)
 echo "$OUT" | grep -q "^Menu: Master volume: 80 | .* | Gore: On | Controls | Back$"; check "options page" $?
 
+# -nobloodno / -bloodyes (not saved) set gore.
+OUT=$(run --menu --options --nobloodno --wait=1)
+echo "$OUT" | grep -q "| Gore: Off | Controls | Back$"; check "--nobloodno" $?
+OUT=$(run --menu --options --bloodyes --wait=1)
+echo "$OUT" | grep -q "| Gore: On | Controls | Back$"; check "--bloodyes" $?
+
 OUT=$(run --stats=7 --counts=120,60,10,5,8,20,3 --phase=1 --wait=2)
 echo "$OUT" | grep "^Score"
 echo "$OUT" | grep -q "^Score-O-matic: 120/120, 50/100, 10/10, 50/100, 8/20, heads 3$"; check "Score-O-matic counts" $?
