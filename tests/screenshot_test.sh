@@ -1,7 +1,7 @@
 #!/bin/sh
 # Smoke test: every level renders a frame that isn't one flat colour.
 # Run from the project folder after `dotnet build`: sh tests/screenshot_test.sh
-MDK=src/Mdk.App/bin/Debug/net10.0/mdk.exe
+MDK=src/Mdk.App/bin/Debug/net10.0/mdk
 OUT=${TMPDIR:-/tmp}
 FAILED=0
 for LEVEL in 3 4 5 6 7 8; do

@@ -4,7 +4,7 @@
 # The expected numbers come from the Godot port (game/stream/stream.gd, stream_tube.gd) run headless
 # at 60 fps with its tube's rand() replaced by Watcom's.
 # Run from the project folder after `dotnet build`: sh tests/stream_test.sh
-MDK=src/Mdk.App/bin/Debug/net10.0/mdk.exe
+MDK=src/Mdk.App/bin/Debug/net10.0/mdk
 OUT_DIR=${TMPDIR:-/tmp}
 SHOT=$OUT_DIR/mdk_stream.bmp
 FAILED=0

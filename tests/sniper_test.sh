@@ -5,7 +5,7 @@
 # view. The Godot port, from the same spot (--level=3 --at=0,120,138.2,75.5 --delay=0.3
 # --sniper=1,9 --fire --profile=2): XG_1006 at 36 health after three bullets, as here with --fire.
 # Run from the project folder after `dotnet build`: sh tests/sniper_test.sh
-MDK=src/Mdk.App/bin/Debug/net10.0/mdk.exe
+MDK=src/Mdk.App/bin/Debug/net10.0/mdk
 SHOT=${TMPDIR:-/tmp}/mdk_sniper.bmp
 SPOT=--at=0,120,150,75.5
 # Godot's comparison starts just above the floor.

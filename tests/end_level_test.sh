@@ -4,7 +4,7 @@
 # about 5 s), then the view tilts up to (-60 - the arena's pitch 0) / 2 = -30° at 22.5°/s, then the
 # screen goes white (tests/flow_test.sh checks what follows).
 # Run from the project folder after `dotnet build`: sh tests/end_level_test.sh
-MDK=src/Mdk.App/bin/Debug/net10.0/mdk.exe
+MDK=src/Mdk.App/bin/Debug/net10.0/mdk
 SHOT=${TMPDIR:-/tmp}/mdk_end_level.bmp
 FAILED=0
 

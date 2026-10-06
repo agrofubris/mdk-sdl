@@ -4,7 +4,7 @@
 # (--level=3 --at=0,120,150,90 --fire --profile=N): debris pieces 19 at 7 s, 34 at 8 s; effects 41 at 10 s.
 # Level 8's GUNT_3 fan: Kurt put in its box rises with his chute open (Godot: z 49 at 3 s, K_CHUTEC).
 # Run from the project folder after `dotnet build`: sh tests/effects_test.sh
-MDK=src/Mdk.App/bin/Debug/net10.0/mdk.exe
+MDK=src/Mdk.App/bin/Debug/net10.0/mdk
 SHOT=${TMPDIR:-/tmp}/mdk_effects.bmp
 FAILED=0
 

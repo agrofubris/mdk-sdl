@@ -5,7 +5,7 @@
 # his health and pickups. Expected numbers from the Godot port (game/fall/fall.gd, run headless
 # with a probe printing the same values; --fixed-fps 60).
 # Run from the project folder after `dotnet build`: sh tests/fall_test.sh
-MDK=src/Mdk.App/bin/Debug/net10.0/mdk.exe
+MDK=src/Mdk.App/bin/Debug/net10.0/mdk
 OUT_DIR=${TMPDIR:-/tmp}
 SHOT=$OUT_DIR/mdk_fall.bmp
 MDK_USER_DIR=$OUT_DIR/mdk_fall_user

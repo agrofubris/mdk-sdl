@@ -1,9 +1,19 @@
 #!/bin/sh
-# Builds the single native executable publish/mdk.exe (Native AOT; SDL3 and the shaders are
-# embedded). Needs the Visual Studio C++ tools; vswhere is put on the PATH for the AOT linker.
-# Run from the project folder: sh tools/publish.sh
+# Builds the single native executable publish/mdk (mdk.exe on Windows; Native AOT, SDL3 and the
+# shaders embedded) for a runtime, this machine's by default. Other options go to dotnet publish.
+# Needs the C/C++ linker: the Visual Studio C++ tools on Windows (vswhere is put on the PATH for
+# the AOT linker), clang on Linux, Xcode on macOS.
+# Run from the project folder: sh tools/publish.sh [win-x64|linux-x64|osx-arm64|osx-x64] [options]
+case "$(uname -s)" in
+	MINGW* | MSYS* | CYGWIN*) RID=win-x64 ;;
+	Darwin) [ "$(uname -m)" = arm64 ] && RID=osx-arm64 || RID=osx-x64 ;;
+	*) RID=linux-x64 ;;
+esac
+case "$1" in
+	win-* | linux-* | osx-*) RID=$1; shift ;;
+esac
 PATH="$PATH:/c/Program Files (x86)/Microsoft Visual Studio/Installer"
 export PATH
 rm -rf publish
-dotnet publish src/Mdk.App -c Release -r win-x64 -o publish || exit 1
-ls -la publish/mdk.exe
+dotnet publish src/Mdk.App -c Release -r "$RID" -o publish "$@" || exit 1
+ls -la publish/mdk*

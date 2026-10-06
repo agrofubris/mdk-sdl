@@ -9,7 +9,7 @@
 #   unlocks the controls and Kurt drops a bomb. Godot: "bomber view 0.0, locked false, bombs 9",
 #   XBN_BOMB at (121, 2394, -53).
 # Run from the project folder after `dotnet build`: sh tests/rides_test.sh
-MDK=src/Mdk.App/bin/Debug/net10.0/mdk.exe
+MDK=src/Mdk.App/bin/Debug/net10.0/mdk
 SHOT=${TMPDIR:-/tmp}/mdk_rides.bmp
 FAILED=0
 

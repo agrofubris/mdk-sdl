@@ -4,7 +4,7 @@
 # (tests/snapshot_test.sh there): LEVEL7, 7 objects, Kurt at (0, 59, 3) after loading.
 # Saves go to a temporary user folder.
 # Run from the project folder after `dotnet build`: sh tests/snapshot_test.sh
-MDK=src/Mdk.App/bin/Debug/net10.0/mdk.exe
+MDK=src/Mdk.App/bin/Debug/net10.0/mdk
 OUT_DIR=${TMPDIR:-/tmp}
 SHOT=$OUT_DIR/mdk_snapshot.bmp
 MDK_USER_DIR=$OUT_DIR/mdk_snapshot_user

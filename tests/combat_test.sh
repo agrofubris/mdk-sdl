@@ -4,7 +4,7 @@
 # he throws flies, lands and blows up. The Godot port, from the same spot (--level=3
 # --at=0,120,150,90 --fire --profile=10): XG_1005 dead, Kurt in K_SHOT with 94 health.
 # Run from the project folder after `dotnet build`: sh tests/combat_test.sh
-MDK=src/Mdk.App/bin/Debug/net10.0/mdk.exe
+MDK=src/Mdk.App/bin/Debug/net10.0/mdk
 SHOT=${TMPDIR:-/tmp}/mdk_combat.bmp
 SPOT=--at=0,120,150,90
 FAILED=0
