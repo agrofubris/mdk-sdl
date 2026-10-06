@@ -31,6 +31,9 @@ public enum Pass
     Overlay,
 }
 
+/// <summary>What a mesh's vertices make: triangles (three each) or lines (two each, one pixel wide).</summary>
+public enum Primitive { Triangles, Lines }
+
 /// <summary>A surface: an index texture through a palette, a flat colour, or a mirror showing the
 /// panorama <paramref name="RowShift"/> rows lower or higher.</summary>
 public readonly record struct Material(int Texture, int Palette, Vector4 Colour, int FrameCount, Pass Pass, float RowShift = 0f)
@@ -110,7 +113,8 @@ public sealed unsafe partial class Renderer : IDisposable
     /// <summary>The program whose resource tells whether a format is embedded.</summary>
     private const string ShaderProbe = "shaders/palette.vs";
 
-    private readonly record struct DrawCommand(int Mesh, int First, int Count, Material Material, int Frame, Matrix4x4 World);
+    private readonly record struct DrawCommand(int Mesh, int First, int Count, Material Material, int Frame, Matrix4x4 World,
+        Primitive Primitive = Primitive.Triangles);
 
     /// <summary>The 2D canvas: <see cref="CanvasHeight"/> units high like the original's view, as
     /// wide as the window's aspect makes it; quads collected each frame into one dynamic mesh.</summary>
@@ -125,7 +129,7 @@ public sealed unsafe partial class Renderer : IDisposable
     private readonly SDL_GPUDevice* _device;
     private readonly ShaderFormat _shaderFormat;
     private readonly SDL_GPUTextureFormat _depthFormat;
-    private readonly Dictionary<Pass, IntPtr> _pipelines = [];
+    private readonly Dictionary<(Pass, Primitive), IntPtr> _pipelines = [];
     private readonly SDL_GPUGraphicsPipeline* _skyPipeline;
     private readonly SDL_GPUSampler* _repeatSampler;
     private readonly SDL_GPUSampler* _clampSampler;
@@ -158,7 +162,13 @@ public sealed unsafe partial class Renderer : IDisposable
         foreach (var pass in Enum.GetValues<Pass>())
         {
             var program = pass == Pass.Mirror ? "mirror" : "palette";
-            _pipelines[pass] = (IntPtr)CreatePipeline(program, pass, Geometry.Mesh);
+            _pipelines[(pass, Primitive.Triangles)] = (IntPtr)CreatePipeline(program, pass, Geometry.Mesh);
+        }
+
+        // Lines (outlines, ropes) take a palette colour; mirrors have none.
+        foreach (var pass in Enum.GetValues<Pass>().Where(p => p != Pass.Mirror))
+        {
+            _pipelines[(pass, Primitive.Lines)] = (IntPtr)CreatePipeline("palette", pass, Geometry.Mesh, Primitive.Lines);
         }
 
         _skyPipeline = CreatePipeline("sky", Pass.DoubleSided, Geometry.Screen);
@@ -339,7 +349,7 @@ public sealed unsafe partial class Renderer : IDisposable
         }
     }
 
-    private SDL_GPUGraphicsPipeline* CreatePipeline(string program, Pass pass, Geometry geometry)
+    private SDL_GPUGraphicsPipeline* CreatePipeline(string program, Pass pass, Geometry geometry, Primitive primitive = Primitive.Triangles)
     {
         var vertexShader = LoadShader(program + ".vs", SDL_GPUShaderStage.SDL_GPU_SHADERSTAGE_VERTEX, 0);
         var fragmentShader = LoadShader(program + ".ps", SDL_GPUShaderStage.SDL_GPU_SHADERSTAGE_FRAGMENT, 2);
@@ -380,7 +390,7 @@ public sealed unsafe partial class Renderer : IDisposable
                 vertex_attributes = attributes,
                 num_vertex_attributes = geometry == Geometry.Mesh ? 2u : 0u,
             },
-            primitive_type = SDL_GPUPrimitiveType.SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
+            primitive_type = primitive == Primitive.Lines ? SDL_GPUPrimitiveType.SDL_GPU_PRIMITIVETYPE_LINELIST : SDL_GPUPrimitiveType.SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
             rasterizer_state = new SDL_GPURasterizerState
             {
                 fill_mode = SDL_GPUFillMode.SDL_GPU_FILLMODE_FILL,
@@ -531,6 +541,10 @@ public sealed unsafe partial class Renderer : IDisposable
     public void Draw(int mesh, int firstVertex, int vertexCount, Material material, int frame, Matrix4x4 world) =>
         Queue.Add(new DrawCommand(mesh, firstVertex, vertexCount, material, frame, world));
 
+    /// <summary>Queues lines of a mesh (two vertices each) in a material's colour (not a mirror).</summary>
+    public void DrawLines(int mesh, int firstVertex, int vertexCount, Material material) =>
+        Queue.Add(new DrawCommand(mesh, firstVertex, vertexCount, material, 0, Matrix4x4.Identity, Primitive.Lines));
+
     /// <summary>Draws the queued batches (opaque first, then blended) and shows them. With
     /// <paramref name="screenshot"/>, also saves the frame as a BMP.</summary>
     public void Present(View view, Vector4 clearColour, string? screenshot = null)
@@ -641,7 +655,7 @@ public sealed unsafe partial class Renderer : IDisposable
     private void DrawOne(SDL_GPUCommandBuffer* commands, SDL_GPURenderPass* pass, DrawCommand command, View view)
     {
         var material = command.Material;
-        SDL_BindGPUGraphicsPipeline(pass, (SDL_GPUGraphicsPipeline*)_pipelines[material.Pass]);
+        SDL_BindGPUGraphicsPipeline(pass, (SDL_GPUGraphicsPipeline*)_pipelines[(material.Pass, command.Primitive)]);
 
         var binding = new SDL_GPUBufferBinding { buffer = (SDL_GPUBuffer*)_buffers[command.Mesh] };
         SDL_BindGPUVertexBuffers(pass, 0, &binding, 1);

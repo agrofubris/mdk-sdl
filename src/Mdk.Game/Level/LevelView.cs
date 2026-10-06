@@ -17,9 +17,10 @@ namespace Mdk.Game.Level;
 /// </code></summary>
 public sealed class LevelView
 {
-    /// <summary>Triangles of one surface; <paramref name="Animated"/> names a texture whose frame
-    /// the scripts set (opcode 133).</summary>
-    private readonly record struct Batch(int First, int Count, Material Material, string? Animated = null);
+    /// <summary>Triangles (or outlines) of one surface; <paramref name="Animated"/> names a texture
+    /// whose frame the scripts set (opcode 133).</summary>
+    private readonly record struct Batch(int First, int Count, Material Material, string? Animated = null,
+        Primitive Primitive = Primitive.Triangles);
 
     private sealed class GroupMesh(int mesh, List<Batch> batches, Vertex[] vertices)
     {
@@ -74,6 +75,9 @@ public sealed class LevelView
 
     public int TriangleCount { get; private set; }
 
+    /// <summary>The outlined edges built (glass frames).</summary>
+    public int OutlineCount { get; private set; }
+
     /// <summary>Shows an arena Kurt can only reach by a teleport.</summary>
     public void Enter(string arena)
     {
@@ -100,6 +104,12 @@ public sealed class LevelView
 
                 foreach (var batch in mesh.Batches)
                 {
+                    if (batch.Primitive == Primitive.Lines)
+                    {
+                        _renderer.DrawLines(mesh.Mesh, batch.First, batch.Count, batch.Material);
+                        continue;
+                    }
+
                     var frame = batch.Animated != null ? frames.FrameOf(view.Arena.Name, batch.Animated) : 0;
                     _renderer.Draw(mesh.Mesh, batch.First, batch.Count, batch.Material, frame);
                 }
@@ -223,6 +233,30 @@ public sealed class LevelView
         }
     }
 
+    /// <summary>The outlines of the flat-coloured surfaces, after the triangles, in their colour.</summary>
+    private void AddOutlines(Arena arena, Dictionary<Material, (Texture? Texture, List<int> Triangles)> bySurface,
+        List<Vertex> vertices, List<Batch> batches)
+    {
+        foreach (var (material, (texture, triangles)) in bySurface)
+        {
+            // Mirrors show the panorama: no colour for lines.
+            if (texture != null || material.Pass == Pass.Mirror)
+            {
+                continue;
+            }
+
+            var lines = Outlines.Of(arena, triangles);
+            if (lines.Count == 0)
+            {
+                continue;
+            }
+
+            OutlineCount += lines.Count / 2;
+            batches.Add(new Batch(vertices.Count, lines.Count, material, Primitive: Primitive.Lines));
+            vertices.AddRange(lines.Select(p => new Vertex(p, Vector2.Zero)));
+        }
+    }
+
     private GroupMesh? Build(ArenaView view, TriangleGroups.Group group)
     {
         var arena = view.Arena;
@@ -275,6 +309,7 @@ public sealed class LevelView
         }
 
         TriangleCount += vertices.Count / 3;
+        AddOutlines(arena, bySurface, vertices, batches);
         Vertex[] array = [.. vertices];
         return new GroupMesh(_renderer.CreateMesh(array), batches, array);
     }

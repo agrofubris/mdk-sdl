@@ -200,7 +200,7 @@ public sealed class Viewer : IScreen
         _fly = new FreeCamera { Pitch = options.Pitch };
         _flying = options.Fly;
         _pause = new PauseMenu(ui);
-        Console.WriteLine($"Level {options.Level}: {level.Arenas.Count} arenas, {_view.TriangleCount} triangles, loaded in {loading.ElapsedMilliseconds} ms");
+        Console.WriteLine($"Level {options.Level}: {level.Arenas.Count} arenas, {_view.TriangleCount} triangles, {_view.OutlineCount} outlines, loaded in {loading.ElapsedMilliseconds} ms");
 
         _test = options.Screenshot != null;
         ui.Window.CaptureMouse(_test ? Capture.Off : Capture.On);
