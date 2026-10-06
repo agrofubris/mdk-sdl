@@ -64,7 +64,8 @@ public sealed class SniperRounds(ScriptRuntime runtime)
     private const float MortarSettleTicks = 15f;
     private const float MortarStillSpeed = 0.5f;
     private const float MortarStillRise = 1f;
-    private const float MortarOffWall = 0.5f;
+    /// <summary>The half extents of the box the mortar sweeps through the arena (0x491f24).</summary>
+    private static readonly Vector3 MortarBox = new(0.5f);
     /// <summary>A guided mortar round stays alive until its path's last key.</summary>
     private const float GuidedLife = 99f;
 
@@ -414,14 +415,15 @@ public sealed class SniperRounds(ScriptRuntime runtime)
             return;
         }
 
-        if (runtime.Raycast(start, end) is not { } wall)
+        // A box swept as the original's, not a ray: faces seen from their back don't stop it.
+        if (runtime.Sweep(start, end, MortarBox) is not { } wall)
         {
             round.Position = end;
             return;
         }
 
-        var normal = Facing(wall.Normal, end - start);
-        round.Position = wall.Point + normal * MortarOffWall;
+        var normal = wall.Normal;
+        round.Position = wall.Point;
         _lastMortar = round;
         runtime.HitGroupAt(wall, 0, ScriptRuntime.HitShot, (int)Type.Mortar);
         if (round.Path != 0)

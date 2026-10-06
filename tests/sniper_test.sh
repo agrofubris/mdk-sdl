@@ -62,6 +62,15 @@ OUT=$(run "$LOW_SPOT" --fire --wait=2.5)
 profile "$OUT" 2 XG_1006
 profile "$OUT" 2 XG_1006 | grep -q "health 36 "; check "held fire: three hits (Godot: 36)" $?
 
+# LEVEL6 OLYM_3: three grunts taunt behind a glass wall. A mortar round lobbed through its small
+# opening passes the face behind it (seen from its back, as bsp_sweep_box does), lands by XG_1001
+# and goes off at 7 s: the grunts fall with their floor (gone at 11 s) and SW_KEY flies out.
+OUT=$(timeout 60 "$MDK" --level=6 --at=-1636.9,-76.5,-647,241 --mute --profile --screenshot="$SHOT" \
+	--give=SW_LGREN --sniper=1,-32 --sniper-fire --wait=11 2>&1)
+profile "$OUT" 11 "SW_KEY_[0-9]*"
+[ "$(profile "$OUT" 1 "XG_[0-9]*" | wc -l)" = 3 ] && [ -z "$(profile "$OUT" 11 "XG_[0-9]*")" ]
+check "a mortar through the opening drops the grunts" $?
+
 [ $FAILED = 0 ] && echo PASSED && exit 0
 echo FAILED
 exit 1

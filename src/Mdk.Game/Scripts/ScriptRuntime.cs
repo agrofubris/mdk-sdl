@@ -2636,6 +2636,32 @@ public sealed partial class ScriptRuntime
         return best;
     }
 
+    /// <summary>A box of half extents <paramref name="half"/> swept without sliding against Kurt's
+    /// arena, then the second one (bsp_sweep_box, the mortar round in 0x462708). Faces stop it only
+    /// from their front: a wall seen from its back is passed (LEVEL6 OLYM_3's opening). The point is
+    /// the box centre at the contact, the normal the face's plane.</summary>
+    public RayHit? Sweep(Vector3 from, Vector3 to, Vector3 half)
+    {
+        IEnumerable<string> arenas = CurrentArena.Length == 0 ? _bsps.Keys : [CurrentArena, SecondArena];
+        foreach (var name in arenas)
+        {
+            if (!_bsps.TryGetValue(name, out var bsp))
+            {
+                continue;
+            }
+
+            var triangle = bsp.SweepBox(from, to, half, 0, 0f, out var point, out var node);
+            if (triangle == Bsp.None)
+            {
+                continue;
+            }
+
+            return new RayHit(point, bsp.Arena.Nodes[node].Normal, name, TriangleGroup(bsp.Arena, triangle));
+        }
+
+        return null;
+    }
+
     private static Vector3 TriangleNormal(Arena arena, int triangle)
     {
         var a = arena.Vertices[arena.TriangleIndices[triangle * 3]];
