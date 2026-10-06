@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Numerics;
 using Mdk.Formats;
+using Mdk.Game.Level;
 
 namespace Mdk.Game.Scripts;
 
@@ -81,7 +82,7 @@ public sealed class EndLevel(int takeoffFrames)
         _arena = runtime.Level.Arenas.Find(a => a.Name == runtime.CurrentArena);
         if (_arena != null)
         {
-            foreach (var triangle in HighestFirst(_arena))
+            foreach (var triangle in HighestFirst(runtime.Level, _arena))
             {
                 _queue.Enqueue(triangle);
             }
@@ -92,11 +93,15 @@ public sealed class EndLevel(int takeoffFrames)
         runtime.RaiseShake(StartShake);
     }
 
-    /// <summary>The visible triangles of an arena, the highest top first.</summary>
-    public static IEnumerable<int> HighestFirst(Arena arena) =>
-        Enumerable.Range(0, arena.TriangleCount)
+    /// <summary>The visible triangles of an arena (shown, with a drawn material), the highest top first.</summary>
+    public static IEnumerable<int> HighestFirst(LevelData level, Arena arena)
+    {
+        var archives = level.ArchivesOf(arena);
+        return Enumerable.Range(0, arena.TriangleCount)
             .Where(t => (arena.TriangleFlags[t] & Hidden) == 0)
+            .Where(t => MaterialResolver.IsDrawn(arena.TriangleMaterials[t], arena.Materials, archives))
             .OrderByDescending(t => Top(arena, t));
+    }
 
     private static float Top(Arena arena, int triangle) =>
         Enumerable.Range(0, 3).Max(k => arena.Vertices[arena.TriangleIndices[triangle * 3 + k]].Z);

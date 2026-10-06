@@ -66,6 +66,35 @@ public sealed class MaterialResolver(Renderer renderer, Dti dti, Shading shading
         return null;
     }
 
+    /// <summary>Whether a material value is drawn (<see cref="Resolve"/> isn't null), without the GPU.</summary>
+    public static bool IsDrawn(int value, IReadOnlyList<string> names, IReadOnlyList<TextureArchive> archives)
+    {
+        if (value < 0)
+        {
+            return IsDrawnColour(-value);
+        }
+
+        var name = names[value];
+        if (archives.Any(a => a.Textures.ContainsKey(name)))
+        {
+            return true;
+        }
+
+        foreach (var archive in archives)
+        {
+            if (archive.Colors.TryGetValue(name, out var index))
+            {
+                return IsDrawnColour(index);
+            }
+        }
+
+        return name.StartsWith(PenPrefix) && int.TryParse(name.AsSpan(PenPrefix.Length), out var pen) && IsDrawnColour(pen);
+    }
+
+    /// <summary>Palette colours, glass and mirrors are drawn; other specials aren't.</summary>
+    private static bool IsDrawnColour(int index) =>
+        index < SpecialFirst || index is >= GlassFirst and <= GlassLast or >= MirrorFirst and <= MirrorLast;
+
     private Surface? Colour(int index, Palette palette, Pass pass)
     {
         if (index < SpecialFirst)

@@ -1,4 +1,6 @@
 using System.Numerics;
+using Mdk.Formats;
+using Mdk.Game.Level;
 using Mdk.Game.Scripts;
 
 namespace Mdk.Game.Tests;
@@ -113,5 +115,17 @@ public class RideTests
         // 121 ticks in exact arithmetic; float sums may cross a tick early.
         Assert.InRange(ticks, 120, 121);
         Assert.Equal(speed + 0.075f, EndLevel.RiseSpeed(speed, Tick), 4);
+    }
+
+    /// <summary>The end tears off only drawn triangles (level.gd get_arena_triangles): level 3's
+    /// NONE triangles stay.</summary>
+    [DataFact]
+    public void EndTearsOnlyDrawnTriangles()
+    {
+        var level = new LevelData(MdkData.Find()!, 3);
+        var arena = level.Arenas.First(a => a.TriangleMaterials.Any(m => m >= 0 && a.Materials[m] == "NONE"));
+        var none = Enumerable.Range(0, arena.TriangleCount).First(t => arena.TriangleMaterials[t] >= 0 && arena.Materials[arena.TriangleMaterials[t]] == "NONE");
+
+        Assert.DoesNotContain(none, EndLevel.HighestFirst(level, arena));
     }
 }
