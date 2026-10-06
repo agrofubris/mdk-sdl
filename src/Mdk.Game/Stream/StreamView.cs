@@ -27,8 +27,6 @@ public sealed class StreamView
     /// <summary>Sprites are drawn a quarter of their size (lights), the planet half.</summary>
     private const float LightScale = 0.25f;
     private const float PlanetScale = 0.5f;
-    /// <summary>The lights glow over what's behind (❓ the original's blend isn't known).</summary>
-    private const float LightAlpha = 0.75f;
     private const int SpriteCapacity = 256;
     private const int QuadVertices = 6;
     private const int TubeCapacity = StreamTube.Rings * StreamTube.Points * 2 * 3;
@@ -189,8 +187,9 @@ public sealed class StreamView
 
         if (lights > 0)
         {
-            var glow = new Vector4(1f, 1f, 1f, LightAlpha);
-            _renderer.Draw(_spriteMesh, planets, lights, new Material(_light.Texture, _paletteId, glow, 1, Pass.Blended));
+            // The lights glow, added to what's behind (as stream.gd; ❓ the original's blend isn't known).
+            var glow = new Material(_light.Texture, _paletteId, Vector4.One, 1, Pass.Blended, Blend: Blend.Add);
+            _renderer.Draw(_spriteMesh, planets, lights, glow);
         }
     }
 

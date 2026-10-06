@@ -195,7 +195,7 @@ so the game runs them unchanged:
 10. 🟡 Fall, stream, bomber, snowboard sequences. The rides are done (see 6). The stream is done (`Stream/`; ports of
     `stream.gd`, `stream_tube.gd`): the tube from Watcom's `rand()` (`--stream` uses seed 1, as the
     Godot reference test), Kurt's steering, drift and walls, the lights, the bonus, Bones' rescue,
-    the Gunter tube and the planet, the fades. Approximation: blended lights. The fall is done
+    the Gunter tube and the planet, the fades. Unknown: the lights' blend (added). The fall is done
     (`Fall/`; ports of `fall.gd`, `fall_missile.gd`): the intro in space, steering, the camera, the ground with the crawler's
     track and the haze (quads far below the camera), radars, missiles, pickups, Bones, the palette
     effects, the HUD; health and pickups go on to the level (`GameState.Carry`). Pickups are only
