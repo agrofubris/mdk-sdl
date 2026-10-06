@@ -21,6 +21,12 @@ public enum Event
     KurtDied,
     /// <summary>The end of the game (event 81): the end movies.</summary>
     GameFinished,
+    /// <summary>The fall before <see cref="GameState.Level"/>, then the level.</summary>
+    Fall,
+    /// <summary>The stream after the level <see cref="GameState.Level"/>.</summary>
+    Stream,
+    /// <summary>The stream is over: the statistics, or the last level after LEVEL8.</summary>
+    StreamEnded,
 }
 
 /// <summary>A screen of the game: the menu, the loading screen, a level, the statistics...</summary>

@@ -24,6 +24,10 @@ public sealed class GameState
     /// <summary>The cheat <c>SEETHEWHOLEGAME</c> (0x5742bc): keys 3-8 in the main menu start that
     /// level, D the statistics with random counts.</summary>
     public bool DebugKeys;
+    /// <summary>What the fall hands on to the next level: Kurt's health and the pickups he took.</summary>
+    public FallCarry? Carry;
+    /// <summary>The level's state of a full save being loaded (JSON), until the level restores it.</summary>
+    public string? Snapshot;
 
     /// <summary>The index (0-5) of a LEVELn number in the order of play, -1 if none.</summary>
     public static int IndexOf(int level) => Array.IndexOf(Order, level);
@@ -42,9 +46,13 @@ public sealed class GameState
         Level = save.Level;
         Deaths = save.Deaths;
         StrikeUsed = save.StrikeUsed;
+        Snapshot = save.Kind == SaveKind.Snapshot ? save.State : null;
     }
 
     /// <summary>A light save of the level to play (health 100, as the original's).</summary>
     public SaveGame Save(SaveKind kind) =>
         new(kind, Level, SaveGame.FullHealth, Deaths, StrikeUsed, DateTime.Now.ToString("s"));
 }
+
+/// <summary>Kurt's health and the pickups (model names, in order) he took in the fall.</summary>
+public sealed record FallCarry(int Health, IReadOnlyList<string> Pickups);

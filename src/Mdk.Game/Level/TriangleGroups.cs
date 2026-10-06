@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text.Json.Nodes;
 using Mdk.Formats;
 
 namespace Mdk.Game.Level;
@@ -77,7 +79,7 @@ public sealed class TriangleGroups
             return;
         }
 
-        group.State = (Operation)operation switch
+        var state = (Operation)operation switch
         {
             Operation.HideAndRelease => group.State | State.Hidden | State.NotSolid,
             Operation.Hide => group.State | State.Hidden,
@@ -86,6 +88,12 @@ public sealed class TriangleGroups
             Operation.Solidify => group.State & ~State.NotSolid,
             _ => State.None,
         };
+        SetFlags(arena, group, state);
+    }
+
+    private void SetFlags(string arena, Group group, State state)
+    {
+        group.State = state;
 
         // The original keeps the state in the triangles' flags, where the collisions read it.
         var flags = _data[arena].TriangleFlags;
@@ -95,7 +103,47 @@ public sealed class TriangleGroups
             flags[t] = (flags[t] & ~StateBits) | (uint)group.State;
         }
 
-        Changed?.Invoke(arena, number);
+        Changed?.Invoke(arena, group.Number);
+    }
+
+    /// <summary>The groups scripts changed, for a full save: arena → group → [state, material or null].</summary>
+    public JsonObject Snapshot()
+    {
+        var data = new JsonObject();
+        foreach (var (arena, groups) in _arenas)
+        {
+            var changed = new JsonObject();
+            foreach (var group in groups.Values.Where(g => g.State != State.None || g.Material != null))
+            {
+                changed[group.Number.ToString(CultureInfo.InvariantCulture)] = new JsonArray((int)group.State, group.Material);
+            }
+
+            if (changed.Count != 0)
+            {
+                data[arena] = changed;
+            }
+        }
+
+        return data;
+    }
+
+    /// <summary>Puts the groups of a full save back.</summary>
+    public void Restore(JsonObject data)
+    {
+        foreach (var (arena, groups) in data)
+        {
+            foreach (var (number, node) in groups!.AsObject())
+            {
+                var group = Get(arena, int.Parse(number, CultureInfo.InvariantCulture));
+                if (group == null)
+                {
+                    continue;
+                }
+
+                group.Material = node![1]?.GetValue<int>();
+                SetFlags(arena, group, (State)node[0]!.GetValue<int>());
+            }
+        }
     }
 
     /// <summary><c>group_set_texture</c>: every triangle of the group takes material <paramref name="value"/>.</summary>

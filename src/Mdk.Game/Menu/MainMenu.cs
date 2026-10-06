@@ -36,6 +36,12 @@ public sealed class MainMenu : IScreen
     private const char DebugFirstLevel = '3';
     private const char DebugLastLevel = '8';
     private const char DebugStatistics = 'D';
+    private const char DebugFall = 'F';
+    /// <summary>The debug key F plays the fall before the fifth level of the order (LEVEL8).</summary>
+    private const int DebugFallIndex = 4;
+    /// <summary>The debug key S plays the stream after the first level of the order (LEVEL7).</summary>
+    private const char DebugStream = 'S';
+    private const int DebugStreamIndex = 0;
     private const int DebugCountLimit = 100;
 
     /// <summary>The page shown, for Esc.</summary>
@@ -170,9 +176,7 @@ public sealed class MainMenu : IScreen
         }
     }
 
-    /// <summary>The debug keys of <c>SEETHEWHOLEGAME</c> (0x426574, 0x431b00). The fall (F) and the
-    /// stream (S) aren't ported.</summary>
-    // TODO the debug keys F (the fall before the fifth level) and S (the first stream)
+    /// <summary>The debug keys of <c>SEETHEWHOLEGAME</c> (0x426574, 0x433b50, 0x431b00).</summary>
     private bool DebugKey(string typed)
     {
         foreach (var c in typed)
@@ -181,6 +185,20 @@ public sealed class MainMenu : IScreen
             {
                 _state.Level = c - '0';
                 _next = Event.Play;
+                return true;
+            }
+
+            if (c == DebugFall)
+            {
+                _state.Level = GameState.Order[DebugFallIndex];
+                _next = Event.Fall;
+                return true;
+            }
+
+            if (c == DebugStream)
+            {
+                _state.Level = GameState.Order[DebugStreamIndex];
+                _next = Event.Stream;
                 return true;
             }
 
@@ -282,8 +300,7 @@ public sealed class MainMenu : IScreen
         Print();
     }
 
-    /// <summary>The briefing, then the level.</summary>
-    // TODO the fall after the briefing (fall.gd)
+    /// <summary>The briefing, the fall, then the level.</summary>
     private void NewGame()
     {
         _state.NewGame(_levelIndex);

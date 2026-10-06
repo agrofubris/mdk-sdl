@@ -39,4 +39,11 @@ public sealed class Sni
     public bool IsSound(Entry entry) => Bytes.AsSpan(entry.Offset, Riff.Length).SequenceEqual(Riff);
 
     public byte[] GetBytes(Entry entry) => Bytes.AsSpan(entry.Offset, entry.Length).ToArray();
+
+    /// <summary>A sprite animation stored in the archive (<c>LEVEL4S.SNI</c>'s <c>K_SURF</c>), or null.</summary>
+    public SpriteAnimation? GetAnimation(string name)
+    {
+        var entry = Entries.FirstOrDefault(e => e.Key == name).Value;
+        return entry == null || IsSound(entry) ? null : SpriteAnimation.Parse(name, Bytes, entry.Offset + 4);
+    }
 }

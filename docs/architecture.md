@@ -13,6 +13,8 @@ Each layer talks only to the one below it.
     │
  Mdk.Game     Flow: Game (screens), GameState, Settings, SaveGames, LevelFlow
     │         Menu: main menu, pause menu, options, loading, statistics, save prompt, videos
+    │         Stream: the tube between levels (generator, Kurt's flight, drawing)
+    │         Fall: the fall before a level (FallSim, FallView, FallHud)
     │         Viewer (a level): level, camera, collision (BSP), sound mixer, scripts and objects, Kurt
     │   └──────────────► Mdk.Formats  (parsers: DTI, MTO, MTI, SNI, FTI, BNI, models)
  Mdk.Engine   Render (Renderer: meshes, index textures, palettes, panorama)
@@ -52,16 +54,14 @@ picks the next screen. A screen's textures and meshes are freed when it ends (`R
 (`Menu/Ui.cs`, `ScreenView`).
 
 ```
- splash ─► main menu ─new game─► briefing ─[fall]─► loading ─► level (Viewer)
+ splash ─► main menu ─new game─► briefing ──fall──► loading ─► level (Viewer)
               ▲   └─continue / saved game──────────► loading      │ tornado (EndLevel)
               │                                                    ▼
-              │                           index 0-3: [stream] ─► statistics ─► save prompt ─► briefing ─[fall]─► next level
-              │                           index 4:   [Gunter stream] ─► save prompt ─► LEVEL5
+              │                           index 0-3: stream ─► statistics ─► save prompt ─► briefing ──fall──► next level
+              │                           index 4:   Gunter stream ─► save prompt ─► LEVEL5
               ├── Kurt died (LASTGAME) ◄──────────────────────────┘
               └── end movies (event 81) ◄── LEVEL5
 ```
-
-[ ] are TODO hooks (`Game.AfterLevel`, `StatsScreen.NextPhase`, `MainMenu.NewGame`).
 
 ## Roadmap
 
@@ -76,7 +76,10 @@ picks the next screen. A screen's textures and meshes are freed when it ends (`R
    chain gun, muzzle flash, hits, knock-down, death, items (`Kurt/Kurt.Combat.cs`,
    `Kurt/Inventory.cs`), the fans' updrafts (`Kurt/Kurt.Updraft.cs`), sniper mode
    (`Kurt/Kurt.Sniper.cs`, `Kurt/Scope.cs`: look, zoom, clip, the scope's off-centre projection).
-   Still to do: ledges, sliding, camera clearance.
+   The camera's climb term (−40 × the smoothed rise per tick), the rides (`Scripts/Rides.cs`,
+   `Snowboard.cs`, `Bomber.cs`, `Kurt/Kurt.Ride.cs`, `Hud/BomberOverlay.cs`; Kurt's moves report
+   the objects and triangle groups they touch). Still to do: ledges, sliding, camera clearance,
+   the camera's roll.
 7. 🟡 Script VM and objects (`Scripts/`: ports of `script_vm.gd`, `script_runtime.gd`,
    `object_motion.gd`, `object_behaviors.gd`; 30 ticks per second, object moves are BSP box sweeps).
    Kurt's items and blasts are ported (`Items.cs`, `Twister.cs`; twisters aren't drawn), so are the
@@ -84,8 +87,9 @@ picks the next screen. A screen's textures and meshes are freed when it ends (`R
    (`Debris.cs`: sparks, shattered groups, break-ups) and the fans (`Fans.cs`), drawn by
    `Objects/EffectsView.cs`, the sniper rounds, their target lock and `bomb_follow_path`
    (`SniperRounds.cs`), Bones' air strike (`AirStrike.cs`) and the full-screen strike
-   (`StrikeScene.cs`). Rides and the end of a level are stubs (`Scripts/Stubs/`, marked
-   `TODO port`).
+   (`StrikeScene.cs`), the end of a level (`EndLevel.cs`: the torn triangles are drawn by
+   `LevelView.DrawEnd`), full saves (`Snapshot.cs`, `ScriptRuntime.Snapshot.cs`, `Kurt.Snapshot.cs`:
+   JSON in the save, objects' public fields by reflection).
 8. 🟡 Weapons, items, HUD, sniper mode: the chain gun, the items and the HUD (`Hud/`: health panel,
    inventory, messages in the original fonts, health bar, flashes, drawn on the renderer's 2D
    canvas) are done, and sniper mode's screen (`Hud/SniperOverlay.cs`; the round cameras and the
@@ -97,8 +101,16 @@ picks the next screen. A screen's textures and meshes are freed when it ends (`R
    `end_movie.gd`): the splash, the main menu over `MDK12.FLC` and the slideshow, options and key
    bindings, saved games (the Godot port's JSON), "Continue" after a death, the pause menu, the
    loading screen, the end of a level (`EndLevel`: Kurt rises, the white flash), the
-   intermission, debriefing, Score-O-matic, save prompt and briefing, the end movies. Still to do:
-   full saves (F2, `snapshot.gd`), the Score-O-matic's spinning heads, the end of a level's flying
-   triangles and Kurt's take-off frames, the original's mouse cursor.
-10. Fall, stream, bomber, snowboard sequences.
+   intermission, debriefing, Score-O-matic (its heads: `Menu/HeadsView.cs`), save prompt and
+   briefing, the end movies, F2's full saves. Still to do: the original's mouse cursor.
+10. 🟡 Fall, stream, bomber, snowboard sequences. The rides are done (see 6). The stream is done (`Stream/`; ports of
+    `stream.gd`, `stream_tube.gd`): the tube from Watcom's `rand()` (`--stream` uses seed 1, as the
+    Godot reference test), Kurt's steering, drift and walls, the lights, the bonus, Bones' rescue,
+    the Gunter tube and the planet, the fades. Approximations: per-segment alpha, ramp colours
+    through an index texture, blended lights and red. The fall is done (`Fall/`; ports of `fall.gd`,
+    `fall_missile.gd`): the intro in space, steering, the camera, the ground with the crawler's
+    track and the haze (quads far below the camera), radars, missiles, pickups, Bones, the palette
+    effects, the HUD; health and pickups go on to the level (`GameState.Carry`). Pickups are only
+    tested under their chute, as the original (0x41275c; fall.gd drops them at once).
+    Approximations: the radar's colours, the smoke trails, the red only on palette colours.
 11. Enhanced look.

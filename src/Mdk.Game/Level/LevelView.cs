@@ -1,21 +1,34 @@
 using System.Numerics;
 using Mdk.Engine.Render;
 using Mdk.Formats;
+using Mdk.Game.Scripts;
 
 namespace Mdk.Game.Level;
 
 /// <summary>The level's arenas on the GPU: a vertex buffer per triangle group, its triangles in
 /// batches by surface. Hidden groups and unreachable arenas aren't drawn; a group that changes
 /// texture is rebuilt.
+/// At the end of a level the triangles torn off Kurt's arena are collapsed in their group's mesh
+/// (made dynamic) and drawn as flying pieces.
 /// <code>
 ///   arena ─┬─ group 0 (the rest)   ─► mesh, batches
 ///          └─ group n (scripted)   ─► mesh, batches   (hidden? retextured?)
+///   end of level: torn triangles ─► collapsed in their mesh;  pieces ─► one dynamic mesh
 /// </code></summary>
 public sealed class LevelView
 {
     private readonly record struct Batch(int First, int Count, Material Material);
 
-    private sealed record GroupMesh(int Mesh, List<Batch> Batches);
+    private sealed class GroupMesh(int mesh, List<Batch> batches, Vertex[] vertices)
+    {
+        public int Mesh = mesh;
+        public readonly List<Batch> Batches = batches;
+        public readonly Vertex[] Vertices = vertices;
+        public bool Dynamic;
+    }
+
+    /// <summary>Where a triangle is drawn: its group, first vertex, surface and UV scale.</summary>
+    private readonly record struct Placement(int Group, int First, Material Material, Vector2 Scale);
 
     private sealed class ArenaView(Arena arena, Vector3[] positions, Palette palette, List<TextureArchive> archives, bool reachable)
     {
@@ -25,12 +38,18 @@ public sealed class LevelView
         public readonly List<TextureArchive> Archives = archives;
         public bool Reachable = reachable;
         public readonly Dictionary<int, GroupMesh?> Groups = [];
+        public readonly Dictionary<int, Placement> Placements = [];
     }
+
+    private const int TriangleVertices = 3;
 
     private readonly Renderer _renderer;
     private readonly MaterialResolver _resolver;
     private readonly TriangleGroups _groups;
     private readonly Dictionary<string, ArenaView> _arenas = [];
+    private int _tornShown;
+    private int _piecesMesh = -1;
+    private Vertex[] _pieceVertices = [];
 
     public LevelView(Renderer renderer, LevelData level, TriangleGroups groups)
     {
@@ -84,6 +103,111 @@ public sealed class LevelView
         }
     }
 
+    /// <summary>The end of a level: the torn triangles vanish from the arena and fly as pieces.</summary>
+    public void DrawEnd(EndLevel? end)
+    {
+        if (end == null || !_arenas.TryGetValue(end.Arena, out var view))
+        {
+            return;
+        }
+
+        Tear(view, end.Torn);
+        DrawPieces(view, end.Pieces);
+    }
+
+    /// <summary>Collapses the newly torn triangles in their groups' meshes (made dynamic).</summary>
+    private void Tear(ArenaView view, IReadOnlyList<int> torn)
+    {
+        if (torn.Count == _tornShown)
+        {
+            return;
+        }
+
+        var changed = new HashSet<GroupMesh>();
+        for (; _tornShown < torn.Count; _tornShown++)
+        {
+            if (!view.Placements.TryGetValue(torn[_tornShown], out var place) || view.Groups[place.Group] is not { } mesh)
+            {
+                continue;
+            }
+
+            for (var k = 1; k < TriangleVertices; k++)
+            {
+                mesh.Vertices[place.First + k] = mesh.Vertices[place.First];
+            }
+
+            changed.Add(mesh);
+        }
+
+        foreach (var mesh in changed)
+        {
+            if (!mesh.Dynamic)
+            {
+                mesh.Mesh = _renderer.CreateDynamicMesh(mesh.Vertices.Length);
+                mesh.Dynamic = true;
+            }
+
+            _renderer.UpdateMesh(mesh.Mesh, mesh.Vertices);
+        }
+    }
+
+    /// <summary>The pieces, turned by their angle around their centre, both faces, batched by surface.</summary>
+    private void DrawPieces(ArenaView view, IReadOnlyList<EndLevel.Piece> pieces)
+    {
+        if (_piecesMesh < 0)
+        {
+            _pieceVertices = new Vertex[view.Arena.TriangleCount * TriangleVertices];
+            _piecesMesh = _renderer.CreateDynamicMesh(_pieceVertices.Length);
+        }
+
+        var count = 0;
+        var batches = new List<Batch>();
+        foreach (var bySurface in pieces.Where(p => view.Placements.ContainsKey(p.Triangle)).GroupBy(p => view.Placements[p.Triangle].Material))
+        {
+            var first = count;
+            foreach (var piece in bySurface)
+            {
+                count = AddPiece(view, piece, count);
+            }
+
+            var material = bySurface.Key.Pass == Pass.Solid ? bySurface.Key with { Pass = Pass.DoubleSided } : bySurface.Key;
+            batches.Add(new Batch(first, count - first, material));
+        }
+
+        if (count == 0)
+        {
+            return;
+        }
+
+        _renderer.UpdateMesh(_piecesMesh, _pieceVertices.AsSpan(0, count));
+        foreach (var batch in batches)
+        {
+            _renderer.Draw(_piecesMesh, batch.First, batch.Count, batch.Material);
+        }
+    }
+
+    private int AddPiece(ArenaView view, EndLevel.Piece piece, int at)
+    {
+        var place = view.Placements[piece.Triangle];
+        var t = piece.Triangle;
+        var corners = new Vector3[TriangleVertices];
+        var middle = Vector3.Zero;
+        for (var k = 0; k < TriangleVertices; k++)
+        {
+            corners[k] = view.Positions[t * TriangleVertices + k];
+            middle += corners[k] / TriangleVertices;
+        }
+
+        var turn = Matrix4x4.CreateRotationZ(float.DegreesToRadians(piece.Angle));
+        foreach (var k in (int[])[0, 1, 2])
+        {
+            var position = piece.Centre + Vector3.Transform(corners[k] - middle, turn);
+            _pieceVertices[at++] = new Vertex(position, view.Arena.TriangleUvs[t * TriangleVertices + k] * place.Scale);
+        }
+
+        return at;
+    }
+
     /// <summary>A group took another texture: its mesh is built again (the old buffer stays until the level ends).</summary>
     private void Rebuild(string arena, int number)
     {
@@ -134,6 +258,10 @@ public sealed class LevelView
             }
 
             batches.Add(new Batch(first, vertices.Count - first, material));
+            for (var i = 0; i < triangles.Count; i++)
+            {
+                view.Placements[triangles[i]] = new Placement(group.Number, first + i * TriangleVertices, material, scale);
+            }
         }
 
         if (vertices.Count == 0)
@@ -142,6 +270,7 @@ public sealed class LevelView
         }
 
         TriangleCount += vertices.Count / 3;
-        return new GroupMesh(_renderer.CreateMesh([.. vertices]), batches);
+        Vertex[] array = [.. vertices];
+        return new GroupMesh(_renderer.CreateMesh(array), batches, array);
     }
 }

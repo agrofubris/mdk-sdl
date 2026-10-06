@@ -128,6 +128,14 @@ public sealed partial class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.S
         }
 
         FadeFlashes(delta);
+        if (Ride != null)
+        {
+            // No knock-down, chute or ledges while riding.
+            KnockDamage = 0f;
+            Ride(input, delta);
+            return;
+        }
+
         UpdateKnockDamage(delta);
         var turbo = input.IsDown(Key.Turbo);
         if (UpdateSniper(input, turbo, delta))
@@ -139,7 +147,7 @@ public sealed partial class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.S
 
         // Throwing or knocked down, he doesn't walk.
         var forward = Axis(input, Key.Forward, Key.Back);
-        var strafe = Axis(input, Key.StrafeRight, Key.StrafeLeft);
+        var strafe = Walking == Walk.Riding ? 0f : Axis(input, Key.StrafeRight, Key.StrafeLeft);
         if (Current is State.Throw or State.Knocked or State.GetUp)
         {
             forward = 0f;
@@ -154,10 +162,17 @@ public sealed partial class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.S
         DrainPush(delta);
         if (move != Vector3.Zero)
         {
-            Feet = space.Move(Feet, move, ArenaSpace.Motion.Walk, WalkSlide, Nearby(Feet + move)).Feet;
+            Feet = Contact(space.Move(Feet, move, ArenaSpace.Motion.Walk, WalkSlide, Nearby(Feet + move))).Feet;
+        }
+
+        if (Walking == Walk.Riding)
+        {
+            RideWalker(input, forward, delta);
+            return;
         }
 
         UpdateVertical(input, move, delta);
+        UpdateTouched();
         UpdateItems(input);
         UpdateFiring(input);
         UpdateState(forward, strafe, delta);
@@ -350,7 +365,7 @@ public sealed partial class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.S
             dz = below.Top + PlatformLift - Feet.Z;
         }
 
-        var result = space.Move(Feet, new Vector3(0f, 0f, dz), ArenaSpace.Motion.Fall, FallSlide);
+        var result = Contact(space.Move(Feet, new Vector3(0f, 0f, dz), ArenaSpace.Motion.Fall, FallSlide));
         Feet = result.Feet;
         Platform = null;
         if (!result.Hit && platform is { } on)

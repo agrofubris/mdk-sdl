@@ -50,12 +50,17 @@ public sealed class KurtSprite
 
     private enum Repeat { Once, Loop }
 
+    /// <summary>Kurt's frames kept in the level's archives: the snowboard's (LEVEL4S.SNI).</summary>
+    public static readonly string[] LevelAnimations = ["K_SURF", "K_SURFJ"];
+
     private readonly Renderer _renderer;
     private readonly Bni _sprites;
     private readonly int _palette;
     private readonly int _mesh;
     private readonly int _muzzleMesh;
     private readonly Dictionary<(string, int), int> _textures = [];
+    /// <summary>Frames from the level's archives (the board's K_SURF and K_SURFJ).</summary>
+    private readonly Dictionary<string, SpriteAnimation> _extra = [];
 
     public KurtSprite(Renderer renderer, Bni sprites, Palette palette)
     {
@@ -67,6 +72,21 @@ public sealed class KurtSprite
     }
 
     public int FrameCount(Kurt.State state) => _sprites.GetAnimation(Animations[state].Name).FrameCount;
+
+    /// <summary>Adds an animation of the level's (null: none there).</summary>
+    public void Add(SpriteAnimation? animation)
+    {
+        if (animation != null)
+        {
+            _extra[animation.Name] = animation;
+        }
+    }
+
+    /// <summary>Frames of an animation of the level's or of <c>TRAVSPRT.BNI</c> (0 when missing).</summary>
+    public int FrameCount(string name) =>
+        _extra.TryGetValue(name, out var animation) ? animation.FrameCount : _sprites.Has(name) ? _sprites.GetAnimation(name).FrameCount : 0;
+
+    private SpriteAnimation Animation(string name) => _extra.TryGetValue(name, out var animation) ? animation : _sprites.GetAnimation(name);
 
     /// <summary>Queues Kurt's frame for the camera at <paramref name="eye"/> looking along
     /// <paramref name="forward"/> with <paramref name="up"/>, the view <paramref name="fieldOfView"/>
@@ -101,7 +121,7 @@ public sealed class KurtSprite
     /// <summary>Draws a frame with its hotspot 101 pixels above the feet, moved by (dx, dy) pixels (y down).</summary>
     private void DrawFrame(int mesh, string name, int frame, Quad at, int dx, int dy)
     {
-        var image = _sprites.GetAnimation(name).GetFrame(frame);
+        var image = Animation(name).GetFrame(frame);
         var w = image.Image.Width;
         var h = image.Image.Height;
         var ax = image.HotspotX - dx;
@@ -121,6 +141,12 @@ public sealed class KurtSprite
     /// <summary>The animation and frame of Kurt's state; the chute opens, then sways.</summary>
     private (string Name, int Frame) Pick(Kurt kurt)
     {
+        // A ride's or the end's frame; past the last it loops (K_FLOATC).
+        if (kurt.Pose is { } pose && FrameCount(pose.Name) is > 0 and var poseFrames)
+        {
+            return (pose.Name, ((pose.Frame % poseFrames) + poseFrames) % poseFrames);
+        }
+
         var (name, repeat) = Animations[kurt.Current];
         var count = _sprites.GetAnimation(name).FrameCount;
         var frame = (int)MathF.Floor(kurt.AnimationFrame);

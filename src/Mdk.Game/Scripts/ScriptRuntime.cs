@@ -16,7 +16,7 @@ namespace Mdk.Game.Scripts;
 ///   tick ─► Kurt's arena? ─► triggers, arenas ─► arena scripts ─► subsystems
 ///        └─► objects of the live arenas: door ─► script (ScriptVm) ─► motion (ObjectMotion)
 /// </code></summary>
-public sealed class ScriptRuntime
+public sealed partial class ScriptRuntime
 {
     public const float Tick = 1f / 30f;
     public const float TicksPerSecond = 30f;
@@ -174,7 +174,7 @@ public sealed class ScriptRuntime
     public readonly AirStrike AirStrike;
     /// <summary>The full-screen strike playing, if any (the game waits meanwhile).</summary>
     public StrikeScene? Strike { get; private set; }
-    public readonly Rides Rides = new();
+    public readonly Rides Rides;
     public readonly Items Items;
     public readonly Fans Fans;
     public readonly GameStats Stats = new();
@@ -269,6 +269,7 @@ public sealed class ScriptRuntime
     public event Action<string>? ArenaEntered;
 
     private readonly ArenaSpace _space;
+    private readonly Bni _sprites;
     private readonly TriangleGroups _groups;
     private readonly Dictionary<string, Bsp> _bsps = [];
     private readonly Dictionary<string, float> _floors = [];
@@ -287,6 +288,8 @@ public sealed class ScriptRuntime
         Mdk.Game.Kurt.Kurt kurt)
     {
         Kurt = kurt;
+        Rides = new Rides(this);
+        _sprites = sprites;
         Items = new Items(this, sprites);
         SniperRounds = new SniperRounds(this);
         AirStrike = new AirStrike(this);
@@ -414,10 +417,21 @@ public sealed class ScriptRuntime
         }
     }
 
-    /// <summary>The triangle groups of his arena that Kurt ran into this tick get a hit (0x46634e).</summary>
-    // TODO Kurt's moves don't report the groups they touch yet
+    /// <summary>The triangle groups of his arena that Kurt ran into this tick get a hit (0x46634e;
+    /// how the snowboard breaks the ice walls).</summary>
     private void KurtTouchesGroups()
     {
+        var touched = new HashSet<int>();
+        foreach (var (arena, triangle) in Kurt.TakeContacts())
+        {
+            var group = TriangleGroup(arena, triangle);
+            if (arena.Name != CurrentArena || group == 0 || !touched.Add(group))
+            {
+                continue;
+            }
+
+            HitGroup(CurrentArena, group, 0, HitKurt, HitTypeKurt);
+        }
     }
 
     /// <summary>Shows an arena (BSPShow 0x41a11c, opcode 100): it becomes the active second arena
@@ -1189,7 +1203,7 @@ public sealed class ScriptRuntime
         Kurt.StopFiring();
         Mixer.Play("NUKE");
         Mixer.Play("TORNADO");
-        EndLevel = new EndLevel();
+        EndLevel = new EndLevel(_sprites.GetAnimation(EndLevel.Takeoff).FrameCount);
         EndLevel.Finished += () => LevelEnded?.Invoke(GameOver.No);
         EndLevel.Start(this);
     }
@@ -2300,7 +2314,8 @@ public sealed class ScriptRuntime
 
     /// <summary>What Kurt collides with (damp_collide_move): the visible parts of the objects of his
     /// arena that are alive and solid (no flags 0x10, 0x800), but the one he rides and doors' LOCK
-    /// parts; platforms (0x100, 0x800000) are stood on.</summary>
+    /// parts; platforms (0x100, 0x800000) are stood on, standable ones even when he passes through
+    /// them otherwise (so he lands on the snowboard).</summary>
     private IReadOnlyList<Solids.Solid> SolidsWithin(Box region)
     {
         const int Passable = MdkObject.FlagNotSolid | MdkObject.FlagNotSolid2;
@@ -2308,13 +2323,16 @@ public sealed class ScriptRuntime
         var solids = new List<Solids.Solid>();
         foreach (var obj in Objects)
         {
-            if (obj.Dead || obj.Arena != CurrentArena || obj.Health == 0 || obj.Model == null || (obj.Flags & Passable) != 0
+            var passable = (obj.Flags & Passable) != 0;
+            var standable = (obj.Flags & MdkObject.FlagStandable) != 0;
+            if (obj.Dead || obj.Arena != CurrentArena || obj.Health == 0 || obj.Model == null || (passable && !standable)
                 || obj == Rides.Ridden || !GetWorldBounds(obj).Intersects(region))
             {
                 continue;
             }
 
-            var footing = (obj.Flags & Platforms) != 0 ? Solids.Footing.Platform : Solids.Footing.Wall;
+            var footing = passable ? Solids.Footing.Floor
+                : (obj.Flags & Platforms) != 0 ? Solids.Footing.Platform : Solids.Footing.Wall;
             var parts = obj.PartBounds();
             for (var i = 0; i < parts.Length; i++)
             {

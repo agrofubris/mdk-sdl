@@ -39,10 +39,11 @@ echo "$OUT" | grep -q "^Score-O-matic: 120/120, 50/100, 10/10, 50/100, 8/20, hea
 OUT=$(run --briefing=6 --wait=2)
 echo "$OUT" | grep -q "^Statistics: Briefing$"; check "briefing" $?
 
-# special_event 1 ends level 7: the tornado (about 7 s), then the statistics.
+# special_event 1 ends level 7: the tornado (about 7 s), then the stream (tests/stream_test.sh
+# follows it to the statistics).
 OUT=$(run --level=7 --event=1 --wait=12)
-echo "$OUT" | grep "^Statistics"
-echo "$OUT" | grep -q "^Statistics: Intermission$"; check "level end leads to the statistics" $?
+echo "$OUT" | grep "^Stream"
+echo "$OUT" | grep -q "^Stream after LEVEL7: Normal,"; check "level end leads to the stream" $?
 
 # Kurt dies: LASTGAME is written and the menu offers "Continue".
 OUT=$(run --level=3 --die --wait=10)

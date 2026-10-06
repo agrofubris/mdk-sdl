@@ -83,6 +83,21 @@ public sealed class Inventory
     /// <summary>A pickup was taken: its name, the text shown for 2 seconds (0x46d098).</summary>
     public event Action<string>? PickedUp;
 
+    /// <summary>The pickups of a full save, as they were.</summary>
+    public void Restore(IEnumerable<Slot> slots, int selected, IReadOnlyList<int> ammo, int selectedAmmo, int superChainGun)
+    {
+        _slots.Clear();
+        _slots.AddRange(slots);
+        Selected = selected;
+        for (var i = 0; i < _ammo.Length && i < ammo.Count; i++)
+        {
+            _ammo[i] = ammo[i];
+        }
+
+        SelectedAmmo = selectedAmmo;
+        SuperChainGun = superChainGun;
+    }
+
     /// <summary>Takes a pickup by model name; health pickups change <paramref name="health"/>. Returns
     /// the sound to play, or "" when Kurt can't take it (full inventory, not a pickup).</summary>
     public string Collect(string pickup, ref int health)

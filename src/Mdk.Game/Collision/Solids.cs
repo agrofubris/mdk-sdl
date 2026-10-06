@@ -19,7 +19,8 @@ public static class Solids
     /// <summary>A part's box in the world, its object, and whether Kurt may stand on it.</summary>
     public readonly record struct Solid(Box Box, object Owner, Footing Footing);
 
-    public enum Footing { Wall, Platform }
+    /// <summary>A wall, a platform (a wall stood on), or a floor only (standable, else passed through).</summary>
+    public enum Footing { Wall, Platform, Floor }
 
     /// <summary>A ray from 3 above the feet to 3 below finds the platform (damp_platform_floor).</summary>
     public const float PlatformReach = 3f;
@@ -35,7 +36,7 @@ public static class Solids
         foreach (var solid in solids)
         {
             var box = new Box(solid.Box.Min - half, solid.Box.Max + half);
-            if (a.Z < box.Min.Z || a.Z > box.Max.Z || Inside(box, a))
+            if (solid.Footing == Footing.Floor || a.Z < box.Min.Z || a.Z > box.Max.Z || Inside(box, a))
             {
                 continue;
             }
@@ -73,7 +74,7 @@ public static class Solids
         foreach (var solid in solids)
         {
             var box = solid.Box;
-            if (solid.Footing != Footing.Platform || feet.X < box.Min.X || feet.X > box.Max.X || feet.Y < box.Min.Y || feet.Y > box.Max.Y
+            if (solid.Footing == Footing.Wall || feet.X < box.Min.X || feet.X > box.Max.X || feet.Y < box.Min.Y || feet.Y > box.Max.Y
                 || box.Max.Z > from || box.Max.Z < to || (best is { } b && b.Top >= box.Max.Z))
             {
                 continue;
@@ -83,6 +84,17 @@ public static class Solids
         }
 
         return best;
+    }
+
+    /// <summary>The owners of the boxes (grown by <paramref name="half"/> and twice the gap) that hold
+    /// the box centre <paramref name="a"/>: what a walk stopped against, or what Kurt is in.</summary>
+    public static IEnumerable<object> Touching(Vector3 a, Vector3 half, IReadOnlyList<Solid> solids)
+    {
+        var reach = half + new Vector3(Gap * 2f);
+        return solids.Where(s => new Box(s.Box.Min - reach, s.Box.Max + reach) is var box
+            && a.X >= box.Min.X && a.X <= box.Max.X && a.Y >= box.Min.Y && a.Y <= box.Max.Y && a.Z >= box.Min.Z && a.Z <= box.Max.Z)
+            .Select(s => s.Owner)
+            .Distinct();
     }
 
     private static bool Inside(Box box, Vector3 p) => p.X > box.Min.X && p.X < box.Max.X && p.Y > box.Min.Y && p.Y < box.Max.Y;

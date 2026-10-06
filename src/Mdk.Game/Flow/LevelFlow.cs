@@ -5,8 +5,8 @@ namespace Mdk.Game.Flow;
 /// <summary>What follows a level (the original's states, main loop 0x401cb8; see godot-mdk
 /// docs/gameplay.md "Level flow"):
 /// <code>
-///   index 0-3: tornado ─► [stream] ─► statistics, save prompt, next briefing ─► [fall] ─► next level
-///   index 4:   tornado ─► [Gunter stream] ─► save prompt ─► LEVEL5 (no statistics, no fall)
+///   index 0-3: tornado ─► stream ─► statistics, save prompt, next briefing ─► [fall] ─► next level
+///   index 4:   tornado ─► Gunter stream ─► save prompt ─► LEVEL5 (no statistics, no fall)
 ///   index 5:   event 81 ─► end movies ─► menu
 ///   game over (the town flattened) or a level outside the order ─► menu
 /// </code>

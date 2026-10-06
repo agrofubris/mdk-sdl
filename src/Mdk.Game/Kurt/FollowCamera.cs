@@ -5,7 +5,8 @@ using Mdk.Engine.Render;
 namespace Mdk.Game.Kurt;
 
 /// <summary>The third-person camera behind Kurt (<c>camera_update</c>). Its pitch (positive looks
-/// down) is the arena's (DTI), eased in, plus the mouse's look offset and a tilt in the air.
+/// down) is the arena's (DTI), eased in, plus the mouse's look offset, a tilt in the air and
+/// −40 × the smoothed rise of the feet per tick (climbing looks up, falling down).
 /// <code>
 ///        camera ●
 ///                 \  pitch
@@ -16,7 +17,6 @@ public sealed class FollowCamera
     /// <summary>Vertical field of view in degrees (the Godot port's, matching the original's view).</summary>
     public const float FieldOfView = 71.5f;
     private const float Distance = 8f;
-    private const float Pivot = 4.5f;
     private const float MouseDegrees = 0.15f;
     private const float MinPitch = -60f;
     private const float MaxPitch = 90f;
@@ -36,18 +36,34 @@ public sealed class FollowCamera
     private const float DownBack = 5f;
     private const float Near = 0.5f;
     private const float Far = 20000f;
+    /// <summary>The climb (0x490db8): the rise per tick, clamped to ±0.5, eased in by 0.97·old +
+    /// 0.03·new per tick, back towards a rise of the other sign by 0.02 per tick; 40° per unit.</summary>
+    private const float ClimbClamp = 0.5f;
+    private const float ClimbKeep = 0.97f;
+    private const float ClimbReturn = 0.02f;
+    private const float ClimbPitch = 40f;
 
     private float _arenaPitch = DefaultPitch;
     private float _lookOffset;
     private float _airPitch;
     private float _airTime;
+    private float _climb;
+    private float? _lastFeetZ;
+    private float _climbTime;
 
     public Vector3 Position { get; private set; }
     public Vector3 Forward { get; private set; } = Vector3.UnitY;
     public Vector3 Up { get; private set; } = Vector3.UnitZ;
+    public Vector3 Right { get; private set; } = Vector3.UnitX;
 
     public void Update(Kurt kurt, float arenaPitch, Input input, float delta)
     {
+        if (kurt.TopDownHeight is { } height)
+        {
+            LookDown(kurt, height);
+            return;
+        }
+
         _arenaPitch = float.Lerp(arenaPitch, _arenaPitch, MathF.Pow(PitchEase, delta * Kurt.Ticks));
         // Through the scope the mouse turns the scope instead.
         if (!kurt.Sniping)
@@ -56,7 +72,13 @@ public sealed class FollowCamera
         }
 
         UpdateAirTime(kurt, delta);
-        if (_airTime == 0f)
+        UpdateClimb(kurt.Feet.Z, delta);
+        if (kurt.Rising)
+        {
+            // The end of a level lifts Kurt: no tilt in the air (end_level.gd).
+            _airPitch = 0f;
+        }
+        else if (_airTime == 0f)
         {
             _airPitch = MathF.Max(_airPitch - AirPitchDecay * delta, 0f);
         }
@@ -66,11 +88,22 @@ public sealed class FollowCamera
         }
 
         _lookOffset = Math.Clamp(_lookOffset, MinPitch - _arenaPitch - _airPitch, MaxPitch - _arenaPitch - _airPitch);
-        var pitch = float.DegreesToRadians(_arenaPitch + _lookOffset + _airPitch);
+        var pitch = float.DegreesToRadians(_arenaPitch + _lookOffset + _airPitch - ClimbPitch * _climb + kurt.CameraTilt);
         var facing = kurt.Facing;
-        Position = Point(kurt.Feet, facing, pitch);
+        Position = Point(kurt.Feet, facing, pitch, kurt.CameraPivot);
         Forward = Vector3.Normalize(facing * MathF.Cos(pitch) - Vector3.UnitZ * MathF.Sin(pitch));
         Up = Vector3.Normalize(Vector3.Cross(Vector3.Cross(Forward, Vector3.UnitZ), Forward));
+        Right = Vector3.Normalize(Vector3.Cross(Forward, Vector3.UnitZ));
+    }
+
+    /// <summary>The bomber's view (0x4183f0): straight down from <paramref name="height"/> above
+    /// Kurt, his heading at the top.</summary>
+    private void LookDown(Kurt kurt, float height)
+    {
+        Position = kurt.Feet + Vector3.UnitZ * height;
+        Forward = -Vector3.UnitZ;
+        Up = kurt.Facing;
+        Right = kurt.Right;
     }
 
     /// <summary>Air time (0x573a48): it starts once Kurt falls faster than 16 u/s and ends when he
@@ -89,8 +122,46 @@ public sealed class FollowCamera
         _airTime = vz > 0f || landed ? 0f : _airTime + delta;
     }
 
+    /// <summary>The smoothed rise of the feet per tick (camera_update 0x4174d0), measured once a
+    /// tick as the original's frames at 30 per second: Kurt's 60 steps a second go down a slope
+    /// every other step, which would shake the view.</summary>
+    private void UpdateClimb(float feetZ, float delta)
+    {
+        _lastFeetZ ??= feetZ;
+        _climbTime += delta * Kurt.Ticks;
+        if (_climbTime < 1f)
+        {
+            return;
+        }
+
+        var ticks = MathF.Floor(_climbTime);
+        _climbTime -= ticks;
+        var rise = Math.Clamp((feetZ - _lastFeetZ.Value) / ticks, -ClimbClamp, ClimbClamp);
+        _lastFeetZ = feetZ;
+        _climb = Climb(_climb, rise, ticks);
+    }
+
+    /// <summary>One step of the climb: eased towards the rise; going the other way it also comes
+    /// back by 0.02 per tick, without passing the rise.</summary>
+    public static float Climb(float climb, float rise, float ticks)
+    {
+        var keep = MathF.Pow(ClimbKeep, ticks);
+        climb = rise * (1f - keep) + climb * keep;
+        if (climb < 0f && rise >= 0f)
+        {
+            return MathF.Min(climb + ClimbReturn * ticks, rise);
+        }
+
+        if (climb > 0f && rise <= 0f)
+        {
+            return MathF.Max(climb - ClimbReturn * ticks, rise);
+        }
+
+        return climb;
+    }
+
     /// <summary>The camera's place for the feet and pitch (radians).</summary>
-    private static Vector3 Point(Vector3 feet, Vector3 facing, float pitch)
+    private static Vector3 Point(Vector3 feet, Vector3 facing, float pitch, float pivot)
     {
         var distance = Distance;
         var back = -distance * MathF.Cos(pitch);
@@ -104,7 +175,7 @@ public sealed class FollowCamera
             back = -distance * MathF.Cos(pitch);
         }
 
-        return feet + facing * back + Vector3.UnitZ * (Pivot + distance * MathF.Sin(pitch));
+        return feet + facing * back + Vector3.UnitZ * (pivot + distance * MathF.Sin(pitch));
     }
 
     public View View(float aspect) => CameraMath.View(Position, Forward, Up, FieldOfView, aspect, Near, Far);

@@ -20,7 +20,7 @@ public enum StatsPages { All, Briefing }
 /// shown and fades out to black. Esc skips; holding Fire or Jump runs everything twice as fast
 /// (typing 4x). All on the 600 x 360 screen.
 /// <code>
-///   intermission ─► debriefing ─► Score-O-matic ─► save prompt ─► briefing ─► [fall] ─► level
+///   intermission ─► debriefing ─► Score-O-matic ─► save prompt ─► briefing ─► fall ─► level
 /// </code></summary>
 public sealed class StatsScreen : IScreen
 {
@@ -114,6 +114,7 @@ public sealed class StatsScreen : IScreen
     private readonly float[] _slides = new float[Rows.Length];
     private int _heads;
     private float _headTime;
+    private readonly HeadsView _headsView;
 
     public StatsScreen(Ui ui, GameState state, SaveGames saves, StatsPages pages, Phase? first)
     {
@@ -125,6 +126,7 @@ public sealed class StatsScreen : IScreen
         var system = ui.Fti.GetBytes("SYS_PAL");
         system.AsSpan(0, Math.Min(system.Length, PaletteSize)).CopyTo(_systemRgb);
         _fonts = new Fonts(ui.Renderer, ui.Fti);
+        _headsView = new HeadsView(ui.Renderer, _bni, PageRgb, ui.Data);
         foreach (var name in new[] { "CGUN", "SNIPER", "RICO1", "RICO2", "RICO3", "ALDIE", "XGHEAD1", "XGHEAD2", "TELETYPE" })
         {
             _sounds[name] = Ui.SoundOf(_bni, name, name == "CGUN" ? Looping.Forever : Looping.Once);
@@ -262,12 +264,12 @@ public sealed class StatsScreen : IScreen
         _image = null;
     }
 
-    // TODO the fall after the briefing (fall.gd); the level starts at once
+    /// <summary>The next page; after the last one (the briefing) the fall, then the level.</summary>
     private void NextPhase()
     {
         if (_phases.Count == 0)
         {
-            _next = Event.Play;
+            _next = Event.Fall;
             return;
         }
 
@@ -475,11 +477,11 @@ public sealed class StatsScreen : IScreen
         (_row, _rowStage, _rowTime) = (_row + 1, 0, 0f);
     }
 
-    /// <summary>Head shots (0x433268): one a second (two when fast, all at once on Esc). Without gore
-    /// the row is left out (0x43290b).</summary>
-    // TODO draw the spinning XGHEAD models (STATS.BNI, STATS.MTI)
+    /// <summary>Head shots (0x433268): one a second (two when fast, all at once on Esc), spinning.
+    /// Without gore the row is left out (0x43290b).</summary>
     private bool UpdateHeads(float delta, float speed)
     {
+        _headsView.Update(_heads, delta);
         if (!_ui.Settings.Gore)
         {
             return true;
@@ -562,6 +564,11 @@ public sealed class StatsScreen : IScreen
         view.Text(big, title, 300 - (big.Width(title) >> 1), TitleY);
         var name = _ui.Fti.GetTextBytes("ST_DAMP");
         view.Text(small, name, 300 - (small.Width(name) >> 1), NameY);
+        if (_ui.Settings.Gore)
+        {
+            _headsView.Draw(_heads, _state.Stats.HeadShots, view.ToCanvas(new RectangleF(0f, 0f, ScreenView.Size.X, ScreenView.Size.Y)));
+        }
+
         if (!shown)
         {
             return;

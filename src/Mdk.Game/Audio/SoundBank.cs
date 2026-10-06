@@ -29,6 +29,20 @@ public sealed class SoundBank(IReadOnlyList<Sni> archives)
         return _cache[name] = Load(name);
     }
 
+    /// <summary>Kurt's sprite animations stored with the sounds (the board's <c>K_SURF</c>), or null.</summary>
+    public SpriteAnimation? Animation(string name)
+    {
+        for (var i = archives.Count - 1; i >= 0; i--)
+        {
+            if (archives[i].GetAnimation(name) is { } animation)
+            {
+                return animation;
+            }
+        }
+
+        return null;
+    }
+
     private SoundMixer.Entry? Load(string name)
     {
         for (var i = archives.Count - 1; i >= 0; i--)

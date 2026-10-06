@@ -57,6 +57,8 @@ public sealed class SavePrompt
         _saves = saves;
         _save = save;
         _name = name.Length > NameLength ? name[..NameLength] : name;
+        // A full save (F2) asks for the name at once.
+        _stage = save.Kind == SaveKind.Snapshot ? Stage.Name : Stage.Ask;
         _cursor = _name.Length;
     }
 

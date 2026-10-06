@@ -7,8 +7,9 @@ namespace Mdk.Game.Flow;
 /// level (its briefing first), or a full snapshot (F2).</summary>
 public enum SaveKind { LevelStart = 3, BeforeLevel = 6, Snapshot = 1003 }
 
-/// <summary>A saved game: its kind, level (LEVELn), health, deaths, the air strike and when.</summary>
-public sealed record SaveGame(SaveKind Kind, int Level, int Health, int Deaths, bool StrikeUsed, string Time)
+/// <summary>A saved game: its kind, level (LEVELn), health, deaths, the air strike and when; a full
+/// snapshot also holds the level's state (JSON: <c>{"kurt": ..., "level": ...}</c>).</summary>
+public sealed record SaveGame(SaveKind Kind, int Level, int Health, int Deaths, bool StrikeUsed, string Time, string? State = null)
 {
     public const int FullHealth = 100;
     private const int FirstLevel = 3;
@@ -28,6 +29,12 @@ public sealed record SaveGame(SaveKind Kind, int Level, int Health, int Deaths, 
             json.WriteNumber("deaths", Deaths);
             json.WriteBoolean("strike_used", StrikeUsed);
             json.WriteString("time", Time);
+            if (State != null)
+            {
+                json.WritePropertyName("snapshot");
+                json.WriteRawValue(State);
+            }
+
             json.WriteEndObject();
         }
 
@@ -55,7 +62,8 @@ public sealed record SaveGame(SaveKind Kind, int Level, int Health, int Deaths, 
             var kind = (SaveKind)Number(root, "type", (int)SaveKind.LevelStart);
             var strike = root.TryGetProperty("strike_used", out var s) && s.ValueKind == JsonValueKind.True;
             var time = root.TryGetProperty("time", out var t) && t.ValueKind == JsonValueKind.String ? t.GetString() ?? "" : "";
-            return new SaveGame(kind, level, Number(root, "health", FullHealth), Number(root, "deaths", 0), strike, time);
+            var state = root.TryGetProperty("snapshot", out var snapshot) && snapshot.ValueKind == JsonValueKind.Object ? snapshot.GetRawText() : null;
+            return new SaveGame(kind, level, Number(root, "health", FullHealth), Number(root, "deaths", 0), strike, time, state);
         }
         catch (JsonException)
         {
@@ -123,4 +131,9 @@ public sealed class SaveGames(string directory)
     }
 
     private string PathOf(string name) => Path.Combine(directory, name + Extension);
+
+    /// <summary>The saves of a user folder (<c>saves/</c> in it).</summary>
+    public static SaveGames In(string userFolder) => new(Path.Combine(userFolder, SavesFolder));
+
+    private const string SavesFolder = "saves";
 }

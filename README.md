@@ -26,8 +26,12 @@ bleeds and the fans lift Kurt. He snipes through the scope with every kind of ro
 Bones' air strike. Only Kurt's arena and the one behind an open door are drawn and solid, as in
 the original. The game starts with the splash and the main menu (options, key bindings, saved
 games) and plays the levels in order with their loading screens, briefings, the end of each level,
-the statistics and the save prompt; when Kurt dies, "Continue" starts the level again. The fall
-before each level, the stream after it, the rides and full saves (F2) aren't ported yet. The
+the statistics and the save prompt; when Kurt dies, "Continue" starts the level again. After each
+level Kurt steers down the stream's tube until Bones' crane picks him up (after LEVEL8 he follows
+Gunter to the planet). Before each level he falls from orbit onto the minecrawler, dodging the
+radars' missiles and catching pickups. Kurt rides level 4's snowboard and level 7's walker
+(`XD2`) and bomber (`XE`), the end of a level tears the arena apart around him as he rises, F2
+makes a full save of the level, and the Score-O-matic spins its heads. The
 [Godot port](https://github.com/nemo22/mdk-godot) is more complete for now.
 
 ## Progress
@@ -37,13 +41,13 @@ before each level, the stream after it, the rides and full saves (F2) aren't por
 | Data formats: levels, textures, models, sprites, sounds, fonts, scripts, videos | █████████░ 90% |
 | Rendering: arenas, glass, sky, mirrors, Kurt's sprite, effects | ████████░░ 80% |
 | Collisions: the original's BSP | ████████░░ 80% |
-| Kurt: walking, turning, jumping, chute, camera, damage, death | ██████░░░░ 60% |
+| Kurt: walking, turning, jumping, chute, camera, damage, death | ███████░░░ 70% |
 | Sound mixer (the original's laws) and music | ██████░░░░ 60% |
 | Script VM, aliens, objects, doors, effects, fans | ███████░░░ 70% |
 | Weapons, items, sniper mode | ████████░░ 80% |
 | HUD (health, inventory, messages, health bar) | ███████░░░ 70% |
-| Menus, saves, level flow | ███████░░░ 70% |
-| The fall and the stream between levels, rides | ░░░░░░░░░░ 0% |
+| Menus, saves, level flow | ████████░░ 80% |
+| The fall and the stream between levels, rides | ███████░░░ 70% |
 | Videos: the menu's FLC and slideshow, the end movies | ████████░░ 80% |
 | **Overall** | **about 60%** |
 
@@ -68,7 +72,13 @@ mdk.exe
   the intermission, 3 the briefing, 4 the debriefing; `--counts=shots,hits,sniper,sniper
   hits,kills,enemies,heads`, `--towns=bits`); `--briefing=N` its briefing alone; `--end` the end
   movies.
-- `--load=NAME`: load a saved game; `--save=NAME`: save the first level when it starts (tests).
+- `--fall=N`: the fall before level N, then the level (`--profile` prints it every second,
+  `--walk=seconds` holds "forward" from `--delay=seconds` of fall).
+- `--stream=N`: the stream after level N (`--health=N` Kurt's health; its tube is always the same
+  one, for tests).
+- `--load=NAME`: load a saved game (a full save prints its hash); `--save=NAME`: save the first
+  level when it starts; `--snapshot=NAME`: a full save (as F2) at the screenshot, its hash printed
+  (tests).
 - `--at=x,y,z[,yaw]`: where Kurt starts (MDK coordinates).
 - `--fly`: start with the flying camera.
 - `--mute`: no sound.
@@ -77,7 +87,10 @@ mdk.exe
   (uses the item after 1 second), `--profile` (prints the objects of Kurt's arena every second),
   `--sniper[=zoom[,pitch]]` (sniper mode once Kurt stands), `--zoom=seconds` (zooms in),
   `--sniper-fire` (one sniper round), `--strike[=dive]` (Bones' full-screen strike), `--die` (Kurt
-  dies after 1 second), `--event=N` (a `special_event` after 1 second: 1 ends the level). With
+  dies after 1 second), `--event=N` (a `special_event` after 1 second: 1 ends the level). After
+  `--delay`: `--teleport=ARENA,x,y,z`, `--kill=TYPE` (kills the first object of that type),
+  `--ride=TYPE` (Kurt on that walker), `--bomber[=drop]` (level 7: calls the `XE`, boards it, and
+  with `drop` drops a bomb once unlocked). With
   `--screenshot` but without `--level`, the screen shown after `--wait` seconds (menu,
   statistics...) is saved.
 
@@ -89,7 +102,7 @@ Controls: W/S or Up/Down to run, A/D to strafe, the mouse or Left/Right to turn,
 (hold it while falling to open the chute), Shift for turbo, Ctrl or the left mouse button to fire,
 Enter to use the item, Tab or [ ] to select it (or 1-5), the right mouse button for sniper mode
 (the mouse wheel or PageUp/PageDown zoom, Tab or [ ] select the ammo), F1 for the flying camera (E/Q to go up and
-down), F12 for a screenshot, Esc for the pause menu (resume, options, main menu, quit). The bindings
+down), F2 for a full save, F12 for a screenshot, Esc for the pause menu (resume, options, main menu, quit). The bindings
 can be changed in Options, Controls. In the menus: the arrows or the mouse, Enter or a click, Esc
 back. Typing `TOOSCARYFORME` in a level turns gore on or off, `SEETHEWHOLEGAME` the main menu's
 debug keys (3-8 start that level, D the statistics with random counts).
@@ -120,6 +133,11 @@ sh tests/scripts_test.sh
 sh tests/sniper_test.sh
 sh tests/effects_test.sh
 sh tests/flow_test.sh
+sh tests/stream_test.sh
+sh tests/fall_test.sh
+sh tests/rides_test.sh
+sh tests/snapshot_test.sh
+sh tests/end_level_test.sh
 ```
 
 ## Layout
@@ -128,7 +146,8 @@ sh tests/flow_test.sh
 - `src/Mdk.Engine`: SDL3 behind a small API: the renderer (SDL_GPU), the audio mixer, the window
   and input.
 - `src/Mdk.Game`: the game: levels, collisions, Kurt, the camera, the sound mixer's laws, scripts,
-  the game's flow (`Flow/`: screens, settings, saves) and its menus (`Menu/`).
+  the game's flow (`Flow/`: screens, settings, saves), its menus (`Menu/`), the stream (`Stream/`)
+  and the fall (`Fall/`).
 - `src/Mdk.App`: the program and its command line.
 - `shaders/`: HLSL shaders, compiled to DXIL at build time.
 - `docs/`: [the architecture and roadmap](docs/architecture.md). The knowledge base about MDK

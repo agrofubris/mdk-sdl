@@ -155,6 +155,9 @@ public sealed partial class Kurt
         return sound;
     }
 
+    /// <summary>Starts with another health than 100 (the fall's).</summary>
+    public void SetHealth(int health) => Health = Math.Max(health, 0);
+
     /// <summary>Knocks Kurt down (state 901): he stops firing, falls and gets up (K_BANG, K_BFLIP), and is
     /// invulnerable for 3 seconds.</summary>
     public void KnockDown(Vector2 push)

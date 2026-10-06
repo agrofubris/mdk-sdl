@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Text.Json.Nodes;
 using Mdk.Formats;
 
 namespace Mdk.Game.Scripts;
@@ -95,6 +96,39 @@ public sealed class Fans(IReadOnlyList<Dti.ArenaEntry> arenas, Random rng)
         }
 
         _fans.Add(fan);
+    }
+
+    /// <summary>The fans for a full save.</summary>
+    public JsonArray Snapshot() => new(_fans.Select(f => (JsonNode?)new JsonObject
+    {
+        ["name"] = f.Name,
+        ["arena"] = f.Arena,
+        ["param"] = f.Param,
+        ["type"] = f.Type,
+        ["strength"] = f.Strength,
+        ["mask"] = f.Mask,
+        ["box"] = new JsonArray(f.BoxStart.X, f.BoxStart.Y, f.BoxStart.Z, f.BoxEnd.X, f.BoxEnd.Y, f.BoxEnd.Z),
+    }).ToArray());
+
+    /// <summary>The fans of a full save, as they were.</summary>
+    public void Restore(JsonArray data)
+    {
+        _fans.Clear();
+        foreach (var entry in data.OfType<JsonObject>())
+        {
+            var box = entry["box"]!.AsArray().Select(n => n!.GetValue<float>()).ToArray();
+            _fans.Add(new Fan
+            {
+                Name = entry["name"]!.GetValue<string>(),
+                Arena = entry["arena"]!.GetValue<string>(),
+                Param = entry["param"]!.GetValue<int>(),
+                Type = entry["type"]!.GetValue<int>(),
+                Strength = entry["strength"]!.GetValue<float>(),
+                Mask = entry["mask"]!.GetValue<int>(),
+                BoxStart = new Vector3(box[0], box[1], box[2]),
+                BoxEnd = new Vector3(box[3], box[4], box[5]),
+            });
+        }
     }
 
     /// <summary>fan_remove (0x413fa0).</summary>

@@ -19,6 +19,8 @@ public sealed class Ui(MdkData data, Window window, Renderer renderer, AudioDevi
     public AudioDevice Audio => audio;
     public Input Input => input;
     public Settings Settings => settings;
+    /// <summary>Where the settings and the saved games are kept.</summary>
+    public string UserFolder => userFolder;
     public Fti Fti { get; } = Fti.Load(data.PathOf("MISC/MDKFONT.FTI"));
     public ScreenView View { get; } = new(renderer);
 

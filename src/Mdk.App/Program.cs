@@ -18,7 +18,10 @@ using Mdk.Game.Scripts;
 //   --stats=N               the screens after level N (--phase=1-4 starts at a page,
 //                           --counts=shots,hits,sniper,sniper hits,kills,enemies,heads, --towns=bits)
 //   --briefing=N            the briefing of level N
+//   --fall=N                the fall before level N, then the level (--profile prints it every second,
+//                           --walk=seconds holds "forward" from --delay=seconds of fall)
 //   --end                   the end movies
+//   --stream=N              the stream after level N (--health=N: Kurt's health)
 //   --load=NAME             load a saved game
 //   --save=NAME             save the first level when it starts (tests)
 //   --at=x,y,z[,yaw]        Kurt's feet (MDK coordinates) and yaw in degrees
@@ -40,6 +43,11 @@ using Mdk.Game.Scripts;
 //   --zoom=seconds          hold "zoom in" in sniper mode (tests)
 //   --sniper-fire           fire one sniper round once the clip is loaded (tests)
 //   --strike[=dive]         Bones' full-screen strike after 1 second (dive: the plane only; tests)
+//   --teleport=ARENA,x,y,z  teleport Kurt there after the delay (tests)
+//   --kill=TYPE             kill the first object of that type after the delay (tests)
+//   --ride=TYPE             put Kurt on the first walker of that type after the delay (tests)
+//   --bomber[=drop]         LEVEL7: call the XE of DANT_5 after the delay, board it (drop: and drop a bomb; tests)
+//   --snapshot=NAME         at the screenshot, a full save as F2 makes, its hash printed (tests)
 
 const int DefaultLevel = 7;
 
@@ -64,7 +72,7 @@ if (options.TryGetValue("at", out var at))
 }
 
 int? Number(string name) => options.TryGetValue(name, out var text) ? int.Parse(text, CultureInfo.InvariantCulture) : null;
-var level = Number("level") ?? Number("stats") ?? Number("briefing") ?? DefaultLevel;
+var level = Number("level") ?? Number("stats") ?? Number("briefing") ?? Number("stream") ?? Number("fall") ?? DefaultLevel;
 var pitch = options.TryGetValue("pitch", out var pitchText) ? float.Parse(pitchText, CultureInfo.InvariantCulture) : 0f;
 options.TryGetValue("screenshot", out var screenshot);
 var sound = options.ContainsKey("mute") ? SoundMode.Muted : SoundMode.On;
@@ -87,12 +95,19 @@ var viewer = new ViewerOptions(level, position, yaw, pitch, sound)
     Strike = options.TryGetValue("strike", out var strike) ? (strike == "dive" ? StrikeScene.Plane.Only : StrikeScene.Plane.WithPilot) : null,
     Die = options.ContainsKey("die"),
     Event = Number("event"),
+    Teleport = options.TryGetValue("teleport", out var teleport) ? TeleportTarget.Parse(teleport) : null,
+    Kill = options.GetValueOrDefault("kill"),
+    Ride = options.GetValueOrDefault("ride"),
+    Bomber = options.TryGetValue("bomber", out var bomber) ? (bomber == "drop" ? BomberTest.Drop : BomberTest.Ride) : null,
+    Snapshot = options.GetValueOrDefault("snapshot"),
 };
 
 // Test options of a level (and --screenshot without --menu) skip the menu, as in the Godot port.
 var start = options.ContainsKey("end") ? Start.EndMovie
     : options.ContainsKey("stats") ? Start.Statistics
     : options.ContainsKey("briefing") ? Start.Briefing
+    : options.ContainsKey("stream") ? Start.Stream
+    : options.ContainsKey("fall") ? Start.Fall
     : options.ContainsKey("level") || (screenshot != null && !options.ContainsKey("menu")) ? Start.Level
     : Start.Menu;
 var page = options.ContainsKey("controls") ? MenuPage.Controls : options.ContainsKey("options") ? MenuPage.Options : MenuPage.Main;
@@ -107,6 +122,7 @@ using var game = new Game(data, new GameOptions(start, viewer)
     Save = options.GetValueOrDefault("save"),
     Screenshot = screenshot,
     Wait = Seconds("wait"),
+    Health = Number("health"),
 });
 game.Run();
 return 0;

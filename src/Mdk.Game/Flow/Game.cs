@@ -8,7 +8,7 @@ using Mdk.Game.Menu;
 namespace Mdk.Game.Flow;
 
 /// <summary>How the game starts (command line): the screen shown first.</summary>
-public enum Start { Menu, Level, Statistics, Briefing, EndMovie }
+public enum Start { Menu, Level, Statistics, Briefing, EndMovie, Stream, Fall }
 
 /// <summary>The command line's choices: where the game starts, the first level's test options, the
 /// statistics' test counts, a save to load or write, a screenshot.</summary>
@@ -29,13 +29,15 @@ public sealed record GameOptions(Start Start, ViewerOptions Level)
     /// <summary>A screen other than the first level saves this frame after <see cref="Wait"/> seconds, then the game quits.</summary>
     public string? Screenshot { get; init; }
     public float Wait { get; init; }
+    /// <summary>Kurt's health in a stream started directly (--stream).</summary>
+    public int? Health { get; init; }
 }
 
 /// <summary>The game: its screens one after the other, as the original's game states.
 /// <code>
-///   splash ─► menu ─new game─► briefing ─[fall]─► loading ─► level ─tornado─► [stream] ─► statistics
+///   splash ─► menu ─new game─► briefing ──fall──► loading ─► level ─tornado─► stream ─► statistics
 ///              ▲  └continue/save─► loading                     │                       save prompt
-///              │                                               │ died: LASTGAME           briefing ─[fall]─► next level
+///              │                                               │ died: LASTGAME           briefing ──fall──► next level
 ///              └───────────────────────────────────────────────┘ event 81: end movies ─► splash ─► menu
 /// </code>
 /// [ ] are not ported yet (TODO hooks in <see cref="Handle"/>, the statistics and the menu).</summary>
@@ -46,7 +48,6 @@ public sealed class Game : IDisposable
     private const string UserFolderName = "mdk-sdl";
     /// <summary>Overrides the user folder (settings and saves), for tests.</summary>
     private const string UserFolderVariable = "MDK_USER_DIR";
-    private const string SavesFolder = "saves";
     private const int TownShift = 29;
 
     private readonly GameOptions _options;
@@ -71,7 +72,7 @@ public sealed class Game : IDisposable
         _options = options;
         var folder = Environment.GetEnvironmentVariable(UserFolderVariable)
             ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), UserFolderName);
-        _saves = new SaveGames(Path.Combine(folder, SavesFolder));
+        _saves = SaveGames.In(folder);
 
         // The original deletes LASTGAME.SAV when it quits.
         _saves.Delete(SaveGames.LastGame);
@@ -147,6 +148,10 @@ public sealed class Game : IDisposable
                 return Event.Briefing;
             case Start.EndMovie:
                 return Event.GameFinished;
+            case Start.Stream:
+                return Event.Stream;
+            case Start.Fall:
+                return Event.Fall;
         }
 
         _state.Splash = _options.Splash;
@@ -206,6 +211,15 @@ public sealed class Game : IDisposable
                 Show(() => new EndMovie(_ui));
                 _state.Splash = true;
                 break;
+            case Event.Stream:
+                ShowStream(_options.Health ?? SaveGame.FullHealth);
+                break;
+            case Event.Fall:
+                Show(() => new Fall.FallScreen(_ui, _state, _firstLevel ? _options.Level : new ViewerOptions(0, null, null, 0f, _options.Level.Sound)));
+                break;
+            case Event.StreamEnded:
+                AfterStream();
+                break;
         }
 
         _firstLevel = false;
@@ -227,9 +241,7 @@ public sealed class Game : IDisposable
         }
     }
 
-    /// <summary>The level ended (the tornado is over): its counts are kept, then the statistics, the
-    /// last level or the menu.</summary>
-    // TODO the stream after the level (stream.gd), and the Gunter stream before LEVEL5
+    /// <summary>The level ended (the tornado is over): its counts are kept, then the stream or the menu.</summary>
     private void AfterLevel(Scripts.ScriptRuntime.GameOver over)
     {
         if (_viewer != null)
@@ -237,8 +249,29 @@ public sealed class Game : IDisposable
             _state.Stats = _viewer.Stats;
         }
 
+        if (LevelFlow.AfterLevel(_state.Level, over) == LevelFlow.After.Menu)
+        {
+            Handle(Event.Menu);
+            return;
+        }
+
+        ShowStream(_viewer?.Health ?? SaveGame.FullHealth);
+    }
+
+    /// <summary>The stream after the level, with Kurt's health. Started directly (--stream) its tube
+    /// is the one of the C library's first seed, as tests expect.</summary>
+    private void ShowStream(int health)
+    {
+        var direct = _firstLevel && _options.Start == Start.Stream;
+        var seed = direct ? Stream.WatcomRandom.DefaultSeed : (uint)Environment.TickCount;
+        Show(() => new Stream.StreamScreen(_ui, _state.Level, health, new Stream.WatcomRandom(seed)));
+    }
+
+    /// <summary>The stream is over: the statistics, or the last level.</summary>
+    private void AfterStream()
+    {
         var level = _state.Level;
-        switch (LevelFlow.AfterLevel(level, over))
+        switch (LevelFlow.AfterLevel(level, Scripts.ScriptRuntime.GameOver.No))
         {
             case LevelFlow.After.Statistics:
                 Handle(Event.Statistics);

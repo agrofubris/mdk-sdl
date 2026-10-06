@@ -17,7 +17,8 @@ public readonly record struct HudState(
     int Selected,
     int SuperChainGun,
     int BarHealth,
-    int BarMax);
+    int BarMax,
+    BomberSight? Bomber = null);
 
 /// <summary>The in-game HUD, drawn like the original (0x41e128) on the 360-high canvas: the health
 /// in the <c>SC_STAT</c> panel (bottom right, <c>SNIP_TXT</c> digits, blinking at 20 or less,
@@ -77,6 +78,7 @@ public sealed class HudView
     public Messages Messages { get; }
     /// <summary>Sniper mode's screen, which replaces the HUD while it shows.</summary>
     public SniperOverlay Sniper { get; }
+    private readonly BomberOverlay _bomber;
 
     public HudView(Renderer renderer, Bni sprites, Palette palette, Fti fti)
     {
@@ -101,6 +103,7 @@ public sealed class HudView
         var small = new FontView(renderer, Font.Parse(fti.GetBytes("FONTSML"), FontSpace.Small), system);
         Messages = new Messages(fti, big, small);
         Sniper = new SniperOverlay(renderer, sprites, palette, _palette);
+        _bomber = new BomberOverlay(renderer, sprites, _palette, big);
     }
 
     /// <summary>Spaces of the fonts' missing characters.</summary>
@@ -144,6 +147,12 @@ public sealed class HudView
             Sniper.Draw(width, state.Health, blink, panelAt, _panel.Size);
             Messages.Draw(width);
             return;
+        }
+
+        // The bomber's sight first (0x41e3c8).
+        if (state.Bomber is { } sight)
+        {
+            _bomber.Draw(width, sight);
         }
 
         // Health panel at the bottom right; the number blinks when health is low.

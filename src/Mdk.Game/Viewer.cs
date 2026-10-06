@@ -49,6 +49,13 @@ public sealed record ViewerOptions(int Level, Vector3? Position, float? Yaw, flo
     public bool Die { get; init; }
     /// <summary>A special_event after a second (1 ends the level).</summary>
     public int? Event { get; init; }
+    /// <summary>After the delay: a teleport, an object killed, a walker ridden, the XE boarded (see <see cref="RideTest"/>).</summary>
+    public TeleportTarget? Teleport { get; init; }
+    public string? Kill { get; init; }
+    public string? Ride { get; init; }
+    public BomberTest? Bomber { get; init; }
+    /// <summary>At the screenshot, a full save of this name (as F2), its hash printed.</summary>
+    public string? Snapshot { get; init; }
 }
 
 public enum SoundMode { On, Muted }
@@ -100,6 +107,9 @@ public sealed class Viewer : IScreen
     private readonly Dictionary<string, ObjectView.Look> _looks = [];
     private readonly SniperView _sniper;
     private readonly SniperTest _sniperTest;
+    private readonly RideTest _rideTest;
+    /// <summary>F2's name prompt, while it's open.</summary>
+    private SavePrompt? _snapshotPrompt;
     private readonly FollowCamera _follow = new();
     private readonly FreeCamera _fly;
     private readonly PauseMenu _pause;
@@ -127,7 +137,8 @@ public sealed class Viewer : IScreen
         var renderer = _renderer;
         var groups = new TriangleGroups();
         _view = new LevelView(renderer, level, groups);
-        _mixer = new SoundMixer(_audio, SoundBank.ForLevel(data, options.Level).Get);
+        var bank = SoundBank.ForLevel(data, options.Level);
+        _mixer = new SoundMixer(_audio, bank.Get);
         var cmi = Cmi.Load(data.PathOf($"TRAVERSE/LEVEL{level.Number}/LEVEL{level.Number}.CMI"));
         PlayMusic(_mixer, cmi, level);
         renderer.Panorama = CreatePanorama(renderer, level.Dti);
@@ -140,6 +151,11 @@ public sealed class Viewer : IScreen
 
         var sprites = Bni.Load(data.PathOf("TRAVERSE/TRAVSPRT.BNI"));
         _sprite = new KurtSprite(renderer, sprites, level.Dti.Palette);
+        foreach (var name in KurtSprite.LevelAnimations)
+        {
+            _sprite.Add(bank.Animation(name));
+        }
+
         _kurt = new Kurt.Kurt(_space, _mixer, _sprite.FrameCount)
         {
             Feet = options.Position ?? level.Dti.StartPosition + new Vector3(0f, 0f, StartDrop),
@@ -160,6 +176,8 @@ public sealed class Viewer : IScreen
         // The HUD; pickups show their names (0x46c448).
         _hud = new HudView(renderer, sprites, level.Dti.Palette, ui.Fti);
         _scripts.Messages = _hud.Messages;
+        CarryFromFall(state);
+        RestoreSnapshot(state);
         _kurt.Inventory.PickedUp += name => _hud.Messages.Push(name, Messages.FlagZoom, PickupMessageSeconds);
 
         foreach (var pickup in options.Give)
@@ -171,6 +189,7 @@ public sealed class Viewer : IScreen
         _effects = new EffectsView(renderer, new MaterialResolver(renderer, level.Dti), level);
         _sniper = new SniperView(renderer, _objects, level, _hud);
         _sniperTest = new SniperTest(options);
+        _rideTest = new RideTest(options);
         _fly = new FreeCamera { Pitch = options.Pitch };
         _flying = options.Fly;
         _pause = new PauseMenu(ui);
@@ -186,9 +205,33 @@ public sealed class Viewer : IScreen
     /// <summary>Kurt's health when the level ended (the save after LEVEL8 keeps it).</summary>
     public int Health => _kurt.Health;
 
+    /// <summary>Kurt keeps the health and the pickups of the fall (taken again, without their messages).</summary>
+    private void CarryFromFall(GameState state)
+    {
+        if (state.Carry is not { } carry)
+        {
+            return;
+        }
+
+        state.Carry = null;
+        foreach (var pickup in carry.Pickups)
+        {
+            _kurt.Collect(pickup);
+        }
+
+        _kurt.SetHealth(carry.Health);
+        Console.WriteLine($"Level starts with the fall's health {carry.Health} and pickups {string.Join(",", carry.Pickups)}");
+    }
+
     public Event Frame(float elapsed, string? screenshot)
     {
         var input = _ui.Input;
+
+        // F2's name prompt: the game waits under it.
+        if (_snapshotPrompt != null)
+        {
+            return AskSnapshot(elapsed, screenshot);
+        }
 
         // The pause menu: the game waits under it.
         if (_pause.Open)
@@ -239,8 +282,7 @@ public sealed class Viewer : IScreen
         TypeCheats(input.Typed);
         if (input.WasPressed(MenuKey.Snapshot))
         {
-            // TODO F2's full save (snapshot.gd, script_runtime.gd snapshot/restore, save_prompt.gd)
-            Console.WriteLine("Full saves (F2) aren't ported yet");
+            OpenSnapshot();
         }
 
         RunSteps(input, elapsed);
@@ -267,6 +309,11 @@ public sealed class Viewer : IScreen
             return _next;
         }
 
+        if (_options.Snapshot is { } name)
+        {
+            SaveSnapshot(name);
+        }
+
         Report(_kurt, _space);
         return Event.Quit;
     }
@@ -287,6 +334,7 @@ public sealed class Viewer : IScreen
             input.Hold(Key.UseItem, options.Use && _time >= UseStart && _time <= UseStart + UseTime ? Input.State.Down : Input.State.Up);
             RunTests();
             _sniperTest.Step(_kurt, _scripts, input, _time);
+            _rideTest.Step(_kurt, _scripts, input, _time);
             if (_flying)
             {
                 _fly.Update(input, Step);
@@ -336,7 +384,7 @@ public sealed class Viewer : IScreen
     {
         var camera = SceneView();
         _mixer.ListenerPosition = camera.Position;
-        _mixer.ListenerRight = _flying ? _fly.Right : Vector3.Normalize(Vector3.Cross(_follow.Forward, Vector3.UnitZ));
+        _mixer.ListenerRight = _flying ? _fly.Right : _follow.Right;
         // In sniper mode the sounds are heard through the scope.
         _mixer.ScopeZoom = _kurt.Sniping && !_flying ? _kurt.Scope.Zoom : 0f;
         _mixer.ListenerForward = _kurt.SniperForward;
@@ -344,6 +392,7 @@ public sealed class Viewer : IScreen
         _mixer.Update(elapsed);
         _scripts.Eye = camera.Position;
         _view.Draw(_scripts.DrawnArenas);
+        _view.DrawEnd(_scripts.EndLevel);
         DrawObjects(_objects, _scripts, _level, _looks);
         _sniper.Draw(_kurt, _scripts, elapsed);
         _effects.Draw(_scripts, camera);
@@ -357,6 +406,62 @@ public sealed class Viewer : IScreen
 
     private View SceneView() => _flying ? _fly.View(_renderer.AspectRatio)
         : _kurt.Sniping ? FollowCamera.SniperView(_kurt, _renderer.AspectRatio) : _follow.View(_renderer.AspectRatio);
+
+    /// <summary>A full save being loaded: the level and Kurt as they were.</summary>
+    private void RestoreSnapshot(GameState state)
+    {
+        if (state.Snapshot is not { } json)
+        {
+            return;
+        }
+
+        state.Snapshot = null;
+        _scripts.Load(json);
+        Console.WriteLine($"restored hash {Snapshot.Hash(_scripts.Capture())}, objects {_scripts.Objects.Count}");
+    }
+
+    /// <summary>F2 (0x42b520(0)): the game stops and the name is asked, the level's number offered.</summary>
+    private void OpenSnapshot()
+    {
+        if (!_scripts.CanSnapshot() || _kurt.Sniping)
+        {
+            return;
+        }
+
+        var name = (GameState.IndexOf(_level.Number) + 1).ToString(CultureInfo.InvariantCulture);
+        _snapshotPrompt = new SavePrompt(_ui, new Fonts(_renderer, _ui.Fti), SaveGames.In(_ui.UserFolder), SnapshotSave(_scripts.Capture()), name);
+        _ui.Window.CaptureMouse(Capture.Off);
+    }
+
+    /// <summary>A frame of F2's prompt (on black); Enter saves the level as it was, Esc gives up.</summary>
+    private Event AskSnapshot(float elapsed, string? screenshot)
+    {
+        _ui.View.Layout(ScreenView.Fit.Inside);
+        _snapshotPrompt!.Update(_ui.Input, elapsed);
+        _snapshotPrompt.Draw();
+        _ui.Present(screenshot);
+        if (_snapshotPrompt.Closed)
+        {
+            _snapshotPrompt = null;
+            CaptureMouse();
+        }
+
+        return Event.None;
+    }
+
+    /// <summary>The tests' full save (--snapshot): written at once, its hash printed.</summary>
+    private void SaveSnapshot(string name)
+    {
+        var json = _scripts.Capture();
+        SaveGames.In(_ui.UserFolder).Write(name, SnapshotSave(json));
+        Console.WriteLine($"snapshot hash {Snapshot.Hash(json)}, objects {_scripts.Objects.Count}");
+    }
+
+    private SaveGame SnapshotSave(string json)
+    {
+        _state.Level = _level.Number;
+        return _state.Save(SaveKind.Snapshot) with { Health = _kurt.Health, State = json };
+    }
 
     /// <summary>The mouse looks around again once the pause menu closes.</summary>
     private void CaptureMouse()
@@ -413,7 +518,7 @@ public sealed class Viewer : IScreen
         var slots = inventory.Slots.Select(s => ((int)s.Item, s.Count)).ToList();
         var (barHealth, barMax) = scripts.GetBar();
         return new HudState(kurt.Health, kurt.HurtFlash, kurt.WhiteFlash, kurt.Current == Kurt.Kurt.State.Dead,
-            slots, inventory.Selected, inventory.SuperChainGun, barHealth, barMax);
+            slots, inventory.Selected, inventory.SuperChainGun, barHealth, barMax, scripts.Rides.Bomber?.Shown);
     }
 
     /// <summary>The visible objects, each with its arena's palette and textures.</summary>
@@ -453,6 +558,12 @@ public sealed class Viewer : IScreen
                 $"  {obj.TypeName}_{obj.InstanceId} {obj.Arena} ({Rounded(p.X)}, {Rounded(p.Y)}, {Rounded(p.Z)}) yaw {(int)obj.Yaw} " +
                 $"move {obj.MoveCommand} path {obj.Path} anim {obj.Animation?.Name ?? "-"} frame {obj.AnimationFrame} " +
                 $"speed {obj.Speed:0.0} health {obj.Health} flags {obj.Flags:x}{door}"));
+        }
+
+        RideTest.Report(scripts);
+        if (scripts.EndLevel is { } end)
+        {
+            Console.WriteLine(end.Describe());
         }
 
         if (scripts.Vm.Unimplemented.Count != 0)

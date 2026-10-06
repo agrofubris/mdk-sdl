@@ -17,7 +17,13 @@ public class WallJitterTests
     private const int Frames = 5;
     private const float Seconds = 4f;
     private const int MaxFlips = 4;
-    private const float PitchTolerance = 1e-4f;
+    /// <summary>Pitch changes (degrees per step) below this don't count as reversals; no step may
+    /// turn the view more than <see cref="MaxPitchStep"/> (the climb term comes back by 0.8° a tick
+    /// when Kurt stops).</summary>
+    private const float PitchTolerance = 0.05f;
+    private const float MaxPitchStep = 1f;
+    /// <summary>The slope's bumps turn the view a few times; the old air tilt did it 80-160 times.</summary>
+    private const int MaxTiltFlips = 10;
 
     private static readonly MdkData Data = MdkData.Find() ?? throw new InvalidOperationException("MDK data not found");
     private static readonly AudioDevice Device = new(Output.Muted);
@@ -74,8 +80,31 @@ public class WallJitterTests
 
         Assert.True(flips < MaxFlips, $"height reversed {flips} times");
 
-        // The view's pitch stays put (the arena pitch is fixed here).
-        var tilts = eyes.Zip(eyes.Skip(1)).Count(e => MathF.Abs(e.First - e.Second) > PitchTolerance);
-        Assert.Equal(0, tilts);
+        // The view's pitch may follow the descent smoothly (the climb term, −40 × the smoothed
+        // vertical speed) but doesn't shake: no step turns it by more than a degree, and its
+        // noticeable changes rarely reverse (the old air tilt toggled every few steps).
+        var pitches = eyes.Select(z => float.RadiansToDegrees(MathF.Asin(z))).ToList();
+        var changes = pitches.Zip(pitches.Skip(1)).Select(p => p.Second - p.First).ToList();
+        Assert.True(changes.Max(MathF.Abs) < MaxPitchStep, $"view pitch jumped {changes.Max(MathF.Abs):0.000}°");
+        var tilts = Reversals(changes);
+        Assert.True(tilts < MaxTiltFlips, $"view pitch reversed {tilts} times");
+    }
+
+    /// <summary>How often a series of changes flips sign (changes below the tolerance ignored).</summary>
+    private static int Reversals(IReadOnlyList<float> changes)
+    {
+        var flips = 0;
+        var previous = 0f;
+        foreach (var d in changes.Where(d => MathF.Abs(d) > PitchTolerance))
+        {
+            if (previous != 0f && MathF.Sign(d) != MathF.Sign(previous))
+            {
+                flips++;
+            }
+
+            previous = d;
+        }
+
+        return flips;
     }
 }

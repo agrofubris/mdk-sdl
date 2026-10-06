@@ -114,6 +114,10 @@ public sealed class ArenaSpace
         return again with { Feet = new Vector3(again.Feet.X, again.Feet.Y, result.Feet.Z) };
     }
 
+    /// <summary>The owners of the solids Kurt's walking box at <paramref name="feet"/> touches or is in.</summary>
+    public static IEnumerable<object> Touching(Vector3 feet, IReadOnlyList<Solids.Solid> solids) =>
+        Solids.Touching(feet + new Vector3(0f, 0f, WalkBox.Z + WalkLift), WalkBox, solids);
+
     /// <summary>The nearest floor a segment crosses (0x421708), in any arena around its ends.</summary>
     public bool Floor(Vector3 from, Vector3 to, out Vector3 point)
     {
