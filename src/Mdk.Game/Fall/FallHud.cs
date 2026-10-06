@@ -8,8 +8,8 @@ using Mdk.Game.Kurt;
 namespace Mdk.Game.Fall;
 
 /// <summary>The HUD over the fall, as in a level (0x420830, 0x46cce4) but from <c>FALL3D.BNI</c>'s
-/// copies of the images: the messages, the health panel (blinking at 20 or less), the inventory for
-/// 2 seconds after it changes, and the skull growing while Kurt dies.
+/// copies of the images: the messages, the health panel (blinking at 20 or less), the inventory
+/// (always: 0x46cce4 resets its timer every frame outside sniper mode), and the skull growing while Kurt dies.
 /// <code>
 ///   ┌─────────────────────────────┐
 ///   │          message            │
@@ -19,7 +19,6 @@ namespace Mdk.Game.Fall;
 /// </code></summary>
 public sealed class FallHud
 {
-    private const int InventoryTicks = 60;
     private const int BlinkMask = 31;
     private const int BlinkOn = 16;
     private const int LowHealth = 20;
@@ -47,8 +46,6 @@ public sealed class FallHud
     private readonly Image _digits;
     private readonly List<Image> _icons = [];
     private int _blink;
-    private int _inventoryTicks;
-    private string _lastInventory = "";
 
     public Messages Messages { get; }
 
@@ -75,19 +72,10 @@ public sealed class FallHud
     private Image Load(Texture texture, int hotspotX, int hotspotY) =>
         new(_renderer.CreateIndexTexture(texture.Width, texture.Height, texture.Indices), new Vector2(texture.Width, texture.Height), hotspotX, hotspotY);
 
-    /// <summary>Some ticks passed: the blink and the inventory's display time.</summary>
+    /// <summary>Some ticks passed: the blink.</summary>
     public void Tick(Inventory inventory, int ticks)
     {
         _blink = (_blink + ticks) & BlinkMask;
-        var state = inventory.Selected + "|" + string.Join(",", inventory.Slots.Select(s => $"{s.Item}:{s.Count}"));
-        if (state != _lastInventory)
-        {
-            _lastInventory = state;
-            _inventoryTicks = InventoryTicks;
-            return;
-        }
-
-        _inventoryTicks = Math.Max(_inventoryTicks - ticks, 0);
     }
 
     /// <summary>Draws it; <paramref name="red"/> (0-1) sizes the skull while Kurt dies.</summary>
@@ -110,10 +98,7 @@ public sealed class FallHud
             DrawNumber(health, panel + new Vector2((int)_panel.Size.X >> 1, ((int)_panel.Size.Y - (int)_digits.Size.Y) >> 1));
         }
 
-        if (_inventoryTicks > 0)
-        {
-            DrawInventory(inventory);
-        }
+        DrawInventory(inventory);
     }
 
     private void DrawInventory(Inventory inventory)
