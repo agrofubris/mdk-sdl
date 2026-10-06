@@ -93,9 +93,13 @@ picks the next screen. A screen's textures and meshes are freed when it ends (`R
 
 1. ✅ Formats, level viewer (arenas, corridors, textures, glass).
 2. ✅ Sky panorama, mirrors, triangle groups (state kept in the triangle flags, as the original).
-   Animated textures wait for the script VM (opcode 133 drives them).
+   Animated textures (`Scripts/AnimatedTextures.cs`, opcode 133), the scripts' sky modes
+   (`Level/SkyModes.cs`, the renderer's `Backdrop`), the glass panes' outlines (`Level/Outlines.cs`,
+   line primitives), ropes (`Objects/RopeView.cs`), bullet holes (`Scripts/BulletHoles.cs`,
+   re-uploaded textures).
 3. ✅ Collision: the original's BSP (`Collision/Bsp.cs`, from godot-mdk `docs/bsp.md`).
-4. ✅ Sound mixer (SDL audio stream, the original's volume, distance, Doppler and pan laws).
+4. ✅ Sound mixer (SDL audio stream, the original's volume, distance, Doppler and pan laws), the
+   arenas' music and its fades (`Audio/LevelMusic.cs`).
 5. ✅ Script decoder (every script of the game decodes like the reference disassembler).
 6. 🟡 Kurt: walking, turning, jumping, chute, falls through the BSP (`damp_collide_move`,
    `damp_gravity`), solid objects and platforms (`Collision/Solids.cs`), follow camera, sprite,
@@ -108,7 +112,7 @@ picks the next screen. A screen's textures and meshes are freed when it ends (`R
    the camera's roll.
 7. 🟡 Script VM and objects (`Scripts/`: ports of `script_vm.gd`, `script_runtime.gd`,
    `object_motion.gd`, `object_behaviors.gd`; 30 ticks per second, object moves are BSP box sweeps).
-   Kurt's items and blasts are ported (`Items.cs`, `Twister.cs`; twisters aren't drawn), so are the
+   Kurt's items and blasts are ported (`Items.cs`, `Twister.cs`; twisters drawn as ribbons, `Ribbon.cs`), so are the
    effects (`Effects.cs`: wounds, slime drops, bubbles, smoke trails), the flying pieces
    (`Debris.cs`: sparks, shattered groups, break-ups) and the fans (`Fans.cs`), drawn by
    `Objects/EffectsView.cs`, the sniper rounds, their target lock and `bomb_follow_path`
@@ -119,8 +123,8 @@ picks the next screen. A screen's textures and meshes are freed when it ends (`R
 8. 🟡 Weapons, items, HUD, sniper mode: the chain gun, the items and the HUD (`Hud/`: health panel,
    inventory, messages in the original fonts, health bar, flashes, drawn on the renderer's 2D
    canvas) are done, and sniper mode's screen (`Hud/SniperOverlay.cs`; the round cameras and the
-   loaded rounds are renderer insets, `SniperView.cs`). Bullet holes on textures (`special_130`)
-   are not.
+   loaded rounds are renderer insets, `SniperView.cs`), bullet holes on textures (`special_130`).
+   Cutscenes look through `CutsceneCamera.cs`.
 9. 🟡 Menus, saves, level flow, videos (`Flow/`, `Menu/`; ports of `main_menu.gd`,
    `menu_items.gd`, `pause_menu.gd`, `save_prompt.gd`, `stats_screen.gd`, `slideshow.gd`,
    `intro_splash.gd`, `loading_screen.gd`, `game_state.gd`, `settings.gd`, `video.gd`,

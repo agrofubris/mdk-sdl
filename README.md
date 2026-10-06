@@ -31,7 +31,9 @@ level Kurt steers down the stream's tube until Bones' crane picks him up (after 
 Gunter to the planet). Before each level he falls from orbit onto the minecrawler, dodging the
 radars' missiles and catching pickups. Kurt rides level 4's snowboard and level 7's walker
 (`XD2`) and bomber (`XE`), the end of a level tears the arena apart around him as he rises, F2
-makes a full save of the level, and the Score-O-matic spins its heads. The
+makes a full save of the level, and the Score-O-matic spins its heads. Each arena plays its music with
+the original's fades, scripts animate textures, switch the sky and film cutscenes, sniper rounds
+leave bullet holes, and ropes, twisters' ribbons and the glass panes' outlines are drawn. The
 [Godot port](https://github.com/nemo22/mdk-godot) is more complete for now.
 
 ## Progress
@@ -39,10 +41,10 @@ makes a full save of the level, and the Score-O-matic spins its heads. The
 | Area | Done |
 | --- | --- |
 | Data formats: levels, textures, models, sprites, sounds, fonts, scripts, videos | █████████░ 90% |
-| Rendering: arenas, glass, sky, mirrors, Kurt's sprite, effects | ████████░░ 80% |
+| Rendering: arenas, glass, sky, mirrors, Kurt's sprite, effects | █████████░ 90% |
 | Collisions: the original's BSP | ████████░░ 80% |
 | Kurt: walking, turning, jumping, chute, camera, damage, death | ███████░░░ 70% |
-| Sound mixer (the original's laws) and music | ██████░░░░ 60% |
+| Sound mixer (the original's laws) and music | ████████░░ 80% |
 | Script VM, aliens, objects, doors, effects, fans | ███████░░░ 70% |
 | Weapons, items, sniper mode | ████████░░ 80% |
 | HUD (health, inventory, messages, health bar) | ███████░░░ 70% |
@@ -163,6 +165,7 @@ sh tests/fall_test.sh
 sh tests/rides_test.sh
 sh tests/snapshot_test.sh
 sh tests/end_level_test.sh
+sh tests/visuals_test.sh
 sh tests/soak_test.sh short
 ```
 
