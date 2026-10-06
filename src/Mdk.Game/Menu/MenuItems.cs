@@ -4,6 +4,7 @@ using System.Numerics;
 using System.Text;
 using Mdk.Engine.Audio;
 using Mdk.Engine.Platform;
+using Mdk.Engine.Render;
 using Mdk.Formats;
 using Mdk.Game.Flow;
 using Mdk.Game.Kurt;
@@ -53,6 +54,8 @@ public sealed class MenuItems
     private static readonly float[] Sensitivities = [0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f, 2.5f, 3f];
     private const int DefaultSensitivity = 3;
     private static readonly string[] DifficultyNames = ["Easy", "Normal", "Hard"];
+    private static readonly string[] AntiAliasingNames = ["Off", "2x", "4x"];
+    private static readonly int GraphicsCount = Enum.GetValues<Graphics>().Length;
     /// <summary>The options' sounds (0x42bb6c): the <c>OPTSONG</c> loop on the music bus and
     /// <c>OPTBUTT</c> on each change.</summary>
     private const string OptionSounds = "MISC/MDKSOUND.SNI";
@@ -327,7 +330,10 @@ public sealed class MenuItems
             step => s.MouseSensitivity = SensitivityStep(s.MouseSensitivity, step));
         AddOption(() => $"Invert mouse: {OnOff(s.InvertMouse)}", _ => s.InvertMouse = !s.InvertMouse);
         AddOption(() => $"Fullscreen: {OnOff(s.Fullscreen)}", _ => s.Fullscreen = !s.Fullscreen);
+        AddOption(() => $"Anti-aliasing: {AntiAliasingNames[(int)s.AntiAliasing]}",
+            step => s.AntiAliasing = (AntiAliasing)Wrap((int)s.AntiAliasing + step, AntiAliasingNames.Length));
         AddOption(() => $"Difficulty: {DifficultyNames[(int)s.Difficulty]}", step => s.Difficulty = (Difficulty)Wrap((int)s.Difficulty + step, DifficultyNames.Length));
+        AddOption(() => $"Graphics: {s.Graphics}", step => s.Graphics = (Graphics)Wrap((int)s.Graphics + step, GraphicsCount));
         AddOption(() => $"Gore: {OnOff(s.Gore)}", _ => s.Gore = !s.Gore);
         AddItem("Controls", () => ShowControls(() => ShowOptions(back)));
         AddItem("Back", back);

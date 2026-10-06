@@ -63,16 +63,18 @@ public sealed class KurtSprite
     private readonly Renderer _renderer;
     private readonly Bni _sprites;
     private readonly int _palette;
+    private readonly Shading _shading;
     private readonly int _mesh;
     private readonly int _muzzleMesh;
     private readonly Dictionary<(string, int), int> _textures = [];
     /// <summary>Frames from the level's archives (the board's K_SURF and K_SURFJ).</summary>
     private readonly Dictionary<string, SpriteAnimation> _extra = [];
 
-    public KurtSprite(Renderer renderer, Bni sprites, Palette palette)
+    public KurtSprite(Renderer renderer, Bni sprites, Palette palette, Shading shading)
     {
         _renderer = renderer;
         _sprites = sprites;
+        _shading = shading;
         _palette = renderer.CreatePalette(palette.Rgba);
         _mesh = renderer.CreateDynamicMesh(QuadVertices);
         _muzzleMesh = renderer.CreateDynamicMesh(QuadVertices);
@@ -141,7 +143,7 @@ public sealed class KurtSprite
             new(Corner(0, 0), new Vector2(0, 0)), new(Corner(w, h), new Vector2(1, 1)), new(Corner(0, h), new Vector2(0, 1)),
         ];
         _renderer.UpdateMesh(mesh, quad);
-        var material = new Material(Texture(name, frame, image.Image), _palette, Vector4.One, 1, Pass.DoubleSided);
+        var material = new Material(Texture(name, frame, image.Image), _palette, Vector4.One, 1, Pass.DoubleSided, Shading: _shading);
         _renderer.Draw(mesh, 0, QuadVertices, material);
     }
 

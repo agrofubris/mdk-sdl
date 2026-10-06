@@ -36,6 +36,8 @@ public sealed record GameOptions(Start Start, ViewerOptions Level)
     public float Wait { get; init; }
     /// <summary>Kurt's health in a stream started directly (--stream).</summary>
     public int? Health { get; init; }
+    /// <summary>The look instead of the settings' (--enhanced, --original; tests).</summary>
+    public Graphics? Graphics { get; init; }
 }
 
 /// <summary>The game: its screens one after the other, as the original's game states.
@@ -91,7 +93,13 @@ public sealed class Game : IDisposable
         _window = new Window("MDK", WindowWidth, WindowHeight, options.Display == Display.Hidden ? Visibility.Hidden : Visibility.Shown);
         _renderer = new Renderer(_window);
         _audio = new AudioDevice(options.Level.Sound == SoundMode.Muted ? Output.Muted : Output.Speakers);
-        settings.Apply(_audio, _window, _input);
+        // Tests choose the look (saved only if the options change).
+        if (options.Graphics is { } graphics)
+        {
+            settings.Graphics = graphics;
+        }
+
+        settings.Apply(_audio, _window, _renderer, _input);
         _ui = new Ui(data, _window, _renderer, _audio, _input, settings, folder);
         _scope = _renderer.Mark();
         _soak = options.Level.Soak is { } seed ? new SoakKeys(seed) : null;

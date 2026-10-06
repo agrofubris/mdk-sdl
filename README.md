@@ -1,7 +1,7 @@
 # MDK in C# and SDL3
 
 ![Status: work in progress](https://img.shields.io/badge/status-work%20in%20progress-orange)
-![Progress: about 77%](https://img.shields.io/badge/progress-~77%25-yellow)
+![Progress: about 78%](https://img.shields.io/badge/progress-~78%25-yellow)
 ![.NET 10](https://img.shields.io/badge/.NET-10-512bd4?logo=dotnet&logoColor=white)
 ![SDL3](https://img.shields.io/badge/SDL-3-blue)
 
@@ -35,7 +35,9 @@ radars' missiles and catching pickups. Kurt rides level 4's snowboard and level 
 (`XD2`) and bomber (`XE`), the end of a level tears the arena apart around him as he rises, F2
 makes a full save of the level, and the Score-O-matic spins its heads. Each arena plays its music with
 the original's fades, scripts animate textures, switch the sky and film cutscenes, sniper rounds
-leave bullet holes, and ropes, twisters' ribbons and the glass panes' outlines are drawn. The
+leave bullet holes, and ropes, twisters' ribbons and the glass panes' outlines are drawn. An
+enhanced look (Options, Graphics) filters the textures, lights the levels with a sun and its
+shadows, and adds ambient occlusion, a little glow and a haze; anti-aliasing smooths the edges. The
 [Godot port](https://github.com/nemo22/mdk-godot) is more complete for now.
 
 ## Progress
@@ -44,6 +46,7 @@ leave bullet holes, and ropes, twisters' ribbons and the glass panes' outlines a
 | --- | --- |
 | Data formats: levels, textures, models, sprites, sounds, fonts, scripts, videos | █████████░ 90% |
 | Rendering: arenas, glass, sky, mirrors, Kurt's sprite, effects | █████████░ 90% |
+| Enhanced look: filtering, sun and shadows, occlusion, glow, haze; anti-aliasing | ████████░░ 80% |
 | Collisions: the original's BSP | ████████░░ 80% |
 | Kurt: walking, turning, jumping, chute, ledges, slides, camera, damage, death | █████████░ 90% |
 | Sound mixer (the original's laws) and music | ████████░░ 80% |
@@ -54,7 +57,7 @@ leave bullet holes, and ropes, twisters' ribbons and the glass panes' outlines a
 | The fall and the stream between levels, rides | ████████░░ 80% |
 | Videos: the menu's FLC and slideshow, the end movies | ████████░░ 80% |
 | Playtesting and bug fixing | ██░░░░░░░░ 20% |
-| **Overall** | **about 77%** |
+| **Overall** | **about 78%** |
 
 The plan is in [docs/architecture.md](docs/architecture.md#roadmap).
 
@@ -91,6 +94,8 @@ mdk.exe
 - `--at=x,y,z[,yaw]`: where Kurt starts (MDK coordinates).
 - `--fly`: start with the flying camera.
 - `--mute`: no sound.
+- `--enhanced`, `--original`: the enhanced or the original look instead of the settings' (not
+  saved).
 - Tests: `--screenshot=file.bmp` (after `--wait=seconds` of game time, then quit),
   `--walk=seconds`, `--delay=seconds` (held keys start later), `--jump`, `--fire`, `--give=SW_HBOMB,...` (pickups to start with), `--use`
   (uses the item after 1 second), `--profile` (prints the objects of Kurt's arena every second),
@@ -105,7 +110,8 @@ mdk.exe
   too when it starts in the menus), 0.1 s a frame; in a level Kurt is healed and problems print
   as `Soak problem` (`--tour`: every arena in turn during `--wait`).
 
-Settings (volumes, music filter, mouse, fullscreen, difficulty, gore, key bindings) and saved games
+Settings (volumes, music filter, mouse, fullscreen, anti-aliasing, difficulty, graphics, gore, key
+bindings) and saved games
 are kept in `%LOCALAPPDATA%/mdk-sdl` (Linux: `~/.local/share/mdk-sdl`, macOS:
 `~/Library/Application Support/mdk-sdl`; `settings.cfg`, `saves/*.sav`; `MDK_USER_DIR` overrides the
 folder). `LASTGAME` (written when Kurt dies) is deleted at start, as in the original.
@@ -169,11 +175,14 @@ sh tests/rides_test.sh
 sh tests/snapshot_test.sh
 sh tests/end_level_test.sh
 sh tests/visuals_test.sh
+sh tests/enhanced_test.sh
 sh tests/soak_test.sh short
 ```
 
 `tests/soak_test.sh` (about 3 minutes with `short`, 15 without) plays every level, arena, fall,
 stream and menu with random keys and reports exceptions, hangs and `Soak problem` lines.
+`MDK_REFERENCE=<another build's mdk> sh tests/enhanced_test.sh` also checks that the original look
+is that build's, pixel for pixel.
 
 ## Layout
 

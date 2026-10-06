@@ -27,7 +27,7 @@ public sealed class Ui(MdkData data, Window window, Renderer renderer, AudioDevi
     /// <summary>The settings changed: applied, and saved.</summary>
     public void ApplySettings()
     {
-        settings.Apply(audio, window, input);
+        settings.Apply(audio, window, renderer, input);
         settings.Save(Settings.PathIn(userFolder));
     }
 

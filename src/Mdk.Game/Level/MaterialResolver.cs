@@ -5,13 +5,14 @@ using Mdk.Formats;
 namespace Mdk.Game.Level;
 
 /// <summary>Turns MDK material references (texture names, palette colours, special values) into
-/// renderer materials, creating each texture and palette on the GPU once.
+/// renderer materials, creating each texture and palette on the GPU once. Opaque surfaces take
+/// <paramref name="shading"/> (the look); glass and mirrors keep the original's.
 /// <code>
 ///   value &lt; 0          palette colour -value
 ///   value &gt;= 0         material name: texture, archive colour, PEN_n, NONE
 ///   colour 256-1028    special: glass (GLASS1-4), mirrors, NONE, PEN_ENV, RIPPLE
 /// </code></summary>
-public sealed class MaterialResolver(Renderer renderer, Dti dti)
+public sealed class MaterialResolver(Renderer renderer, Dti dti, Shading shading = Shading.Original)
 {
     private const int SpecialFirst = 256;
     private const int MirrorFirst = 990;
@@ -44,7 +45,7 @@ public sealed class MaterialResolver(Renderer renderer, Dti dti)
         {
             if (archive.Textures.TryGetValue(name, out var texture))
             {
-                var material = new Material(TextureId(texture), PaletteId(palette), Vector4.One, texture.FrameCount, pass);
+                var material = new Material(TextureId(texture), PaletteId(palette), Vector4.One, texture.FrameCount, pass, Shading: ShadingOf(pass));
                 return new Surface(material, texture);
             }
         }
@@ -71,7 +72,7 @@ public sealed class MaterialResolver(Renderer renderer, Dti dti)
         {
             var rgba = palette.Rgba;
             var colour = new Vector4(rgba[index * 4], rgba[index * 4 + 1], rgba[index * 4 + 2], byte.MaxValue) * ByteToUnit;
-            return new Surface(Material.Flat(colour, pass), null);
+            return new Surface(Material.Flat(colour, pass) with { Shading = ShadingOf(pass) }, null);
         }
 
         // Glass: the level's colour blended by its alpha, both faces (0x471290).
@@ -90,6 +91,8 @@ public sealed class MaterialResolver(Renderer renderer, Dti dti)
         // NONE, PEN_ENV and RIPPLE aren't drawn (the Direct3D renderer skips RIPPLE).
         return null;
     }
+
+    private Shading ShadingOf(Pass pass) => pass is Pass.Solid or Pass.DoubleSided ? shading : Shading.Original;
 
     /// <summary>Uploads a texture's pixels again if it's on the GPU (a bullet hole changed them).</summary>
     public void Refresh(Texture texture)

@@ -143,12 +143,14 @@ public sealed class Viewer : IScreen
         var level = _level;
         var renderer = _renderer;
         var groups = new TriangleGroups();
-        _view = new LevelView(renderer, level, groups);
+        var graphics = ui.Settings.Graphics;
+        _view = new LevelView(renderer, level, groups, EnhancedLook.Surfaces(graphics));
         var bank = SoundBank.ForLevel(data, options.Level);
         _mixer = new SoundMixer(_audio, bank.Get);
         var cmi = Cmi.Load(data.PathOf($"TRAVERSE/LEVEL{level.Number}/LEVEL{level.Number}.CMI"));
         _music = new LevelMusic(_mixer, cmi.ArenaMusic);
-        renderer.Panorama = CreatePanorama(renderer, level.Dti);
+        renderer.Panorama = CreatePanorama(renderer, level.Dti) with { Sampling = EnhancedLook.Sky(graphics) };
+        renderer.Lighting = graphics == Graphics.Enhanced ? EnhancedLook.Lighting(level.Dti) : null;
 
         _space = new ArenaSpace();
         foreach (var arena in level.Arenas.Where(a => level.IsReachable(a.Name)))
@@ -157,7 +159,7 @@ public sealed class Viewer : IScreen
         }
 
         var sprites = Bni.Load(data.PathOf("TRAVERSE/TRAVSPRT.BNI"));
-        _sprite = new KurtSprite(renderer, sprites, level.Dti.Palette);
+        _sprite = new KurtSprite(renderer, sprites, level.Dti.Palette, EnhancedLook.Sprites(graphics));
         foreach (var name in KurtSprite.LevelAnimations)
         {
             _sprite.Add(bank.Animation(name));
@@ -199,10 +201,10 @@ public sealed class Viewer : IScreen
             _kurt.Collect(pickup);
         }
         _scripts.ArenaEntered += _view.Enter;
-        var objectLook = new MaterialResolver(renderer, level.Dti);
-        var effectsLook = new MaterialResolver(renderer, level.Dti);
+        var objectLook = new MaterialResolver(renderer, level.Dti, EnhancedLook.Surfaces(graphics));
+        var effectsLook = new MaterialResolver(renderer, level.Dti, EnhancedLook.Surfaces(graphics));
         _objects = new ObjectView(renderer, objectLook);
-        _effects = new EffectsView(renderer, effectsLook, level);
+        _effects = new EffectsView(renderer, effectsLook, level, EnhancedLook.Sprites(graphics));
         _scripts.TextureStamped += texture =>
         {
             _view.Refresh(texture);

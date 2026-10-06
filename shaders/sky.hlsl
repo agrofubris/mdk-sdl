@@ -1,7 +1,7 @@
 // The sky: the original blits a panorama as a 2D backdrop. It scrolls horizontally with the yaw
 // (wrap_width pixels for 360 degrees) and vertically with the pitch, horizon_row at eye level; above
 // and below it the screen is filled with top and bottom colours. Drawn as one screen-filling
-// triangle before the level, without depth.
+// triangle before the level, without depth. The enhanced look filters it.
 
 #include "panorama.hlsli"
 
@@ -28,22 +28,41 @@ VertexOut vs_main(uint id : SV_VertexID)
     return output;
 }
 
-float4 ps_main(VertexOut input) : SV_Target
+// A pixel's colour; above and below the panorama, the top and bottom colours.
+float3 sky_pixel(int column, int row)
 {
-    float2 pixel = panorama_pixel(normalize(input.direction));
     int index;
-    if (pixel.y < 0.0)
+    if (row < 0)
     {
         index = top_colour;
     }
-    else if (pixel.y >= panorama_height)
+    else if (row >= panorama_height)
     {
         index = bottom_colour;
     }
     else
     {
-        index = panorama_index(int(pixel.x), int(pixel.y));
+        index = panorama_index(column, row);
     }
 
-    return float4(palette_texture.Load(int3(index, 0, 0)).rgb, 1.0);
+    return palette_texture.Load(int3(index, 0, 0)).rgb;
+}
+
+float4 ps_main(VertexOut input) : SV_Target
+{
+    float3 direction = normalize(input.direction);
+
+    // The enhanced look blends the 4 nearest pixels, each through the palette.
+    if (sampling == SAMPLING_LINEAR)
+    {
+        float2 position = panorama_position(direction) - 0.5;
+        int2 cell = int2(floor(position));
+        float2 f = frac(position);
+        float3 top = lerp(sky_pixel(cell.x, cell.y), sky_pixel(cell.x + 1, cell.y), f.x);
+        float3 bottom = lerp(sky_pixel(cell.x, cell.y + 1), sky_pixel(cell.x + 1, cell.y + 1), f.x);
+        return float4(lerp(top, bottom, f.y), 1.0);
+    }
+
+    float2 pixel = panorama_pixel(direction);
+    return float4(sky_pixel(int(pixel.x), int(pixel.y)), 1.0);
 }

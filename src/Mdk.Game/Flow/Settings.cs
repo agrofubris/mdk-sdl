@@ -1,12 +1,16 @@
 using System.Globalization;
 using Mdk.Engine.Audio;
 using Mdk.Engine.Platform;
+using Mdk.Engine.Render;
 using Mdk.Game.Kurt;
 
 namespace Mdk.Game.Flow;
 
+/// <summary>The look of the levels: the original's, or enhanced (lit, filtered, shadows, haze).</summary>
+public enum Graphics { Original, Enhanced }
+
 /// <summary>The player's settings (settings.gd): volumes, the music filter, the mouse, the window,
-/// the difficulty, gore and the key bindings (one key or mouse button per action, by name). Saved as
+/// anti-aliasing, the difficulty, gore, the graphics and the key bindings (one key or mouse button per action, by name). Saved as
 /// <c>name=value</c> lines in the user's folder; applied at start and whenever they change.
 /// <code>
 ///   master_volume=80
@@ -39,6 +43,9 @@ public sealed class Settings
     public Difficulty Difficulty = Difficulty.Normal;
     /// <summary>Gore (0x5742dc, on by default): green sparks, slime, blown off parts, the head shots row.</summary>
     public bool Gore = true;
+    /// <summary>The levels' look, from the next level on; the 2D screens are filtered at once.</summary>
+    public Graphics Graphics = Graphics.Original;
+    public AntiAliasing AntiAliasing = AntiAliasing.Off;
     /// <summary>Rebound actions: action → key or mouse button name (see <see cref="Input.Bind"/>).</summary>
     public readonly Dictionary<Key, string> Bindings = [];
 
@@ -91,6 +98,8 @@ public sealed class Settings
             $"fullscreen={Fullscreen}",
             $"difficulty={Difficulty}",
             $"gore={Gore}",
+            $"graphics={Graphics}",
+            $"antialiasing={AntiAliasing}",
         };
         lines.AddRange(Bindings.Select(b => $"{BindPrefix}{b.Key}={b.Value}"));
         return string.Join('\n', lines) + "\n";
@@ -137,15 +146,23 @@ public sealed class Settings
             case "gore":
                 Gore = bool.TryParse(value, out var gore) ? gore : Gore;
                 break;
+            case "graphics":
+                Graphics = Enum.TryParse<Graphics>(value, out var graphics) && Enum.IsDefined(graphics) ? graphics : Graphics;
+                break;
+            case "antialiasing":
+                AntiAliasing = Enum.TryParse<AntiAliasing>(value, out var antiAliasing) && Enum.IsDefined(antiAliasing) ? antiAliasing : AntiAliasing;
+                break;
         }
     }
 
     private static int Volume(string value, int fallback) =>
         int.TryParse(value, out var volume) ? Math.Clamp(volume, 0, MaxVolume) : fallback;
 
-    /// <summary>The volumes and filter, the window, the mouse and the bindings.</summary>
-    public void Apply(AudioDevice audio, Window window, Input input)
+    /// <summary>The volumes and filter, the window, the frame's sampling, the mouse and the bindings.</summary>
+    public void Apply(AudioDevice audio, Window window, Renderer renderer, Input input)
     {
+        renderer.AntiAliasing = AntiAliasing;
+        renderer.CanvasSampling = Graphics == Graphics.Enhanced ? Sampling.Linear : Sampling.Nearest;
         audio.MasterGain = Gain(MasterVolume);
         audio.SetBusGain(Bus.Music, Gain(MusicVolume));
         audio.SetBusGain(Bus.Effects, Gain(EffectsVolume));

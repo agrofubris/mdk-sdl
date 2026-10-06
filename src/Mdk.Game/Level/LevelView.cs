@@ -54,11 +54,11 @@ public sealed class LevelView
     private int _piecesMesh = -1;
     private Vertex[] _pieceVertices = [];
 
-    public LevelView(Renderer renderer, LevelData level, TriangleGroups groups)
+    public LevelView(Renderer renderer, LevelData level, TriangleGroups groups, Shading shading)
     {
         _renderer = renderer;
         _groups = groups;
-        _resolver = new MaterialResolver(renderer, level.Dti);
+        _resolver = new MaterialResolver(renderer, level.Dti, shading);
         foreach (var arena in level.Arenas)
         {
             groups.Add(arena);

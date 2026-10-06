@@ -16,7 +16,7 @@ namespace Mdk.Game.Objects;
 ///   Effects.All, ScriptRuntime.Boxes ──► billboard quads ───┤
 ///   twisters' ribbons ──► WMIBTEX triangles ────────────────┴─► dynamic mesh ──► renderer
 /// </code></summary>
-public sealed class EffectsView(Renderer renderer, MaterialResolver resolver, LevelData level)
+public sealed class EffectsView(Renderer renderer, MaterialResolver resolver, LevelData level, Shading sprites)
 {
     /// <summary>Vertices drawn at most per frame (the rest is dropped).</summary>
     private const int MaxVertices = 1 << 16;
@@ -143,12 +143,13 @@ public sealed class EffectsView(Renderer renderer, MaterialResolver resolver, Le
         return new MaterialResolver.Surface(Material.Flat(colour, Pass.DoubleSided), null);
     }
 
-    /// <summary>An animated texture of an arena (or the level) as a sprite surface, or null.</summary>
+    /// <summary>An animated texture of an arena (or the level) as a sprite surface (shaded as
+    /// <paramref name="sprites"/>), or null.</summary>
     private MaterialResolver.Surface? Sprite(string arena, string texture)
     {
         var look = LookOf(arena);
         var surface = resolver.Resolve(0, [texture], look.Palette, look.Archives, Pass.DoubleSided);
-        return surface is { Texture: not null } ? surface : null;
+        return surface is { Texture: not null } s ? s with { Material = s.Material with { Shading = sprites } } : null;
     }
 
     /// <summary>A sprite centred at <paramref name="center"/>, <paramref name="right"/> and

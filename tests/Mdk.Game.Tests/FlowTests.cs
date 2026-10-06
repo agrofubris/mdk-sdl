@@ -1,5 +1,6 @@
 using System.Text;
 using Mdk.Engine.Platform;
+using Mdk.Engine.Render;
 using Mdk.Game.Flow;
 using Mdk.Game.Kurt;
 using Mdk.Game.Menu;
@@ -57,6 +58,8 @@ public class FlowTests
             Fullscreen = true,
             Difficulty = Difficulty.Hard,
             Gore = false,
+            Graphics = Graphics.Enhanced,
+            AntiAliasing = AntiAliasing.X4,
         };
         settings.Bindings[Key.Fire] = "Left mouse";
         settings.Bindings[Key.Jump] = "Right Ctrl";
@@ -65,15 +68,19 @@ public class FlowTests
 
         Assert.Equal(settings.Format(), read.Format());
         Assert.Equal(Difficulty.Hard, read.Difficulty);
+        Assert.Equal(Graphics.Enhanced, read.Graphics);
+        Assert.Equal(AntiAliasing.X4, read.AntiAliasing);
         Assert.Equal("Right Ctrl", read.Bindings[Key.Jump]);
     }
 
     [Fact]
     public void BadSettingsKeepDefaults()
     {
-        var read = Settings.Parse("master_volume=loud\nmusic_volume=500\nunknown=1\nbind.Nothing=W\n");
+        var read = Settings.Parse("master_volume=loud\nmusic_volume=500\nunknown=1\nbind.Nothing=W\ngraphics=7\nantialiasing=X16\n");
 
         Assert.Equal(new Settings().MasterVolume, read.MasterVolume);
+        Assert.Equal(Graphics.Original, read.Graphics);
+        Assert.Equal(AntiAliasing.Off, read.AntiAliasing);
         Assert.Equal(Settings.MaxVolume, read.MusicVolume);
         Assert.Empty(read.Bindings);
     }

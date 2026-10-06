@@ -35,8 +35,10 @@ public enum Pass
 public enum Primitive { Triangles, Lines }
 
 /// <summary>A surface: an index texture through a palette, a flat colour, or a mirror showing the
-/// panorama <paramref name="RowShift"/> rows lower or higher.</summary>
-public readonly record struct Material(int Texture, int Palette, Vector4 Colour, int FrameCount, Pass Pass, float RowShift = 0f)
+/// panorama <paramref name="RowShift"/> rows lower or higher; <paramref name="Shading"/> picks the
+/// original look or the enhanced one.</summary>
+public readonly record struct Material(int Texture, int Palette, Vector4 Colour, int FrameCount, Pass Pass, float RowShift = 0f,
+    Shading Shading = Shading.Original)
 {
     public const int None = -1;
 
@@ -49,7 +51,7 @@ public readonly record struct Material(int Texture, int Palette, Vector4 Colour,
 /// columns cover 360 degrees, <paramref name="HorizonRow"/> at eye level; the screen above and below
 /// it takes palette colours <paramref name="TopColour"/> and <paramref name="BottomColour"/>.</summary>
 public sealed record Panorama(int Sky, int MirrorSky, int Palette, float WrapWidth, float HorizonRow, float Offset,
-    float Height, int TopColour, int BottomColour);
+    float Height, int TopColour, int BottomColour, Sampling Sampling = Sampling.Nearest);
 
 /// <summary>What is behind the scene (the scripts' sky modes, 0x574304): the panorama, the clear
 /// colour, or the last frame kept.</summary>
@@ -91,12 +93,19 @@ public sealed unsafe partial class Renderer : IDisposable
         public int TopColour;
         public int BottomColour;
         public float RowShift;
-        public float Unused;
+        public Sampling Sampling;
         public Vector4 Camera;
     }
 
-    /// <summary>Whether a pipeline reads vertex buffers and the depth buffer (the sky does neither).</summary>
-    private enum Geometry { Mesh, Screen }
+    /// <summary>Whether a pipeline reads vertex buffers and the depth buffer (the sky does neither;
+    /// the enhanced look's post-processing has no depth buffer).</summary>
+    private enum Geometry { Mesh, Screen, Post }
+
+    /// <summary>What a pipeline writes: colour (and depth), or depth alone: the camera's (the enhanced
+    /// look's ambient occlusion) or the sun's (its shadows, biased).</summary>
+    private enum Output { Colour, Depth, Shadow }
+
+    private readonly record struct PipelineKey(string Program, Pass Pass, Primitive Primitive, Geometry Geometry, uint Samples, Output Output);
 
     /// <summary>A shader format and the extension of its embedded programs (shaders/palette.vs.dxil).</summary>
     private readonly record struct ShaderFormat(SDL_GPUShaderFormat Format, string Extension);
@@ -129,8 +138,7 @@ public sealed unsafe partial class Renderer : IDisposable
     private readonly SDL_GPUDevice* _device;
     private readonly ShaderFormat _shaderFormat;
     private readonly SDL_GPUTextureFormat _depthFormat;
-    private readonly Dictionary<(Pass, Primitive), IntPtr> _pipelines = [];
-    private readonly SDL_GPUGraphicsPipeline* _skyPipeline;
+    private readonly Dictionary<PipelineKey, IntPtr> _pipelines = [];
     private readonly SDL_GPUSampler* _repeatSampler;
     private readonly SDL_GPUSampler* _clampSampler;
     private readonly List<IntPtr> _textures = [];
@@ -159,19 +167,13 @@ public sealed unsafe partial class Renderer : IDisposable
         _repeatSampler = CreateSampler(SDL_GPUSamplerAddressMode.SDL_GPU_SAMPLERADDRESSMODE_REPEAT);
         _clampSampler = CreateSampler(SDL_GPUSamplerAddressMode.SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE);
 
-        foreach (var pass in Enum.GetValues<Pass>())
-        {
-            var program = pass == Pass.Mirror ? "mirror" : "palette";
-            _pipelines[(pass, Primitive.Triangles)] = (IntPtr)CreatePipeline(program, pass, Geometry.Mesh);
-        }
+        // The enhanced look samples its depth buffers.
+        var sampledDepth = depthUsage | SDL_GPUTextureUsageFlags.SDL_GPU_TEXTUREUSAGE_SAMPLER;
+        _sampledDepthFormat = SDL_GPUTextureSupportsFormat(_device, SDL_GPUTextureFormat.SDL_GPU_TEXTUREFORMAT_D32_FLOAT, SDL_GPUTextureType.SDL_GPU_TEXTURETYPE_2D, sampledDepth)
+            ? SDL_GPUTextureFormat.SDL_GPU_TEXTUREFORMAT_D32_FLOAT
+            : SDL_GPUTextureFormat.SDL_GPU_TEXTUREFORMAT_D16_UNORM;
+        _mipSampler = CreateSampler(SDL_GPUSamplerAddressMode.SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE, Sampling.Linear);
 
-        // Lines (outlines, ropes) take a palette colour; mirrors have none.
-        foreach (var pass in Enum.GetValues<Pass>().Where(p => p != Pass.Mirror))
-        {
-            _pipelines[(pass, Primitive.Lines)] = (IntPtr)CreatePipeline("palette", pass, Geometry.Mesh, Primitive.Lines);
-        }
-
-        _skyPipeline = CreatePipeline("sky", Pass.DoubleSided, Geometry.Screen);
         _canvasMesh = CreateDynamicMesh(CanvasQuads * QuadVertices);
 
         // Texture 0 is bound for flat colours, so it must outlive every scope (Release).
@@ -215,6 +217,7 @@ public sealed unsafe partial class Renderer : IDisposable
 
         Panorama = null;
         Backdrop = Backdrop.Sky;
+        Lighting = null;
     }
 
     /// <summary>The canvas's width for the window's aspect.</summary>
@@ -309,16 +312,18 @@ public sealed unsafe partial class Renderer : IDisposable
         return null;
     }
 
-    private SDL_GPUSampler* CreateSampler(SDL_GPUSamplerAddressMode mode)
+    private SDL_GPUSampler* CreateSampler(SDL_GPUSamplerAddressMode mode, Sampling sampling = Sampling.Nearest)
     {
+        var linear = sampling == Sampling.Linear;
         var info = new SDL_GPUSamplerCreateInfo
         {
-            min_filter = SDL_GPUFilter.SDL_GPU_FILTER_NEAREST,
-            mag_filter = SDL_GPUFilter.SDL_GPU_FILTER_NEAREST,
-            mipmap_mode = SDL_GPUSamplerMipmapMode.SDL_GPU_SAMPLERMIPMAPMODE_NEAREST,
+            min_filter = linear ? SDL_GPUFilter.SDL_GPU_FILTER_LINEAR : SDL_GPUFilter.SDL_GPU_FILTER_NEAREST,
+            mag_filter = linear ? SDL_GPUFilter.SDL_GPU_FILTER_LINEAR : SDL_GPUFilter.SDL_GPU_FILTER_NEAREST,
+            mipmap_mode = linear ? SDL_GPUSamplerMipmapMode.SDL_GPU_SAMPLERMIPMAPMODE_LINEAR : SDL_GPUSamplerMipmapMode.SDL_GPU_SAMPLERMIPMAPMODE_NEAREST,
             address_mode_u = mode,
             address_mode_v = mode,
             address_mode_w = mode,
+            max_lod = linear ? AllMips : 0f,
         };
         return SDL_CreateGPUSampler(_device, &info);
     }
@@ -349,10 +354,22 @@ public sealed unsafe partial class Renderer : IDisposable
         }
     }
 
-    private SDL_GPUGraphicsPipeline* CreatePipeline(string program, Pass pass, Geometry geometry, Primitive primitive = Primitive.Triangles)
+    /// <summary>A pipeline, created the first time it's asked for.</summary>
+    private SDL_GPUGraphicsPipeline* Pipeline(PipelineKey key)
     {
+        if (!_pipelines.TryGetValue(key, out var pipeline))
+        {
+            pipeline = _pipelines[key] = (IntPtr)CreatePipeline(key);
+        }
+
+        return (SDL_GPUGraphicsPipeline*)pipeline;
+    }
+
+    private SDL_GPUGraphicsPipeline* CreatePipeline(PipelineKey key)
+    {
+        var (program, pass, primitive, geometry, samples, output) = key;
         var vertexShader = LoadShader(program + ".vs", SDL_GPUShaderStage.SDL_GPU_SHADERSTAGE_VERTEX, 0);
-        var fragmentShader = LoadShader(program + ".ps", SDL_GPUShaderStage.SDL_GPU_SHADERSTAGE_FRAGMENT, 2);
+        var fragmentShader = LoadShader(program + ".ps", SDL_GPUShaderStage.SDL_GPU_SHADERSTAGE_FRAGMENT, SamplerCount(program));
         var bufferDescription = new SDL_GPUVertexBufferDescription
         {
             slot = 0,
@@ -394,10 +411,13 @@ public sealed unsafe partial class Renderer : IDisposable
             rasterizer_state = new SDL_GPURasterizerState
             {
                 fill_mode = SDL_GPUFillMode.SDL_GPU_FILLMODE_FILL,
-                cull_mode = pass == Pass.Solid && geometry == Geometry.Mesh ? SDL_GPUCullMode.SDL_GPU_CULLMODE_BACK : SDL_GPUCullMode.SDL_GPU_CULLMODE_NONE,
+                cull_mode = pass == Pass.Solid && geometry == Geometry.Mesh && output != Output.Shadow ? SDL_GPUCullMode.SDL_GPU_CULLMODE_BACK : SDL_GPUCullMode.SDL_GPU_CULLMODE_NONE,
                 // MDK's front faces wind clockwise on screen.
                 front_face = SDL_GPUFrontFace.SDL_GPU_FRONTFACE_CLOCKWISE,
+                enable_depth_bias = output == Output.Shadow,
+                depth_bias_slope_factor = output == Output.Shadow ? ShadowSlopeBias : 0f,
             },
+            multisample_state = new SDL_GPUMultisampleState { sample_count = SampleCount(samples) },
             depth_stencil_state = new SDL_GPUDepthStencilState
             {
                 compare_op = SDL_GPUCompareOp.SDL_GPU_COMPAREOP_LESS_OR_EQUAL,
@@ -407,9 +427,9 @@ public sealed unsafe partial class Renderer : IDisposable
             target_info = new SDL_GPUGraphicsPipelineTargetInfo
             {
                 color_target_descriptions = &colourTarget,
-                num_color_targets = 1,
-                depth_stencil_format = _depthFormat,
-                has_depth_stencil_target = true,
+                num_color_targets = output == Output.Colour ? 1u : 0u,
+                depth_stencil_format = output == Output.Colour ? _depthFormat : _sampledDepthFormat,
+                has_depth_stencil_target = geometry != Geometry.Post,
             },
         };
         var pipeline = SDL_CreateGPUGraphicsPipeline(_device, &info);
@@ -591,24 +611,16 @@ public sealed unsafe partial class Renderer : IDisposable
 
     private void RenderScene(SDL_GPUCommandBuffer* commands, View view, Vector4 clearColour)
     {
-        var colourTarget = new SDL_GPUColorTargetInfo
+        if (Lighting is { } lighting)
         {
-            texture = _target,
-            clear_color = new SDL_FColor { r = clearColour.X, g = clearColour.Y, b = clearColour.Z, a = clearColour.W },
-            load_op = Backdrop == Backdrop.Keep ? SDL_GPULoadOp.SDL_GPU_LOADOP_LOAD : SDL_GPULoadOp.SDL_GPU_LOADOP_CLEAR,
-            store_op = SDL_GPUStoreOp.SDL_GPU_STOREOP_STORE,
-        };
-        var depthTarget = new SDL_GPUDepthStencilTargetInfo
-        {
-            texture = _depth,
-            clear_depth = 1f,
-            load_op = SDL_GPULoadOp.SDL_GPU_LOADOP_CLEAR,
-            store_op = SDL_GPUStoreOp.SDL_GPU_STOREOP_DONT_CARE,
-            stencil_load_op = SDL_GPULoadOp.SDL_GPU_LOADOP_DONT_CARE,
-            stencil_store_op = SDL_GPUStoreOp.SDL_GPU_STOREOP_DONT_CARE,
-        };
+            RenderEnhanced(commands, view, clearColour, lighting);
+            return;
+        }
 
+        var colourTarget = SceneColour(_target, clearColour);
+        var depthTarget = SceneDepth();
         var pass = SDL_BeginGPURenderPass(commands, &colourTarget, 1, &depthTarget);
+        _passSamples = _samples;
         if (Panorama != null && Backdrop == Backdrop.Sky)
         {
             DrawSky(commands, pass, view, Panorama);
@@ -625,6 +637,7 @@ public sealed unsafe partial class Renderer : IDisposable
         }
 
         SDL_EndGPURenderPass(pass);
+        _passSamples = 1;
         if (!canvasNow)
         {
             RenderInsets(commands);
@@ -634,7 +647,7 @@ public sealed unsafe partial class Renderer : IDisposable
     /// <summary>The panorama behind everything: one screen-filling triangle.</summary>
     private void DrawSky(SDL_GPUCommandBuffer* commands, SDL_GPURenderPass* pass, View view, Panorama panorama)
     {
-        SDL_BindGPUGraphicsPipeline(pass, _skyPipeline);
+        SDL_BindGPUGraphicsPipeline(pass, Pipeline(new PipelineKey("sky", Pass.DoubleSided, Primitive.Triangles, Geometry.Screen, _passSamples, Output.Colour)));
         var clipToDirection = view.ClipToDirection;
         SDL_PushGPUVertexUniformData(commands, 0, (IntPtr)(&clipToDirection), (uint)sizeof(Matrix4x4));
         BindPanorama(commands, pass, panorama, panorama.Sky, 0f, view.Position);
@@ -657,6 +670,7 @@ public sealed unsafe partial class Renderer : IDisposable
             TopColour = panorama.TopColour,
             BottomColour = panorama.BottomColour,
             RowShift = rowShift,
+            Sampling = panorama.Sampling,
             Camera = new Vector4(camera, 1f),
         };
         SDL_PushGPUFragmentUniformData(commands, 0, (IntPtr)(&uniforms), (uint)sizeof(PanoramaUniforms));
@@ -665,13 +679,21 @@ public sealed unsafe partial class Renderer : IDisposable
     private void DrawOne(SDL_GPUCommandBuffer* commands, SDL_GPURenderPass* pass, DrawCommand command, View view)
     {
         var material = command.Material;
-        SDL_BindGPUGraphicsPipeline(pass, (SDL_GPUGraphicsPipeline*)_pipelines[(material.Pass, command.Primitive)]);
+        var mode = ModeOf(command);
+        var program = material.Pass == Pass.Mirror ? "mirror" : mode != null ? "enhanced" : "palette";
+        SDL_BindGPUGraphicsPipeline(pass, Pipeline(new PipelineKey(program, material.Pass, command.Primitive, Geometry.Mesh, _passSamples, Output.Colour)));
 
         var binding = new SDL_GPUBufferBinding { buffer = (SDL_GPUBuffer*)_buffers[command.Mesh] };
         SDL_BindGPUVertexBuffers(pass, 0, &binding, 1);
 
         // The canvas is already in clip space; the rest goes through the camera.
         var transform = material.Pass == Pass.Overlay ? command.World : command.World * view.ViewProjection;
+        if (mode is { } enhanced)
+        {
+            DrawEnhanced(commands, pass, command, transform, enhanced, view);
+            return;
+        }
+
         SDL_PushGPUVertexUniformData(commands, 0, (IntPtr)(&transform), (uint)sizeof(Matrix4x4));
 
         // Mirrors show nothing without a panorama.
@@ -740,7 +762,8 @@ public sealed unsafe partial class Renderer : IDisposable
 
     private void EnsureTargets(uint width, uint height)
     {
-        if (_target != null && width == _targetWidth && height == _targetHeight)
+        var samples = SupportedSamples();
+        if (_target != null && width == _targetWidth && height == _targetHeight && samples == _samples)
         {
             return;
         }
@@ -751,13 +774,17 @@ public sealed unsafe partial class Renderer : IDisposable
             SDL_ReleaseGPUTexture(_device, _depth);
         }
 
+        ReleaseSizedTargets();
         _target = CreateTexture(ColourFormat, width, height, SDL_GPUTextureUsageFlags.SDL_GPU_TEXTUREUSAGE_COLOR_TARGET | SDL_GPUTextureUsageFlags.SDL_GPU_TEXTUREUSAGE_SAMPLER);
         _depth = CreateTexture(_depthFormat, width, height, SDL_GPUTextureUsageFlags.SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET);
         _targetWidth = width;
         _targetHeight = height;
+        _samples = samples;
+        CreateMultisampled(width, height);
     }
 
-    private SDL_GPUTexture* CreateTexture(SDL_GPUTextureFormat format, uint width, uint height, SDL_GPUTextureUsageFlags usage)
+    private SDL_GPUTexture* CreateTexture(SDL_GPUTextureFormat format, uint width, uint height, SDL_GPUTextureUsageFlags usage,
+        uint levels = 1, uint samples = 1)
     {
         var info = new SDL_GPUTextureCreateInfo
         {
@@ -767,7 +794,8 @@ public sealed unsafe partial class Renderer : IDisposable
             width = width,
             height = height,
             layer_count_or_depth = 1,
-            num_levels = 1,
+            num_levels = levels,
+            sample_count = SampleCount(samples),
         };
         var texture = SDL_CreateGPUTexture(_device, &info);
         Check(texture != null, "SDL_CreateGPUTexture");
@@ -820,16 +848,17 @@ public sealed unsafe partial class Renderer : IDisposable
             SDL_ReleaseGPUGraphicsPipeline(_device, (SDL_GPUGraphicsPipeline*)pipeline);
         }
 
-        SDL_ReleaseGPUGraphicsPipeline(_device, _skyPipeline);
-
         if (_target != null)
         {
             SDL_ReleaseGPUTexture(_device, _target);
             SDL_ReleaseGPUTexture(_device, _depth);
         }
 
+        ReleaseSizedTargets();
+        ReleaseShadowMap();
         SDL_ReleaseGPUSampler(_device, _repeatSampler);
         SDL_ReleaseGPUSampler(_device, _clampSampler);
+        SDL_ReleaseGPUSampler(_device, _mipSampler);
         SDL_ReleaseWindowFromGPUDevice(_device, _window.Handle);
         SDL_DestroyGPUDevice(_device);
     }

@@ -71,6 +71,33 @@ One native executable per platform (Native AOT). It embeds SDL3's library for it
   mode's round cameras and clip).
 - The sky is a screen-filling triangle drawn first, scrolled by yaw and pitch like the original's
   2D backdrop.
+- Anti-aliasing (`Renderer.AntiAliasing`, 2x or 4x MSAA): the scene is drawn into a multisampled
+  target resolved into the frame; off, nothing changes.
+
+## Rendering (enhanced look)
+
+The game picks the look (`Settings.Graphics`, `Level/EnhancedLook.cs`, the Godot port's
+`Level._enhance`): materials carry a `Shading` (arenas and objects `Lit`, Kurt and effects
+`Sprite`, glass and mirrors `Original`), the sky a `Sampling`, and the renderer gets a `Lighting`
+(sun, ambient, shadow distance, glow, haze in the colour below the sky panorama). The 2D canvas is
+filtered too (`Renderer.CanvasSampling`).
+
+```
+ sun's depth (Lit casters) ──► shadow map 2048² ─────────┐
+ camera's depth (opaque) ───────────────────────────────┐ │
+ scene: filtered sky, enhanced.hlsl (MSAA) ──► scene ───┼─┴─mips─► post.hlsl ─► frame ─► canvas, insets
+                                                        └ ambient occlusion    (occlusion × colour, glow)
+```
+
+- `palette_filtered.hlsli`: bilinear by hand, each of the four texels through the palette; index
+  0 transparent; animated textures keep to their frame.
+- `enhanced.hlsl`: flat normals from the world position's screen derivatives (the triangle's
+  plane, turned to the camera); light in linear colour: albedo × (ambient + sun × N·L × shadow),
+  then the haze (1 − e^(−density × distance)). Sprites: filtered, unlit, edges cut at half cover.
+- Shadows (`SunShadow`): an orthographic view along the sunlight, centred on the camera and
+  snapped to whole texels; 2 × 2 compared texels, slope and normal offsets against acne.
+- `post.hlsl`: Alchemy ambient occlusion from the camera's depth, fading in the haze; glow from
+  the scene's blurred mips, screen-blended.
 
 ## Game flow
 
@@ -145,4 +172,8 @@ picks the next screen. A screen's textures and meshes are freed when it ends (`R
     effects, the HUD; health and pickups go on to the level (`GameState.Carry`). Pickups are only
     tested under their chute, as the original (0x41275c; fall.gd drops them at once).
     Approximations: the radar's colours, the smoke trails, the red only on palette colours.
-11. Enhanced look.
+11. ✅ Enhanced look (`Renderer.Enhanced.cs`, `shaders/enhanced.hlsl`, `post.hlsl`, `depth.hlsl`):
+    filtered textures, sky, sprites and 2D screens, a sun with shadows, white ambient light,
+    ambient occlusion, glow, haze; anti-aliasing in both looks. Still to do: mipmaps for the
+    textures, a sun per level, lights for muzzle flashes and explosions, occlusion and haze in the
+    insets (sniper mode).
