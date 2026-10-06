@@ -223,6 +223,24 @@ public class KurtMovesTests
         Assert.True(RunUntil(kurt, new Input(), State.Still, 2f));
     }
 
+    /// <summary>The mouse steers the slide as it turns Kurt walking, at most 4 × 45°/s (damp_control
+    /// clamps it to ±4 before 0x5014d4).</summary>
+    [DataTheory]
+    [InlineData(10f, -1.5f)]
+    [InlineData(1000f, -3f)]
+    public void TheMouseSteersTheSlide(float mouse, float yaw)
+    {
+        var kurt = KurtIn(SpaceOf(3), FlatFloor);
+        Run(kurt, new Input(), 1f);
+        kurt.StartSlide();
+        kurt.SlideAccel(new Vector2(30f, 0f), 1f);
+        var input = new Input();
+        input.AddMouseMotion(mouse, 0f);
+
+        kurt.Update(input, Step);
+        Assert.Equal(yaw, kurt.Yaw, 3);
+    }
+
     [Fact]
     public void TwentyTicksInTheAirEndTheSlide()
     {

@@ -38,6 +38,8 @@ public sealed partial class Kurt
     private const float SlideBrake = 15f;
     private const float SlideMinSpeed = 15f;
     private const float SlideTurn = 45f;
+    /// <summary>The mouse turns at most 4 × <see cref="SlideTurn"/>.</summary>
+    private const float SlideMouseTurn = 4f * SlideTurn;
     /// <summary>Kurt faces the slide once |vx| + |vy| is above this.</summary>
     private const float SlideHeading = 0.5f;
     /// <summary>A wall stops him when he moved less than half of a move over 0.5 units on an axis:
@@ -233,7 +235,7 @@ public sealed partial class Kurt
         return MathF.Min(speed, _slideCap);
     }
 
-    /// <summary>Kurt faces where the slide goes; turning turns it.</summary>
+    /// <summary>Kurt faces where the slide goes; turning (keys or mouse) turns it.</summary>
     private void Steer(Input input, float speed, float delta)
     {
         if (MathF.Abs(_slideVelocity.X) + MathF.Abs(_slideVelocity.Y) > SlideHeading)
@@ -241,7 +243,8 @@ public sealed partial class Kurt
             Yaw = float.RadiansToDegrees(MathF.Atan2(_slideVelocity.Y, _slideVelocity.X));
         }
 
-        Yaw += Axis(input, Key.TurnLeft, Key.TurnRight) * SlideTurn * delta;
+        var mouse = SlideMouseTurn * delta;
+        Yaw += Axis(input, Key.TurnLeft, Key.TurnRight) * SlideTurn * delta - Math.Clamp(input.MouseX * MouseDegrees, -mouse, mouse);
         _slideVelocity = new Vector2(Facing.X, Facing.Y) * speed;
     }
 
