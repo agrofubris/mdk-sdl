@@ -16,7 +16,7 @@ public class TinyMoveTests
 
     private static readonly MdkData Data = MdkData.Find() ?? throw new InvalidOperationException("MDK data not found");
 
-    [Fact]
+    [DataFact]
     public void TinyWalkMoveStaysPut()
     {
         var mto = Mto.Load(Data.PathOf($"TRAVERSE/LEVEL{Level}/LEVEL{Level}O.MTO"));
