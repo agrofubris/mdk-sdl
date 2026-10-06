@@ -23,6 +23,8 @@ public sealed class FollowCamera
     private const float AirPitchRate = 0.667f * Kurt.Ticks;
     private const float AirPitchMax = 40f;
     private const float AirPitchDecay = 40f;
+    /// <summary>Falling faster than this (u/s) starts the air time.</summary>
+    private const float FallStartSpeed = -16f;
     /// <summary>The arena pitch eases in by 0.85·old + 0.15·new per tick.</summary>
     private const float PitchEase = 0.85f;
     private const float DefaultPitch = 4f;
@@ -53,14 +55,13 @@ public sealed class FollowCamera
             _lookOffset += input.MouseY * MouseDegrees;
         }
 
-        if (kurt.OnFloor)
+        UpdateAirTime(kurt, delta);
+        if (_airTime == 0f)
         {
-            _airTime = 0f;
             _airPitch = MathF.Max(_airPitch - AirPitchDecay * delta, 0f);
         }
         else
         {
-            _airTime += delta;
             _airPitch = MathF.Max(_airPitch, MathF.Min(_airTime * AirPitchRate, AirPitchMax));
         }
 
@@ -70,6 +71,22 @@ public sealed class FollowCamera
         Position = Point(kurt.Feet, facing, pitch);
         Forward = Vector3.Normalize(facing * MathF.Cos(pitch) - Vector3.UnitZ * MathF.Sin(pitch));
         Up = Vector3.Normalize(Vector3.Cross(Vector3.Cross(Forward, Vector3.UnitZ), Forward));
+    }
+
+    /// <summary>Air time (0x573a48): it starts once Kurt falls faster than 16 u/s and ends when he
+    /// rises or stands still on a floor. Running downhill loses the floor for single steps without
+    /// tilting the view.</summary>
+    private void UpdateAirTime(Kurt kurt, float delta)
+    {
+        var vz = kurt.VerticalSpeed;
+        if (_airTime == 0f)
+        {
+            _airTime = vz < FallStartSpeed ? delta : 0f;
+            return;
+        }
+
+        var landed = vz == 0f && kurt.OnFloor;
+        _airTime = vz > 0f || landed ? 0f : _airTime + delta;
     }
 
     /// <summary>The camera's place for the feet and pitch (radians).</summary>
