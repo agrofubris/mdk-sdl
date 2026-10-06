@@ -100,6 +100,7 @@ public sealed class Viewer : IScreen
     private readonly LevelData _level;
     private readonly LevelView _view;
     private readonly SoundMixer _mixer;
+    private readonly LevelMusic _music;
     private readonly ArenaSpace _space;
     private readonly KurtSprite _sprite;
     private readonly Kurt.Kurt _kurt;
@@ -144,7 +145,7 @@ public sealed class Viewer : IScreen
         var bank = SoundBank.ForLevel(data, options.Level);
         _mixer = new SoundMixer(_audio, bank.Get);
         var cmi = Cmi.Load(data.PathOf($"TRAVERSE/LEVEL{level.Number}/LEVEL{level.Number}.CMI"));
-        PlayMusic(_mixer, cmi, level);
+        _music = new LevelMusic(_mixer, cmi.ArenaMusic);
         renderer.Panorama = CreatePanorama(renderer, level.Dti);
 
         _space = new ArenaSpace();
@@ -352,6 +353,8 @@ public sealed class Viewer : IScreen
             }
 
             input.ClearMouse();
+            _music.Enter(_space.ArenaAt(_kurt.Feet));
+            _music.Update(Step);
             _scripts.Update(Step);
             _space.SetSolid(_scripts.SolidArenas);
             _soak?.Step(_kurt, _scripts, _space, _time);
@@ -363,6 +366,7 @@ public sealed class Viewer : IScreen
             if (options.Profile && MathF.Floor(_time) > MathF.Floor(_time - Step))
             {
                 Profile(_scripts, _time);
+                Console.WriteLine($"  music {_music.Playing} {Decibels(_music.Volume)}dB, fading {_music.Fading ?? "-"}");
             }
         }
     }
@@ -590,6 +594,10 @@ public sealed class Viewer : IScreen
         }
     }
 
+    /// <summary>A music volume (0-0x7FFF) in whole decibels, as the Godot port's profile prints it.</summary>
+    private static int Decibels(float volume) =>
+        (int)MathF.Round(20f * MathF.Log10(SoundMixer.Gain(volume)));
+
     /// <summary>A coordinate rounded like Godot's Vector3.round().</summary>
     private static string Rounded(float value) =>
         (MathF.Round(value, MidpointRounding.AwayFromZero) + 0f).ToString("0.0", CultureInfo.InvariantCulture);
@@ -619,16 +627,6 @@ public sealed class Viewer : IScreen
         const float DefaultPitch = 4f;
         var name = space.ArenaAt(feet);
         return level.Dti.Arenas.FirstOrDefault(a => a.Name == name)?.Pitch ?? DefaultPitch;
-    }
-
-    /// <summary>The starting arena's music (named by the level's CMI, in <c>LEVELnO.SNI</c>).</summary>
-    private static void PlayMusic(SoundMixer mixer, Cmi cmi, LevelData level)
-    {
-        var arena = level.Dti.Arenas[level.Dti.StartArena].Name;
-        if (cmi.ArenaMusic.TryGetValue(arena, out var music) && mixer.PlayMusic(music) != 0)
-        {
-            Console.WriteLine($"Music: {music}");
-        }
     }
 
     /// <summary>The level's sky and the panorama its mirrors show, through the level's palette.</summary>
