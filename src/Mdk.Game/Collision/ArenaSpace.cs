@@ -10,7 +10,7 @@ namespace Mdk.Game.Collision;
 ///   feet ──► box (0.6, 0.6, 2.5) at feet + 0.5 (walking) │ (0.4, 0.4, 2.5) at feet + 0.01 (falling)
 ///        ──► Kurt's arena: 4 slides ──free?──► the other arena: no slide ──► new feet
 /// </code></summary>
-public sealed class ArenaSpace
+public sealed partial class ArenaSpace
 {
     /// <summary>Which of Kurt's two boxes a move uses.</summary>
     public enum Motion { Walk, Fall }

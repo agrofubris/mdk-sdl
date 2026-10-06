@@ -351,6 +351,71 @@ public sealed class Bsp(Arena arena)
         return triangle;
     }
 
+    /// <summary>The plane of the node whose list holds <paramref name="triangle"/>.</summary>
+    public BspNode PlaneOf(int triangle) => Arena.Nodes[NodeOf(triangle)];
+
+    /// <summary>The edge of the faces in <paramref name="triangle"/>'s node list that the line from
+    /// <paramref name="point"/> to <paramref name="back"/> crosses (in XY) farthest towards
+    /// <paramref name="back"/> (damp_ledge_grab 0x469868): the point on it and its direction (the
+    /// triangle's winding), or null.</summary>
+    public (Vector3 Point, Vector3 Direction)? Edge(int triangle, Vector3 point, Vector3 back)
+    {
+        var n = Arena.Nodes[NodeOf(triangle)];
+        var (first, count) = triangle >= n.FrontFirst && triangle < n.FrontFirst + n.FrontCount
+            ? (n.FrontFirst, n.FrontCount) : (n.BackFirst, n.BackCount);
+        var best = -1f;
+        (Vector3, Vector3)? edge = null;
+        for (var t = first; t < first + count; t++)
+        {
+            for (var k = 0; k < 3; k++)
+            {
+                var a = Arena.Vertices[Arena.TriangleIndices[t * 3 + k]];
+                var b = Arena.Vertices[Arena.TriangleIndices[t * 3 + (k + 1) % 3]];
+                var along = Crossing(point, back, a, b);
+                var at = Crossing(a, b, point, back);
+                if (along <= best || at < 0f)
+                {
+                    continue;
+                }
+
+                best = along;
+                edge = (a + (b - a) * at, b - a);
+            }
+        }
+
+        return edge;
+    }
+
+    /// <summary>The node whose front or back list holds the triangle.</summary>
+    private int NodeOf(int triangle)
+    {
+        for (var i = 0; i < Arena.Nodes.Length; i++)
+        {
+            var n = Arena.Nodes[i];
+            if ((triangle >= n.FrontFirst && triangle < n.FrontFirst + n.FrontCount)
+                || (triangle >= n.BackFirst && triangle < n.BackFirst + n.BackCount))
+            {
+                return i;
+            }
+        }
+
+        return 0;
+    }
+
+    /// <summary>Where the segment p1→p2 crosses the line q1→q2 in XY, as a fraction of p1→p2 within
+    /// 0-1, or −1 (0x469e68).</summary>
+    private static float Crossing(Vector3 p1, Vector3 p2, Vector3 q1, Vector3 q2)
+    {
+        var denominator = (q2.X - q1.X) * (p2.Y - p1.Y) - (q2.Y - q1.Y) * (p2.X - p1.X);
+        if (denominator == 0f)
+        {
+            return -1f;
+        }
+
+        var t = ((p1.X - q1.X) * (q2.Y - q1.Y) - (p1.Y - q1.Y) * (q2.X - q1.X)) / denominator;
+        return t is >= 0f and <= 1f ? t : -1f;
+    }
+
     private (int Triangle, Vector3 Point) Walk(int index, Vector3 a, Vector3 b, SegmentMode mode)
     {
         while (true)
