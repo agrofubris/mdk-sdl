@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Numerics;
 using Mdk.Engine.Audio;
+using Mdk.Engine.Diagnostics;
 using Mdk.Engine.Platform;
 using Mdk.Engine.Render;
 using Mdk.Formats;
@@ -9,6 +10,7 @@ using Mdk.Game.Flow;
 using Mdk.Game.Menu;
 using Mdk.Game.Audio;
 using Mdk.Game.Collision;
+using Mdk.Game.DevTools;
 using Mdk.Game.Hud;
 using Mdk.Game.Kurt;
 using Mdk.Game.Level;
@@ -62,6 +64,8 @@ public sealed record ViewerOptions(int Level, Vector3? Position, float? Yaw, flo
     /// <summary>After the delay: one of the 1996 demo's teleports, a roll held (tests).</summary>
     public int? BetaTeleport { get; init; }
     public BetaRoll? Roll { get; init; }
+    /// <summary>After the delay: the console opens and runs these commands ("pos;god").</summary>
+    public string? Console { get; init; }
 }
 
 /// <summary>A roll of the 1996 demo's levels.</summary>
@@ -134,6 +138,9 @@ public sealed class Viewer : IScreen
     private Event _next = Event.None;
     /// <summary>The level ended: the event that follows once the delay is over.</summary>
     private (Event Event, float Delay)? _ending;
+    private readonly LevelDevTools _dev;
+    /// <summary>The keys the game gets while the console has the real ones: none (tests hold theirs).</summary>
+    private readonly Input _idle = new();
 
     public Viewer(Ui ui, ViewerOptions options, GameState state)
     {
@@ -237,7 +244,30 @@ public sealed class Viewer : IScreen
 
         _test = options.Screenshot != null;
         ui.Window.CaptureMouse(_test ? Capture.Off : Capture.On);
+        _dev = new LevelDevTools(ui, new LevelCommands(ui, state, level, _kurt, _scripts, _space, SaveSlot), _kurt, _scripts);
+        EnterStartArena(state);
     }
+
+    /// <summary>The console's map: Kurt starts on a floor of the arena asked for.</summary>
+    private void EnterStartArena(GameState state)
+    {
+        if (state.StartArena is not { } arena)
+        {
+            return;
+        }
+
+        state.StartArena = null;
+        if (ArenaStops.Find(_level, _space, arena) is not { } stop)
+        {
+            Console.WriteLine($"No arena {arena}");
+            return;
+        }
+
+        _scripts.TeleportKurt(arena, stop, _kurt.Yaw);
+    }
+
+    /// <summary>The console's save: a full save of that name, as F2 makes.</summary>
+    private bool SaveSlot(string name) => SaveGames.In(_ui.UserFolder).Write(name, SnapshotSave(_scripts.Capture()));
 
     /// <summary>The counts of the level (for the statistics).</summary>
     public GameStats Stats => _scripts.Stats;
@@ -267,6 +297,12 @@ public sealed class Viewer : IScreen
     {
         var input = _ui.Input;
 
+        // A console command left the level (map, load, quit).
+        if (_dev.Commands.Next != Event.None)
+        {
+            return _dev.Commands.Next;
+        }
+
         // While the game waits, the mouse and the wheel don't pile up for Kurt.
         if (_snapshotPrompt != null || _pause.Open)
         {
@@ -287,6 +323,13 @@ public sealed class Viewer : IScreen
             _renderer.Present(SceneView(), Background(), screenshot);
             CaptureMouse();
             return paused;
+        }
+
+        // The open console has the keys: the game runs on without them.
+        if (_dev.Update(input, elapsed) == ConsoleState.Open)
+        {
+            input.ClearMouse();
+            input = _idle;
         }
 
         if (input.WasPressed(MenuKey.Back) && _scripts.Strike is not { Active: true })
@@ -336,7 +379,14 @@ public sealed class Viewer : IScreen
             OpenSnapshot();
         }
 
-        RunSteps(input, elapsed);
+        RunSteps(input, elapsed * _dev.Commands.TimeScale);
+
+        // Once the scripts have set Kurt's arena.
+        if (_time >= _options.Delay && _scripts.CurrentArena.Length != 0)
+        {
+            _dev.RunOnce(_options.Console);
+        }
+
         if (_ending is { } ending)
         {
             _ending = ending with { Delay = ending.Delay - elapsed };
@@ -348,7 +398,12 @@ public sealed class Viewer : IScreen
 
         var camera = DrawScene(elapsed);
         var save = SavePath(_options, input, _time) ?? screenshot;
-        _renderer.Present(camera, Background(), save);
+        _dev.Draw();
+        using (_ui.Dev.Profiler.Measure(Section.Render))
+        {
+            _renderer.Present(camera, Background(), save);
+        }
+
         if (save == null)
         {
             return _next;
@@ -387,22 +442,20 @@ public sealed class Viewer : IScreen
             RunTests();
             _sniperTest.Step(_kurt, _scripts, input, _time);
             _rideTest.Step(_kurt, _scripts, input, _time);
-            if (_flying)
-            {
-                _fly.Update(input, Step);
-            }
-            else
-            {
-                _kurt.Update(input, Step);
-                _follow.Update(_kurt, PitchGoal(), input, Step);
-            }
-
+            UpdateKurt(input);
             input.ClearMouse();
-            _scripts.Update(Step);
+            using (_ui.Dev.Profiler.Measure(Section.Scripts))
+            {
+                _scripts.Update(Step);
+            }
 
             // The music follows Kurt's arena, which the scripts set (BSPShow).
-            _music.Enter(_scripts.CurrentArena);
-            _music.Update(Step);
+            using (_ui.Dev.Profiler.Measure(Section.Audio))
+            {
+                _music.Enter(_scripts.CurrentArena);
+                _music.Update(Step);
+            }
+
             if (CutsceneCamera.Active(_scripts))
             {
                 _cutscene.Update(_scripts);
@@ -422,6 +475,20 @@ public sealed class Viewer : IScreen
                 Console.WriteLine($"  music {_music.Playing} {Decibels(_music.Volume)}dB, fading {_music.Fading ?? "-"}");
             }
         }
+    }
+
+    /// <summary>A step of Kurt and his camera, or of the flying camera (timed as physics).</summary>
+    private void UpdateKurt(Input input)
+    {
+        using var measure = _ui.Dev.Profiler.Measure(Section.Physics);
+        if (_flying)
+        {
+            _fly.Update(input, Step);
+            return;
+        }
+
+        _kurt.Update(input, Step);
+        _follow.Update(_kurt, PitchGoal(), input, Step);
     }
 
     /// <summary>The tests' held keys: forward for --walk seconds, jump, fire, and use at 1 second.</summary>
@@ -495,8 +562,13 @@ public sealed class Viewer : IScreen
         _mixer.ScopeZoom = _kurt.Sniping && !_flying ? _kurt.Scope.Zoom : 0f;
         _mixer.ListenerForward = _kurt.SniperForward;
         _mixer.ListenerUp = FollowCamera.UpOf(_kurt.SniperForward);
-        _mixer.Update(elapsed);
+        using (_ui.Dev.Profiler.Measure(Section.Audio))
+        {
+            _mixer.Update(elapsed);
+        }
+
         _scripts.Eye = camera.Position;
+        using var render = _ui.Dev.Profiler.Measure(Section.Render);
         _view.Draw(_scripts.DrawnArenas, _scripts.AnimatedTextures);
         _view.DrawEnd(_scripts.EndLevel);
         DrawObjects(_objects, _scripts, _level, _looks);

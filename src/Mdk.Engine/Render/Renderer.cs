@@ -79,6 +79,9 @@ public enum Backdrop { Sky, Clear, Keep }
 /// to world directions, for the sky), and its position.</summary>
 public readonly record struct View(Matrix4x4 ViewProjection, Matrix4x4 ClipToDirection, Vector3 Position);
 
+/// <summary>What the last frame drew: its GPU draw calls and triangles (lines count none).</summary>
+public readonly record struct RenderStats(int DrawCalls, int Triangles);
+
 /// <summary>Draws paletted triangle meshes with SDL_GPU.
 /// <code>
 ///  game ──► Renderer ──► offscreen colour + depth ──blit──► swapchain
@@ -613,7 +616,9 @@ public sealed unsafe partial class Renderer : IDisposable
         EnsureTargets(width, height);
         QueueCanvas();
         UploadDynamic(commands);
+        (_drawCalls, _triangles) = (0, 0);
         RenderScene(commands, view, clearColour);
+        Stats = new RenderStats(_drawCalls, _triangles);
         if (swapchain != null)
         {
             Blit(commands, swapchain, width, height);
@@ -628,6 +633,23 @@ public sealed unsafe partial class Renderer : IDisposable
         }
 
         _commands.Clear();
+    }
+
+    /// <summary>The last presented frame's draws (the debug overlay).</summary>
+    public RenderStats Stats { get; private set; }
+
+    /// <summary>The sky and the post pass draw one screen-filling triangle.</summary>
+    private const int ScreenTriangle = 3;
+    private const int TriangleVertices = 3;
+    private int _drawCalls;
+    private int _triangles;
+
+    /// <summary>Draws vertices of the bound buffer, counted in <see cref="Stats"/>.</summary>
+    private void DrawPrimitives(SDL_GPURenderPass* pass, int count, int first, Primitive primitive)
+    {
+        _drawCalls++;
+        _triangles += primitive == Primitive.Triangles ? count / TriangleVertices : 0;
+        SDL_DrawGPUPrimitives(pass, (uint)count, 1, (uint)first, 0);
     }
 
     /// <summary>The offscreen frame of a hidden window (the shown one's default size).</summary>
@@ -678,7 +700,7 @@ public sealed unsafe partial class Renderer : IDisposable
         var clipToDirection = view.ClipToDirection;
         SDL_PushGPUVertexUniformData(commands, 0, (IntPtr)(&clipToDirection), (uint)sizeof(Matrix4x4));
         BindPanorama(commands, pass, panorama, panorama.Sky, 0f, view.Position);
-        SDL_DrawGPUPrimitives(pass, 3, 1, 0, 0);
+        DrawPrimitives(pass, ScreenTriangle, 0, Primitive.Triangles);
     }
 
     private void BindPanorama(SDL_GPUCommandBuffer* commands, SDL_GPURenderPass* pass, Panorama panorama, int texture, float rowShift, Vector3 camera)
@@ -732,7 +754,7 @@ public sealed unsafe partial class Renderer : IDisposable
             }
 
             BindPanorama(commands, pass, Panorama, Panorama.MirrorSky, material.RowShift, view.Position);
-            SDL_DrawGPUPrimitives(pass, (uint)command.Count, 1, (uint)command.First, 0);
+            DrawPrimitives(pass, command.Count, command.First, command.Primitive);
             return;
         }
 
@@ -751,7 +773,7 @@ public sealed unsafe partial class Renderer : IDisposable
             Frame = command.Frame,
         };
         SDL_PushGPUFragmentUniformData(commands, 0, (IntPtr)(&uniforms), (uint)sizeof(FragmentUniforms));
-        SDL_DrawGPUPrimitives(pass, (uint)command.Count, 1, (uint)command.First, 0);
+        DrawPrimitives(pass, command.Count, command.First, command.Primitive);
     }
 
     private void Blit(SDL_GPUCommandBuffer* commands, SDL_GPUTexture* swapchain, uint width, uint height)

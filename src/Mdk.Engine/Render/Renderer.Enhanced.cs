@@ -342,7 +342,7 @@ public sealed unsafe partial class Renderer
             Frame = command.Frame,
         };
         SDL_PushGPUFragmentUniformData(commands, 0, (IntPtr)(&uniforms), (uint)sizeof(FragmentUniforms));
-        SDL_DrawGPUPrimitives(pass, (uint)command.Count, 1, (uint)command.First, 0);
+        DrawPrimitives(pass, command.Count, command.First, command.Primitive);
     }
 
     /// <summary>A draw through the enhanced shader (its pipeline and vertex buffer bound).</summary>
@@ -377,7 +377,7 @@ public sealed unsafe partial class Renderer
             Shadow = new Vector4(ShadowSize, ShadowDepthBias / (2f * SunShadow.Reach), ShadowNormalOffset, shadowed ? 1f : 0f),
         };
         SDL_PushGPUFragmentUniformData(commands, 0, (IntPtr)(&uniforms), (uint)sizeof(EnhancedUniforms));
-        SDL_DrawGPUPrimitives(pass, (uint)command.Count, 1, (uint)command.First, 0);
+        DrawPrimitives(pass, command.Count, command.First, command.Primitive);
     }
 
     /// <summary>Ambient occlusion and glow, from the scene into the frame.</summary>
@@ -407,7 +407,7 @@ public sealed unsafe partial class Renderer
             Glow = new Vector4(lighting.Glow, GlowThreshold, GlowIntensity, GlowMip),
         };
         SDL_PushGPUFragmentUniformData(commands, 0, (IntPtr)(&uniforms), (uint)sizeof(PostUniforms));
-        SDL_DrawGPUPrimitives(pass, 3, 1, 0, 0);
+        DrawPrimitives(pass, ScreenTriangle, 0, Primitive.Triangles);
         SDL_EndGPURenderPass(pass);
     }
 }

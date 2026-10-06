@@ -16,10 +16,12 @@ Each layer talks only to the one below it.
     │         Stream: the tube between levels (generator, Kurt's flight, drawing)
     │         Fall: the fall before a level (FallSim, FallView, FallHud)
     │         Viewer (a level): level, camera, collision (BSP), sound mixer, scripts and objects, Kurt
+    │         DevTools: the console, its commands, the debug overlay
     │   └──────────────► Mdk.Formats  (parsers: DTI, MTO, MTI, SNI, FTI, BNI, models; the 1996 demo's)
  Mdk.Engine   Render (Renderer: meshes, index textures, palettes, panorama)
     │         Audio (AudioDevice: software mixer of voices, music and effects buses, streamed voices, master limiter)
-    │         Platform (Window, Input: game keys (rebindable), menu keys, pointer, text, cursor, SDL3)
+    │         Platform (Window, Input: game keys (rebindable), menu keys, raw keys, pointer, text, cursor, SDL3)
+    │         Diagnostics (Profiler: frame sections; LogRing, LogWriter: the output's last lines)
  SDL3         SDL_GPU (Direct3D 12 / Vulkan / Metal), events
 ```
 
@@ -117,6 +119,32 @@ picks the next screen. A screen's textures and meshes are freed when it ends (`R
               ├── Kurt died (LASTGAME) ◄──────────────────────────┘
               └── end movies (event 81) ◄── LEVEL5
 ```
+
+## Developer tools
+
+The console (Grave, the key left of 1 by its scancode) and the debug overlay (F3) of a level
+(`DevTools/`, `LevelDevTools` in the `Viewer`):
+
+```
+ Console.WriteLine ──► LogWriter ──► stdout / stderr (unchanged; tests parse them)
+                               └──► LogRing (500 lines) ──► ConsoleView
+ Input (RawKey, typed text) ──► DevConsole ──Enter──► CommandRegistry ──► ConsoleCommands (parse, check)
+                                   │ Tab, Up/Down        (help, clear)          │
+                                   ▼                                            ▼
+                             CommandHistory                     ICommandTarget: LevelCommands (Kurt, scripts,
+                                                                settings, saves; Next: map, load, quit)
+ Profiler (render, physics, scripts, audio), Renderer.Stats, GC ──► OverlayText ──► OverlayView
+```
+
+- The game runs on while the console is open; the level gets an idle `Input` (the tests' held
+  keys still apply), so typing reaches neither Kurt nor the cheats.
+- The engine's parts are generic: `RawKey` (fixed keys by place, auto-repeat included),
+  `Profiler` sections, `RenderStats` (GPU draw calls and triangles of the last frame), the log.
+- `Kurt.Mortality` (god: no damage, no death by falling out) and `Kurt.Clipping` (noclip: the
+  walking keys move him freely). `ArenaStops` finds a floor of an arena (the soak tour, `tp`,
+  `map`); `GameState.StartArena` carries `map`'s arena to the next `Viewer`.
+- `--console="..."` opens the console once Kurt's arena is known (after `--delay`) and runs the
+  lines (`tests/console_test.sh`).
 
 ## The 1996 beta demo
 

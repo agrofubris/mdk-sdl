@@ -23,6 +23,11 @@ public enum Key
 /// <summary>Keys of the menus and prompts: fixed, whatever the game's bindings.</summary>
 public enum MenuKey { Up, Down, Left, Right, Accept, Back, Backspace, Delete, Home, End, Snapshot }
 
+/// <summary>Keys by their place on the keyboard, whatever the layout and the bindings (the console,
+/// the debug overlay); the keyboard's repeat presses them again. <see cref="Grave"/> is the key left
+/// of 1.</summary>
+public enum RawKey { Grave, F3, Tab, Enter, Backspace, Up, Down, PageUp, PageDown, Escape }
+
 /// <summary>Mouse buttons that click menu items.</summary>
 public enum Pointer { Left, Right }
 
@@ -118,6 +123,21 @@ public sealed class Input
         [SDL_Scancode.SDL_SCANCODE_F2] = MenuKey.Snapshot,
     };
 
+    private static readonly Dictionary<SDL_Scancode, RawKey> RawKeys = new()
+    {
+        [SDL_Scancode.SDL_SCANCODE_GRAVE] = RawKey.Grave,
+        [SDL_Scancode.SDL_SCANCODE_F3] = RawKey.F3,
+        [SDL_Scancode.SDL_SCANCODE_TAB] = RawKey.Tab,
+        [SDL_Scancode.SDL_SCANCODE_RETURN] = RawKey.Enter,
+        [SDL_Scancode.SDL_SCANCODE_KP_ENTER] = RawKey.Enter,
+        [SDL_Scancode.SDL_SCANCODE_BACKSPACE] = RawKey.Backspace,
+        [SDL_Scancode.SDL_SCANCODE_UP] = RawKey.Up,
+        [SDL_Scancode.SDL_SCANCODE_DOWN] = RawKey.Down,
+        [SDL_Scancode.SDL_SCANCODE_PAGEUP] = RawKey.PageUp,
+        [SDL_Scancode.SDL_SCANCODE_PAGEDOWN] = RawKey.PageDown,
+        [SDL_Scancode.SDL_SCANCODE_ESCAPE] = RawKey.Escape,
+    };
+
     /// <summary>Names of mouse buttons as bindings (<see cref="Bind"/>); others are
     /// <see cref="ButtonPrefix"/> and their number ("Mouse 4").</summary>
     private static readonly Dictionary<MouseButton, string> ButtonNames = new()
@@ -135,6 +155,7 @@ public sealed class Input
     private readonly Dictionary<SDL_Scancode, Key> _keys = new(DefaultKeys);
     private readonly Dictionary<MouseButton, Key> _buttonKeys = new(DefaultButtons);
     private readonly HashSet<MenuKey> _menuPressed = [];
+    private readonly HashSet<RawKey> _rawPressed = [];
     private readonly HashSet<Pointer> _clicked = [];
 
     private readonly HashSet<Key> _down = [];
@@ -198,12 +219,15 @@ public sealed class Input
 
     public bool WasPressed(MenuKey key) => _menuPressed.Contains(key);
 
+    public bool WasPressed(RawKey key) => _rawPressed.Contains(key);
+
     public bool WasClicked(Pointer button) => _clicked.Contains(button);
 
     internal void BeginFrame()
     {
         _pressed.Clear();
         _menuPressed.Clear();
+        _rawPressed.Clear();
         _clicked.Clear();
         PointerMoved = false;
         Typed = "";
@@ -322,6 +346,11 @@ public sealed class Input
         if (state == State.Down && MenuKeys.TryGetValue(scancode, out var menuKey))
         {
             _menuPressed.Add(menuKey);
+        }
+
+        if (state == State.Down && RawKeys.TryGetValue(scancode, out var rawKey))
+        {
+            _rawPressed.Add(rawKey);
         }
 
         if (state == State.Down && repeat == Repeat.No)

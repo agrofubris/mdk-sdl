@@ -4,6 +4,7 @@ using Mdk.Engine.Audio;
 using Mdk.Engine.Platform;
 using Mdk.Engine.Render;
 using Mdk.Formats;
+using Mdk.Game.DevTools;
 using Mdk.Game.Flow;
 using Mdk.Game.Hud;
 
@@ -25,6 +26,8 @@ public sealed class Ui(MdkData data, Window window, Renderer renderer, AudioDevi
     public ScreenView View { get; } = new(renderer);
     /// <summary>The 1996 demo, when it's found (its levels are extras).</summary>
     public BetaDemo? Beta { get; } = BetaDemo.Find(data);
+    /// <summary>The console's and the debug overlay's session: the log, timings, history.</summary>
+    public DevSession Dev { get; } = new();
 
     /// <summary>The settings changed: applied, and saved.</summary>
     public void ApplySettings()

@@ -83,6 +83,9 @@ public sealed class Inventory
     /// <summary>A pickup was taken: its name, the text shown for 2 seconds (0x46d098).</summary>
     public event Action<string>? PickedUp;
 
+    /// <summary>Whether a model name is a pickup (SW_HBOMB, SW_H50...).</summary>
+    public static bool IsPickup(string model) => InstantPickups.Contains(model) || ItemPickups.ContainsKey(model);
+
     /// <summary>The pickups of a full save, as they were.</summary>
     public void Restore(IEnumerable<Slot> slots, int selected, IReadOnlyList<int> ammo, int selectedAmmo, int superChainGun)
     {

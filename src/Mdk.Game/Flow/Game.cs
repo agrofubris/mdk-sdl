@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Mdk.Engine.Audio;
+using Mdk.Engine.Diagnostics;
 using Mdk.Engine.Platform;
 using Mdk.Engine.Render;
 using Mdk.Formats;
@@ -141,7 +142,12 @@ public sealed class Game : IDisposable
 
             var shot = test && !_levelShot && time >= _options.Wait ? _options.Screenshot : null;
             var next = _screen.Frame(elapsed, shot);
-            _audio.Update(elapsed);
+            using (_ui.Dev.Profiler.Measure(Section.Audio))
+            {
+                _audio.Update(elapsed);
+            }
+
+            _ui.Dev.Profiler.EndFrame();
             if (shot != null)
             {
                 Console.WriteLine($"Saved {shot}");

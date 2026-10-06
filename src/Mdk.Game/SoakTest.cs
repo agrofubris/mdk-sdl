@@ -20,13 +20,6 @@ public enum SoakRoute { Stay, Tour }
 /// </code></summary>
 public sealed class SoakTest
 {
-    private const uint DtiAlien = 2;
-    private const uint DtiCover = 5;
-    private const uint DtiWaypoint = 8;
-    /// <summary>Kurt lands from slightly above the record.</summary>
-    private const float TeleportLift = 4f;
-    /// <summary>A tour stop's record is at most this high above its floor.</summary>
-    private const float MaxDrop = 200f;
     private const int HealBelow = Kurt.Inventory.MaxHealth / 2;
     /// <summary>Seconds standing outside every arena before it's a problem, falling before it's a pit.</summary>
     private const float LostTime = 3f;
@@ -199,34 +192,19 @@ public sealed class SoakTest
 
     private static bool IsFinite(Vector3 v) => float.IsFinite(v.X) && float.IsFinite(v.Y) && float.IsFinite(v.Z);
 
-    /// <summary>A point on a floor in each reachable arena: under its first cover spot, else waypoint,
-    /// alien or connection record above a floor of that arena (not of an overlapping one).</summary>
+    /// <summary>A point on a floor in each reachable arena (<see cref="ArenaStops"/>).</summary>
     private static IEnumerable<(string, Vector3)> Stops(LevelData level, Collision.ArenaSpace space)
     {
-        uint[] preferred = [DtiCover, DtiWaypoint, DtiAlien, LevelData.Connection];
         var points = new HashSet<Vector3>();
         foreach (var entry in level.Dti.Arenas.Where(a => level.IsReachable(a.Name)))
         {
-            var floors = preferred.SelectMany(type => entry.Records.Where(r => r.Type == type))
-                .Select(r => FloorBelow(space, entry.Name, r.Position))
-                .Where(p => p != null);
-
             // A corridor's connections are those of its arenas (CHMO_1 ends in HMO_1): visited once.
-            if (floors.FirstOrDefault() is not { } floor || !points.Add(floor))
+            if (ArenaStops.Find(level, space, entry.Name) is not { } stop || !points.Add(stop))
             {
                 continue;
             }
 
-            yield return (entry.Name, floor + new Vector3(0f, 0f, TeleportLift));
+            yield return (entry.Name, stop);
         }
-    }
-
-    /// <summary>The floor of that arena under a point (not one of an overlapping arena).</summary>
-    private static Vector3? FloorBelow(Collision.ArenaSpace space, string arena, Vector3 point)
-    {
-        var from = point + new Vector3(0f, 0f, TeleportLift);
-        var bsp = space.At(from).FirstOrDefault(b => b.Arena.Name == arena);
-        var to = from - new Vector3(0f, 0f, MaxDrop);
-        return bsp != null && bsp.Segment(from, to, Collision.Bsp.SegmentMode.Floor, out var floor) != Collision.Bsp.None ? floor : null;
     }
 }
