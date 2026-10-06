@@ -1,5 +1,5 @@
 # Builds, tests (without the game's data, whose tests are skipped) and publishes one native
-# executable per platform; a v* tag also makes a GitHub release of the three archives.
+# executable and SDL3's library per platform; a v* tag also makes a GitHub release of the three archives.
 #
 #   windows-latest ─► mdk-win-x64.zip      (DXIL + SPIR-V)
 #   ubuntu-latest  ─► mdk-linux-x64.tar.gz (SPIR-V)          ─► release (tags v*)
@@ -94,11 +94,11 @@ jobs:
         run: |
           mkdir dist
           if [ "$RUNNER_OS" = Windows ]; then
-            7z a -tzip "dist/mdk-${{ matrix.rid }}.zip" ./publish/mdk.exe
+            7z a -tzip "dist/mdk-${{ matrix.rid }}.zip" ./publish/mdk.exe ./publish/SDL3.dll
           elif [ "$RUNNER_OS" = Linux ]; then
-            tar -czf "dist/mdk-${{ matrix.rid }}.tar.gz" -C publish mdk
+            tar -czf "dist/mdk-${{ matrix.rid }}.tar.gz" -C publish mdk libSDL3.so
           else
-            (cd publish && zip -q "../dist/mdk-${{ matrix.rid }}.zip" mdk)
+            (cd publish && zip -q "../dist/mdk-${{ matrix.rid }}.zip" mdk libSDL3.dylib)
           fi
           ls -la dist
 
