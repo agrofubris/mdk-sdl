@@ -24,6 +24,8 @@ public sealed class KurtSprite
     private const string ChuteOpening = "K_CHUTE";
     private const string ChuteSway = "K_CHUTEC";
     private const int ChuteOpenedFrame = 5;
+    /// <summary>K_CHUTE's frame shown once when the chute closes in the air.</summary>
+    private const int ChuteClosedFrame = 7;
     /// <summary>The chain gun's muzzle flash, drawn behind Kurt (a little farther from the camera).</summary>
     private const string MuzzleFlash = "K_MUZZF";
     private const float MuzzleBehind = 0.05f;
@@ -163,6 +165,11 @@ public sealed class KurtSprite
         if (kurt.Pose is { } pose && FrameCount(pose.Name) is > 0 and var poseFrames)
         {
             return (pose.Name, ((pose.Frame % poseFrames) + poseFrames) % poseFrames);
+        }
+
+        if (kurt.ChuteClosing)
+        {
+            return (ChuteOpening, ChuteClosedFrame);
         }
 
         var (name, repeat) = Animations[kurt.Current];

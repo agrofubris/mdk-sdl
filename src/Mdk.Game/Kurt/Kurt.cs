@@ -102,6 +102,8 @@ public sealed partial class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.S
     public bool OnFloor;
     public bool ChuteOpen;
     public State Current = State.Still;
+    /// <summary>The chute closed in the air this tick: K_CHUTE's closing frame shows once.</summary>
+    public bool ChuteClosing { get; private set; }
     /// <summary>The solid object boxes of Kurt's arena within a region (set by the scripts runtime).</summary>
     public Func<Box, IReadOnlyList<Solids.Solid>>? SolidsWithin;
     /// <summary>The object Kurt stands on (0x573b84), or null.</summary>
@@ -127,6 +129,7 @@ public sealed partial class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.S
     public void Update(Input input, float delta)
     {
         Invulnerable = MathF.Max(Invulnerable - delta, 0f);
+        ChuteClosing = false;
         if (Frozen)
         {
             // Cutscenes: he stands still.
@@ -575,6 +578,13 @@ public sealed partial class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.S
             if (ChuteOpen)
             {
                 SetState(State.Chute);
+            }
+            else if (Current == State.Chute)
+            {
+                // Closed in the air: its closing frame, then the fall.
+                ChuteClosing = true;
+                SetState(State.Fall);
+                return;
             }
             else if (VerticalSpeed > 0f && Current is not (State.Jump or State.RunJump or State.Fall))
             {

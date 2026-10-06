@@ -185,4 +185,22 @@ public class KurtTests
         Assert.False(mixer.IsPlaying("CHUTEON"));
         Assert.True(mixer.IsPlaying("CHUTEIN"));
     }
+
+    [DataFact]
+    public void ChuteClosedInTheAirShowsItsClosingFrameThenFalls()
+    {
+        var kurt = new Kurt.Kurt(new ArenaSpace(), new SoundMixer(Device, _ => null), _ => Frames) { Feet = new Vector3(0f, 0f, 1000f), VerticalSpeed = -20f };
+        var jump = new Input();
+        jump.Hold(Key.Jump, Input.State.Down);
+        Run(kurt, jump, 0.5f);
+        Assert.Equal(State.Chute, kurt.Current);
+
+        // One tick of K_CHUTE's closing frame, then the fall.
+        kurt.Update(new Input(), Step);
+        Assert.Equal(State.Fall, kurt.Current);
+        Assert.True(kurt.ChuteClosing);
+
+        kurt.Update(new Input(), Step);
+        Assert.False(kurt.ChuteClosing);
+    }
 }
