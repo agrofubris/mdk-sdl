@@ -108,6 +108,7 @@ public sealed class Viewer : IScreen
     private readonly HudView _hud;
     private readonly ObjectView _objects;
     private readonly EffectsView _effects;
+    private readonly RopeView _ropes;
     private readonly Dictionary<string, ObjectView.Look> _looks = [];
     private readonly SniperView _sniper;
     private readonly SniperTest _sniperTest;
@@ -193,6 +194,7 @@ public sealed class Viewer : IScreen
         _scripts.ArenaEntered += _view.Enter;
         _objects = new ObjectView(renderer, new MaterialResolver(renderer, level.Dti));
         _effects = new EffectsView(renderer, new MaterialResolver(renderer, level.Dti), level);
+        _ropes = new RopeView(renderer, level);
         _sniper = new SniperView(renderer, _objects, level, _hud);
         _sniperTest = new SniperTest(options);
         _rideTest = new RideTest(options);
@@ -424,6 +426,7 @@ public sealed class Viewer : IScreen
         _view.Draw(_scripts.DrawnArenas, _scripts.AnimatedTextures);
         _view.DrawEnd(_scripts.EndLevel);
         DrawObjects(_objects, _scripts, _level, _looks);
+        _ropes.Draw(_scripts.Objects);
         _sniper.Draw(_kurt, _scripts, elapsed);
         _effects.Draw(_scripts, camera);
         _sprite.Draw(_kurt, camera.Position, eye.Forward, eye.Up, eye.FieldOfView);
@@ -626,6 +629,11 @@ public sealed class Viewer : IScreen
             var c = scripts.CameraPoint;
             Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
                 $"  cutscene {scripts.Cutscene:x} shot {scripts.CameraMode} camera ({Rounded(c.X)}, {Rounded(c.Y)}, {Rounded(c.Z)}) yaw {scripts.CameraYaw:0} pitch {scripts.CameraPitch:0}"));
+        }
+
+        foreach (var obj in scripts.Objects.Where(o => o.RopeMask != 0 && !o.Dead))
+        {
+            Console.WriteLine($"  rope {obj.TypeName}_{obj.InstanceId} lines {RopeView.LinesOf(obj).Count / 2} colour {obj.RopeColor}");
         }
 
         foreach (var ((arena, texture), frame) in scripts.AnimatedTextures.Frames)
