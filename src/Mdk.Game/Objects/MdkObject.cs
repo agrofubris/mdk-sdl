@@ -409,15 +409,19 @@ public sealed class MdkObject
             return [];
         }
 
+        // Shared like Baked: runtimes on other threads (parallel tests) use it too.
         var key = (Model, Animation, AnimationFrame);
-        if (BoundsCache.TryGetValue(key, out var cached))
+        lock (BoundsCache)
         {
-            return cached;
-        }
+            if (BoundsCache.TryGetValue(key, out var cached))
+            {
+                return cached;
+            }
 
-        var pose = Animation == null ? Model.PartList.Select(p => p.Vertices).ToArray() : Bake(Model, Animation)[AnimationFrame];
-        var bounds = pose.Select(v => v.Length == 0 ? (Box?)null : new Box(v.Aggregate(Vector3.Min), v.Aggregate(Vector3.Max))).ToArray();
-        return BoundsCache[key] = bounds;
+            var pose = Animation == null ? Model.PartList.Select(p => p.Vertices).ToArray() : Bake(Model, Animation)[AnimationFrame];
+            var bounds = pose.Select(v => v.Length == 0 ? (Box?)null : new Box(v.Aggregate(Vector3.Min), v.Aggregate(Vector3.Max))).ToArray();
+            return BoundsCache[key] = bounds;
+        }
     }
 
     /// <summary>Bounds of the visible parts in the current pose (model space).</summary>
