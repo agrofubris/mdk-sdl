@@ -30,6 +30,9 @@ public class DoorArenaTests
     private static readonly Vector3 FarFromDoor = new(0f, 750f, -8f);
     private static readonly Vector3 CorridorSpot = new(100f, 990f, -6f);
     private const int SecondTicks = 30;
+    private const string Far = "DANT_10";
+    private static readonly Vector3 FarSpot = new(495f, 5005f, 24f);
+    private static readonly Vector3 TunnelSpot = new(0f, 485f, 19f);
 
     private static readonly MdkData Data = MdkData.Find() ?? throw new InvalidOperationException("MDK data not found");
     private static readonly AudioDevice Device = new(Output.Muted);
@@ -99,11 +102,45 @@ public class DoorArenaTests
         runtime.TeleportKurt(Corridor, CorridorSpot, 0f);
         StandAt(runtime, CorridorSpot, 1);
 
+        // DANT_2 stays loaded from the tunnel; a trigger clears it.
+        runtime.ShowArena("");
         runtime.PreloadArena(Room);
 
         var door = DoorAt(runtime, TunnelDoor);
         Assert.Equal(Room, door.Arena);
         Assert.Equal(Tunnel, door.Connects);
         Assert.Equal(TurnedYaw, door.Yaw, 0.01f);
+    }
+
+    /// <summary>A teleport into a corridor not loaded loads the last arena (DTI order) leading to it,
+    /// which becomes the active second (0x41bce4): from DANT_10 into CDANT_1, DANT_2 behind its door.</summary>
+    [DataFact]
+    public void TeleportLoadsCorridorArena()
+    {
+        var runtime = CreateRuntime();
+        runtime.TeleportKurt(Far, FarSpot, 0f);
+        StandAt(runtime, FarSpot, 1);
+
+        runtime.TeleportKurt(Tunnel, TunnelSpot, DoorYaw);
+        StandAt(runtime, TunnelSpot, 1);
+
+        Assert.Equal(Room, runtime.SecondArena);
+        Assert.Contains(Room, runtime.DrawnArenas);
+    }
+
+    /// <summary>A teleport into a corridor of the loaded arena keeps the second arena (0x41bce4):
+    /// from DANT_2 into CDANT_2, none.</summary>
+    [DataFact]
+    public void TeleportKeepsLoadedCorridor()
+    {
+        var runtime = CreateRuntime();
+        runtime.TeleportKurt(Room, FarFromDoor, DoorYaw);
+        StandAt(runtime, FarFromDoor, 1);
+
+        runtime.TeleportKurt(Corridor, CorridorSpot, 0f);
+        StandAt(runtime, CorridorSpot, 1);
+
+        Assert.Equal("", runtime.SecondArena);
+        Assert.Equal([Corridor], runtime.DrawnArenas);
     }
 }

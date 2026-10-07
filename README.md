@@ -26,7 +26,8 @@ bleeds and the fans lift Kurt. He grabs ledges and climbs them, slides down leve
 tunnels on his back, gets hurt by hard landings and dies falling out of the arena; the camera
 rolls, shakes and pushes him away from the walls behind him. He snipes through the scope with every kind of round and calls
 Bones' air strike. Only Kurt's arena and the one behind an open door are drawn and solid, as in
-the original; doors move into Kurt's arena, so they open from either side.
+the original; doors move into Kurt's arena, so they open from either side, and a teleport into
+a corridor loads the arena behind it.
 The game starts with the splash and the main menu (options, key bindings, saved
 games) and plays the levels in order with their loading screens, briefings, the end of each level,
 the statistics and the save prompt; when Kurt dies, "Continue" starts the level again. After each

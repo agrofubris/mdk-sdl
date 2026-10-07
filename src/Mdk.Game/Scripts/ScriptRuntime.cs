@@ -285,6 +285,8 @@ public sealed partial class ScriptRuntime
     private readonly Dictionary<MdkObject, List<int>> _following = [];
     private List<string> _loadedArenas = [];
     private List<string> _drawnArenas = [];
+    /// <summary>The one arena (not corridor) loaded (_g_current_arena); its corridors are loaded too.</summary>
+    private string _residentArena = "";
     private int _nextInstance = 1000;
     private Vector3 _previousKurtPosition;
     /// <summary>A teleport into an arena set the previous position before the first tick.</summary>
@@ -425,10 +427,9 @@ public sealed partial class ScriptRuntime
         {
             EnterArena(arena);
 
-            // A teleport leaves no second arena (0x41bce4).
-            SecondArena = "";
-            SecondActive = false;
+            var from = CurrentArena;
             CurrentArena = arena;
+            TeleportSecond(arena, from);
             ShowArena(arena);
 
             // No move crosses a connection (0x41bce4 sets 0x5739cc too).
@@ -441,6 +442,46 @@ public sealed partial class ScriptRuntime
         {
             Kurt.WhiteFlash = MathF.Max(Kurt.WhiteFlash, TeleportFlash);
         }
+    }
+
+    /// <summary>The second arena after a teleport (0x41bce4): none into an arena; into a corridor
+    /// not loaded, the last arena (DTI order) leading to it (CDANT_1 → DANT_2), loaded ahead; into
+    /// a loaded one (of the loaded arena, or Kurt's pair), unchanged. Kurt's show then activates it.</summary>
+    private void TeleportSecond(string arena, string from)
+    {
+        if (Level.Mto.Has(arena))
+        {
+            SecondArena = "";
+            SecondActive = false;
+            return;
+        }
+
+        if (IsCorridorLoaded(arena, from))
+        {
+            return;
+        }
+
+        var neighbour = Level.Dti.Arenas.LastOrDefault(a => Level.Mto.Has(a.Name) && a.Records.Any(r =>
+            r.Type == LevelData.Connection && _connections.GetValueOrDefault((a.Name, r.Id)) == arena));
+        SecondArena = neighbour?.Name ?? "";
+        SecondActive = false;
+        if (neighbour != null)
+        {
+            LoadArena(neighbour.Name);
+        }
+    }
+
+    /// <summary>Corridors connected to the loaded arena are loaded with it (0x419ac0); so are the
+    /// arena Kurt was in and the second.</summary>
+    private bool IsCorridorLoaded(string corridor, string from)
+    {
+        if (corridor == SecondArena || corridor == from)
+        {
+            return true;
+        }
+
+        return ArenaRecords(_residentArena).Any(r =>
+            r.Type == LevelData.Connection && _connections.GetValueOrDefault((_residentArena, r.Id)) == corridor);
     }
 
     /// <summary>The triangle groups of his arena that Kurt ran into this tick get a hit (0x46634e;
@@ -474,12 +515,12 @@ public sealed partial class ScriptRuntime
         // Loaded (arena_load 0x419d00): Kurt's arena, or a new second one.
         if (arena == CurrentArena)
         {
-            PullDoors(arena);
+            LoadArena(arena);
         }
         else if (arena != SecondArena)
         {
             SecondArena = arena;
-            PullDoors(arena);
+            LoadArena(arena);
         }
 
         SecondActive = true;
@@ -500,8 +541,19 @@ public sealed partial class ScriptRuntime
         }
 
         SecondArena = arena;
-        PullDoors(arena);
+        LoadArena(arena);
         SecondActive = false;
+    }
+
+    /// <summary>Loads an arena (arena_load 0x419d00): only one arena (not corridor) is loaded at a time.</summary>
+    private void LoadArena(string arena)
+    {
+        if (Level.Mto.Has(arena))
+        {
+            _residentArena = arena;
+        }
+
+        PullDoors(arena);
     }
 
     /// <summary>An arena being loaded takes the doors leading to it from its neighbours (arena_load
