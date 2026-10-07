@@ -132,8 +132,8 @@ picks the next screen. A screen's textures and meshes are freed when it ends (`R
 
 ## Developer tools
 
-The console (Grave, the key left of 1 by its scancode) and the debug overlay (F3) of a level
-(`DevTools/`, `LevelDevTools` in the `Viewer`):
+The console (Grave, the key left of 1 by its scancode) and the debug overlay (F3) of every screen
+(`DevTools/`; `DevUi` and `GameCommands` in the `Game`, `LevelCommands` in the `Viewer`):
 
 ```
  Console.WriteLine ──► LogWriter ──► stdout / stderr (unchanged; tests parse them)
@@ -141,20 +141,30 @@ The console (Grave, the key left of 1 by its scancode) and the debug overlay (F3
  Input (RawKey, typed text) ──► DevConsole ──Enter──► CommandRegistry ──► ConsoleCommands (parse, check)
                                    │ Tab, Up/Down        (help, clear)          │
                                    ▼                                            ▼
-                             CommandHistory                     ICommandTarget: LevelCommands (Kurt, scripts,
-                                                                settings, saves; Next: map, load, quit)
- Profiler (render, physics, scripts, audio), Renderer.Stats, GC ──► OverlayText ──► OverlayView
+                             CommandHistory                     ICommandTarget: GameCommands (settings, saves,
+                                                                session god/noclip, time scale; TakeNext:
+                                                                map, load, quit) ──► ILevelTarget?: the
+                                                                Viewer's LevelCommands (Kurt, scripts)
+ Profiler (render, physics, scripts, audio), Renderer.Stats, GC,
+ IScreen.Status (the screen's lines) ──► OverlayText ──► OverlayView
 ```
 
-- The game runs on while the console is open; the level gets an idle `Input` (the tests' held
-  keys still apply), so typing reaches neither Kurt nor the cheats.
+- One hook for every screen: `Game.Run` updates `DevUi` before each screen's frame, and
+  `Renderer.Overlay` draws the overlay and the console on the canvas inside any `Present` (the
+  screens', the stream's and fall's direct ones, the loading screen's).
+- While the console is open (and on Grave's frame) `Input.Withhold` empties the frame's input:
+  the screen gets no presses, typing, clicks, mouse or held keys (the tests' held keys still
+  apply), so typing reaches neither Kurt, the menus nor the cheats.
+- The level's commands (`tp`, `pos`, `give`, `health`, `kill`, `save`) answer "Not in a level"
+  elsewhere. God and noclip live in `DevSession`: every new level's Kurt gets them. `timescale`
+  scales every screen's frame time.
 - The engine's parts are generic: `RawKey` (fixed keys by place, auto-repeat included),
   `Profiler` sections, `RenderStats` (GPU draw calls and triangles of the last frame), the log.
 - `Kurt.Mortality` (god: no damage, no death by falling out) and `Kurt.Clipping` (noclip: the
   walking keys move him freely). `ArenaStops` finds a floor of an arena (the soak tour, `tp`,
   `map`); `GameState.StartArena` carries `map`'s arena to the next `Viewer`.
-- `--console="..."` opens the console once Kurt's arena is known (after `--delay`) and runs the
-  lines (`tests/console_test.sh`).
+- `--console="..."` opens the console on the first screen and runs the lines; in a level once
+  Kurt's arena is known (after `--delay`) (`tests/console_test.sh`).
 
 ## The 1996 beta demo
 

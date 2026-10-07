@@ -105,6 +105,13 @@ public sealed class FallScreen : IScreen
         return Next();
     }
 
+    /// <summary>The fall's time, Kurt's height above the ground, his health and pickups.</summary>
+    public IReadOnlyList<string> Status =>
+    [
+        string.Create(CultureInfo.InvariantCulture,
+            $"fall{(_sim.InIntro ? " intro" : "")} t {_sim.Time:0.0} kurt z {_sim.KurtPosition.Z:0.0} health {_sim.Health} pickups {_sim.Collected.Count}"),
+    ];
+
     /// <summary>The level with Kurt's health and pickups, or the menu when he died.</summary>
     private Event Next()
     {

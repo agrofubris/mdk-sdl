@@ -611,6 +611,7 @@ public sealed unsafe partial class Renderer : IDisposable
     /// <paramref name="screenshot"/>, also saves the frame as a BMP.</summary>
     public void Present(View view, Vector4 clearColour, string? screenshot = null)
     {
+        Overlay?.Invoke();
         var commands = SDL_AcquireGPUCommandBuffer(_device);
         SDL_GPUTexture* swapchain = null;
         uint width = HiddenWidth, height = HiddenHeight;
@@ -647,6 +648,10 @@ public sealed unsafe partial class Renderer : IDisposable
 
         _commands.Clear();
     }
+
+    /// <summary>Draws on the canvas over every frame, whoever presents it, just before (the
+    /// developer tools).</summary>
+    public Action? Overlay { get; set; }
 
     /// <summary>The last presented frame's draws (the debug overlay).</summary>
     public RenderStats Stats { get; private set; }

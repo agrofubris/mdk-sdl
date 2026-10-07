@@ -149,6 +149,13 @@ public sealed class MainMenu : IScreen
         return _next;
     }
 
+    public IReadOnlyList<string> Status =>
+    [
+        _splash is { Done: false } ? "intro splash"
+            : !_slideshow.ItemsShown ? "main menu: slideshow"
+            : _video.Playing ? $"main menu: {_page}, video" : $"main menu: {_page}",
+    ];
+
     private void StartVideo()
     {
         if (_videoStarted)

@@ -6,13 +6,17 @@ using Mdk.Game.Kurt;
 
 namespace Mdk.Game.DevTools;
 
-/// <summary>The console's commands on a level: their arguments parsed, checked and handed to the
-/// <see cref="ICommandTarget"/>; bad ones print the usage.</summary>
+/// <summary>The console's commands: their arguments parsed, checked and handed to the
+/// <see cref="ICommandTarget"/>; bad ones print the usage. Those of the level answer
+/// <see cref="NotInLevel"/> on the other screens.</summary>
 public static class ConsoleCommands
 {
     private const string All = "all";
     private const int Coordinates = 3;
     private const float MaxTimeScale = 10f;
+    private const string NotInLevel = "Not in a level";
+    /// <summary>God mode and noclip switched outside a level.</summary>
+    private const string NextLevel = " from the next level";
 
     /// <summary>"give all": every item (as many as the slots hold), every sniper round, health.</summary>
     private static readonly string[] AllPickups =
@@ -28,14 +32,14 @@ public static class ConsoleCommands
     public static void Register(CommandRegistry registry, ICommandTarget target)
     {
         registry.Add(new Command("map", "map <level> [arena]", args => Map(target, args)));
-        registry.Add(new Command("teleport", "teleport <x y z | arena [x y z]>", args => Teleport(target, args), ["tp"]));
-        registry.Add(new Command("pos", "pos", _ => Pos(target.Where())));
-        registry.Add(new Command("noclip", "noclip", _ => $"noclip {Name(target.ToggleNoclip())}"));
-        registry.Add(new Command("god", "god", _ => $"god {Name(target.ToggleGod())}"));
-        registry.Add(new Command("give", "give <all | SW_...>", args => Give(target, args)));
-        registry.Add(new Command("health", "health <n>", args => Health(target, args)));
-        registry.Add(new Command("kill", "kill", _ => $"Killed {target.KillEnemies()} enemies"));
-        registry.Add(new Command("save", "save <slot>", args => Save(target, args)));
+        registry.Add(new Command("teleport", "teleport <x y z | arena [x y z]>", args => InLevel(target, level => Teleport(level, args)), ["tp"]));
+        registry.Add(new Command("pos", "pos", _ => InLevel(target, level => Pos(level.Where()))));
+        registry.Add(new Command("noclip", "noclip", _ => Session(target, "noclip", target.ToggleNoclip())));
+        registry.Add(new Command("god", "god", _ => Session(target, "god", target.ToggleGod())));
+        registry.Add(new Command("give", "give <all | SW_...>", args => InLevel(target, level => Give(level, args))));
+        registry.Add(new Command("health", "health <n>", args => InLevel(target, level => Health(level, args))));
+        registry.Add(new Command("kill", "kill", _ => InLevel(target, level => $"Killed {level.KillEnemies()} enemies")));
+        registry.Add(new Command("save", "save <slot>", args => InLevel(target, level => Save(level, args))));
         registry.Add(new Command("load", "load <slot>", args => Load(target, args)));
         registry.Add(new Command("difficulty", "difficulty <easy|normal|hard>", args => SetDifficulty(target, args)));
         registry.Add(new Command("look", "look <original|enhanced>", args => Look(target, args)));
@@ -75,7 +79,7 @@ public static class ConsoleCommands
     }
 
     /// <summary>"tp ARENA", "tp x y z", "tp ARENA x y z"; commas work as spaces (--teleport's form).</summary>
-    private static string Teleport(ICommandTarget target, string[] args)
+    private static string Teleport(ILevelTarget target, string[] args)
     {
         var words = string.Join(' ', args).Split([' ', ','], StringSplitOptions.RemoveEmptyEntries);
         var numbers = words.Select(w => float.TryParse(w, CultureInfo.InvariantCulture, out var n) ? n : (float?)null).ToList();
@@ -93,7 +97,7 @@ public static class ConsoleCommands
         return target.Teleport(arena, point) ? Pos(target.Where()).Split('\n')[0] : $"No arena {arena}";
     }
 
-    private static string Give(ICommandTarget target, string[] args)
+    private static string Give(ILevelTarget target, string[] args)
     {
         if (args.Length != 1)
         {
@@ -115,7 +119,7 @@ public static class ConsoleCommands
         return target.Give(pickup) ? $"Took {pickup}" : $"Can't take {pickup}";
     }
 
-    private static string Health(ICommandTarget target, string[] args)
+    private static string Health(ILevelTarget target, string[] args)
     {
         if (args.Length != 1 || !int.TryParse(args[0], CultureInfo.InvariantCulture, out var health) || health < 0)
         {
@@ -126,7 +130,7 @@ public static class ConsoleCommands
         return $"health {health}";
     }
 
-    private static string Save(ICommandTarget target, string[] args)
+    private static string Save(ILevelTarget target, string[] args)
     {
         if (args.Length != 1)
         {
@@ -164,7 +168,7 @@ public static class ConsoleCommands
             return Usage("look <original|enhanced>");
         }
 
-        return target.SetLook(look) ? $"look {Lower(look)}" : $"look {Lower(look)} from the next level";
+        return target.SetLook(look) ? $"look {Lower(look)}" : $"look {Lower(look)}{NextLevel}";
     }
 
     private static string AntiAlias(ICommandTarget target, string[] args)
@@ -194,6 +198,14 @@ public static class ConsoleCommands
         target.Quit();
         return "";
     }
+
+    /// <summary>A command of the level: run on it, or <see cref="NotInLevel"/>.</summary>
+    private static string InLevel(ICommandTarget target, Func<ILevelTarget, string> run) =>
+        target.Level is { } level ? run(level) : NotInLevel;
+
+    /// <summary>"god on"; outside a level "god on from the next level".</summary>
+    private static string Session(ICommandTarget target, string name, Switch value) =>
+        $"{name} {Name(value)}{(target.Level == null ? NextLevel : "")}";
 
     private static string Usage(string usage) => $"Usage: {usage}";
 

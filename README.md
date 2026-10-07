@@ -120,8 +120,8 @@ mdk.exe
   `--delay`: `--teleport=ARENA,x,y,z`, `--kill=TYPE` (kills the first object of that type),
   `--ride=TYPE` (Kurt on that walker), `--bomber[=drop]` (level 7: calls the `XE`, boards it, and
   with `drop` drops a bomb once unlocked), `--beta-teleport=N` (the 1996 demo's teleport N),
-  `--roll=left|right` (holds a roll of the demo's levels), `--console="pos;god"` (opens the
-  console and runs those commands). With
+  `--roll=left|right` (holds a roll of the demo's levels). `--console="pos;god"` opens the
+  console and runs those commands, on any first screen (`--menu --console="map 6"`). With
   `--screenshot` but without `--level`, the screen shown after `--wait` seconds (menu,
   statistics...) is saved. `--soak[=seed]`: random but seeded keys on every screen (menu keys
   too when it starts in the menus), 0.1 s a frame; in a level Kurt is healed and problems print
@@ -144,12 +144,16 @@ S the stream after LEVEL7, D the statistics with random counts).
 
 ### Console and debug overlay
 
-In a level, F3 shows the debug overlay: frames per second and the frame's time (render,
-physics, scripts, audio), draw calls and triangles, memory (GC heap, working set, collections),
-Kurt's position, yaw and state, the level, his arena and the objects. The key left of 1 (`` ` ``,
-`;` on a Slovak keyboard) opens the console: the game's output above a command line (Tab
-completes a command, Up/Down the history, PageUp/PageDown scroll, Esc closes). The game runs on,
-without the keys.
+On every screen (menus, briefing, statistics, videos, loading, the fall, the stream, a level),
+F3 shows the debug overlay: frames per second and the frame's time (render, physics, scripts,
+audio), draw calls and triangles, memory (GC heap, working set, collections), then the screen's
+own lines: a menu's name; the fall's time, Kurt's height, health and pickups; the stream's
+segment, speed and health; in a level Kurt's position, yaw and state, the level, his arena and
+the objects. The key left of 1 (`` ` ``, `;` on a Slovak keyboard) opens the console: the game's
+output above a command line (Tab completes a command, Up/Down the history, PageUp/PageDown
+scroll, Esc closes). The screen runs on, without the keys. Outside a level `tp`, `pos`, `give`,
+`health`, `kill` and `save` answer "Not in a level"; `god` and `noclip` hold from the next level;
+`map` starts a level from the menus.
 
 | Command | |
 | --- | --- |

@@ -16,7 +16,7 @@ public class OverlayTests
         var profiler = new Profiler();
         var sample = new OverlaySample(profiler, new RenderStats(120, 4500),
             new MemorySample(12 * Megabyte, 80 * Megabyte, [3, 2, 1]),
-            new Placement(6, "ARENA_2", new Vector3(1f, -2.5f, 30f), 270f), 42, "Run");
+            OverlayText.Level(new Placement(6, "ARENA_2", new Vector3(1f, -2.5f, 30f), 270f), 42, "Run"));
 
         var text = string.Join('\n', OverlayText.Lines(sample));
         Assert.Contains("draw calls 120, triangles 4500", text);
@@ -25,5 +25,15 @@ public class OverlayTests
         Assert.Contains("level 6 arena ARENA_2, objects 42", text);
         Assert.Contains("render", text);
         Assert.Contains("audio", text);
+    }
+
+    /// <summary>Other screens show their own lines (a menu its name).</summary>
+    [Fact]
+    public void ScreensAddTheirLines()
+    {
+        var sample = new OverlaySample(new Profiler(), default, new MemorySample(0, 0, [0]), ["main menu"]);
+        var lines = OverlayText.Lines(sample);
+        Assert.StartsWith("FPS", lines[0]);
+        Assert.Equal("main menu", lines[^1]);
     }
 }

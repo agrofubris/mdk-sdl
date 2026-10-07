@@ -341,6 +341,17 @@ public sealed class Input
         _wheel.Clear();
     }
 
+    /// <summary>Someone else has this frame's input (the console): the game sees no presses, typing,
+    /// clicks or mouse, and no keyboard or mouse keys held. Keys held by the program (tests) stay.</summary>
+    public void Withhold()
+    {
+        BeginFrame();
+        ClearMouse();
+        _down.Clear();
+        _buttons.Clear();
+        _fly.Clear();
+    }
+
     internal void SetKey(SDL_Scancode scancode, State state, Repeat repeat)
     {
         if (state == State.Down && MenuKeys.TryGetValue(scancode, out var menuKey))

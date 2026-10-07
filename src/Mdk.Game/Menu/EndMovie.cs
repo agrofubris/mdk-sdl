@@ -64,6 +64,8 @@ public sealed class EndMovie : IScreen
         return _next;
     }
 
+    public IReadOnlyList<string> Status => [_video.Playing ? "end movies" : "end movies: done"];
+
     /// <summary>A frame was shown: the extras of the next one (0x477604).</summary>
     private void OnFrame(int frame)
     {

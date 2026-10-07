@@ -1,7 +1,8 @@
 #!/bin/sh
 # The console on level 3 (--console opens it and runs commands): pos prints options that start
 # there, god survives --die, tp moves Kurt to an arena, save and load a full save, map loads
-# another level, kill and unknown commands answer; the game's own lines still print.
+# another level, kill and unknown commands answer; the game's own lines still print. Outside a
+# level (the menu, the stream, the fall) the game's commands work and the level's answer.
 # Run from the project folder after `dotnet build`: sh tests/console_test.sh
 # No window: the game draws off screen and never takes the focus.
 export MDK_HIDDEN=1
@@ -13,6 +14,11 @@ FAILED=0
 
 run() {
 	timeout 60 "$MDK" --level=3 --mute --screenshot="$SHOT" "$@" 2>&1
+}
+
+# Any screen: no --level.
+run_on() {
+	timeout 60 "$MDK" --mute --screenshot="$SHOT" "$@" 2>&1
 }
 
 # expect <name> <pattern>: $OUT has a line matching the pattern.
@@ -42,6 +48,21 @@ expect "load" "^restored hash"
 
 OUT=$(run --wait=1 --console="map 6")
 expect "map" "^Level 6: "
+
+OUT=$(run_on --menu --wait=1 --console="fps;pos;map 6")
+expect "menu: fps" "^overlay on"
+expect "menu: pos" "^Not in a level"
+expect "menu: map starts the level" "^Level 6: "
+
+OUT=$(run_on --stream=7 --wait=1 --console="help;give all;god")
+expect "stream: help" "^map <level> \[arena\]"
+expect "stream: give" "^Not in a level"
+expect "stream: god" "^god on from the next level"
+expect "stream: flies on" "^Saved "
+
+OUT=$(run_on --fall=7 --wait=1 --console="kill;difficulty easy")
+expect "fall: kill" "^Not in a level"
+expect "fall: difficulty" "^difficulty easy"
 
 [ $FAILED = 0 ] && echo PASSED && exit 0
 echo FAILED

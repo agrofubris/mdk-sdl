@@ -144,6 +144,9 @@ public sealed class StatsScreen : IScreen
         Start(_phases.Dequeue());
     }
 
+    /// <summary>"statistics: Score", "statistics: Briefing", or the save prompt between them.</summary>
+    public IReadOnlyList<string> Status => [_prompt != null ? "save prompt" : $"statistics: {_phase}"];
+
     public Event Frame(float elapsed, string? screenshot)
     {
         var input = _ui.Input;

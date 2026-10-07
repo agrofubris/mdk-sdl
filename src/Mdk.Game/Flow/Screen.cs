@@ -35,4 +35,7 @@ public interface IScreen : IDisposable
     /// <summary>One frame of <paramref name="elapsed"/> seconds: input, update, draw and present (saving
     /// it to <paramref name="screenshot"/> when given).</summary>
     Event Frame(float elapsed, string? screenshot);
+
+    /// <summary>The debug overlay's lines about the screen: its name, its state.</summary>
+    IReadOnlyList<string> Status { get; }
 }

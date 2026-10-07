@@ -140,9 +140,7 @@ public sealed class Viewer : IScreen
     private Event _next = Event.None;
     /// <summary>The level ended: the event that follows once the delay is over.</summary>
     private (Event Event, float Delay)? _ending;
-    private readonly LevelDevTools _dev;
-    /// <summary>The keys the game gets while the console has the real ones: none (tests hold theirs).</summary>
-    private readonly Input _idle = new();
+    private readonly LevelCommands _commands;
 
     public Viewer(Ui ui, ViewerOptions options, GameState state)
     {
@@ -246,7 +244,11 @@ public sealed class Viewer : IScreen
 
         _test = options.Screenshot != null;
         ui.Window.CaptureMouse(_test ? Capture.Off : Capture.On);
-        _dev = new LevelDevTools(ui, new LevelCommands(ui, state, level, _kurt, _scripts, _space, SaveSlot), _kurt, _scripts);
+        _commands = new LevelCommands(level, _kurt, _scripts, _space, SaveSlot);
+
+        // The session's cheats hold in every level.
+        _commands.SetGod(ui.Dev.God);
+        _commands.SetNoclip(ui.Dev.Noclip);
         EnterStartArena(state);
     }
 
@@ -270,6 +272,27 @@ public sealed class Viewer : IScreen
 
     /// <summary>The console's save: a full save of that name, as F2 makes.</summary>
     private bool SaveSlot(string name) => SaveGames.In(_ui.UserFolder).Write(name, SnapshotSave(_scripts.Capture()));
+
+    /// <summary>The console's commands on the level.</summary>
+    public ILevelTarget Commands => _commands;
+
+    /// <summary>The tests' --console runs after the delay, once the scripts have set Kurt's arena.</summary>
+    public bool ConsoleReady => _time >= _options.Delay && _scripts.CurrentArena.Length != 0;
+
+    /// <summary>The debug overlay's lines: the pause menu or F2's prompt, Kurt and the level.</summary>
+    public IReadOnlyList<string> Status
+    {
+        get
+        {
+            var level = OverlayText.Level(_commands.Where(), _scripts.Objects.Count, _kurt.Current.ToString());
+            if (_pause.Open)
+            {
+                return ["pause menu", .. level];
+            }
+
+            return _snapshotPrompt != null ? ["save prompt", .. level] : level;
+        }
+    }
 
     /// <summary>The counts of the level (for the statistics).</summary>
     public GameStats Stats => _scripts.Stats;
@@ -299,12 +322,6 @@ public sealed class Viewer : IScreen
     {
         var input = _ui.Input;
 
-        // A console command left the level (map, load, quit).
-        if (_dev.Commands.Next != Event.None)
-        {
-            return _dev.Commands.Next;
-        }
-
         // While the game waits, the mouse and the wheel don't pile up for Kurt.
         if (_snapshotPrompt != null || _pause.Open)
         {
@@ -325,13 +342,6 @@ public sealed class Viewer : IScreen
             _renderer.Present(SceneView(), Background(), screenshot);
             CaptureMouse();
             return paused;
-        }
-
-        // The open console has the keys: the game runs on without them.
-        if (_dev.Update(input, elapsed) == ConsoleState.Open)
-        {
-            input.ClearMouse();
-            input = _idle;
         }
 
         if (input.WasPressed(MenuKey.Back) && _scripts.Strike is not { Active: true })
@@ -381,13 +391,7 @@ public sealed class Viewer : IScreen
             OpenSnapshot();
         }
 
-        RunSteps(input, elapsed * _dev.Commands.TimeScale);
-
-        // Once the scripts have set Kurt's arena.
-        if (_time >= _options.Delay && _scripts.CurrentArena.Length != 0)
-        {
-            _dev.RunOnce(_options.Console);
-        }
+        RunSteps(input, elapsed);
 
         if (_ending is { } ending)
         {
@@ -405,7 +409,6 @@ public sealed class Viewer : IScreen
         }
 
         var save = SavePath(_options, input, _time) ?? screenshot;
-        _dev.Draw();
         using (_ui.Dev.Profiler.Measure(Section.Render))
         {
             _renderer.Present(camera, Background(), save);

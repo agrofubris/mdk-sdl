@@ -4,6 +4,7 @@ using Mdk.Engine.Diagnostics;
 using Mdk.Engine.Platform;
 using Mdk.Engine.Render;
 using Mdk.Formats;
+using Mdk.Game.DevTools;
 using Mdk.Game.Menu;
 
 namespace Mdk.Game.Flow;
@@ -63,6 +64,8 @@ public sealed class Game : IDisposable
     private const int TownShift = 29;
     /// <summary>The soak test's frames are this many game steps (0.1 s): it runs faster.</summary>
     private const int SoakSteps = 6;
+    /// <summary>The overlay's line between screens (the loading screen).</summary>
+    private const string Loading = "loading";
 
     private readonly GameOptions _options;
     private readonly Window _window;
@@ -73,6 +76,9 @@ public sealed class Game : IDisposable
     private readonly GameState _state = new();
     private readonly SaveGames _saves;
     private readonly Renderer.Scope _scope;
+    /// <summary>The console and the overlay, over every screen.</summary>
+    private readonly DevUi _dev;
+    private readonly GameCommands _commands;
     /// <summary>The soak test's random keys, on every screen; menu keys too when it starts in the
     /// menus or the flow screens.</summary>
     private readonly SoakKeys? _soak;
@@ -110,6 +116,14 @@ public sealed class Game : IDisposable
 
         settings.Apply(_audio, _window, _renderer, _input);
         _ui = new Ui(data, _window, _renderer, _audio, _input, settings, folder);
+
+        // The developer tools draw over whatever screen presents; their font outlives the screens.
+        _commands = new GameCommands(_ui, _state, () => (_screen as Viewer)?.Commands);
+        var registry = new CommandRegistry();
+        ConsoleCommands.Register(registry, _commands);
+        _dev = new DevUi(new DevConsole(registry, _ui.Dev.History, _ui.Dev.Log, Console.WriteLine), () => _ui.Dev.ToggleOverlay());
+        var devView = new DevUiView(_renderer, new Fonts(_renderer, _ui.Fti).Small);
+        _renderer.Overlay = () => devView.Draw(_dev, _ui.Dev, () => _screen?.Status ?? [Loading]);
         _scope = _renderer.Mark();
         _soak = options.Level.Soak is { } seed ? new SoakKeys(seed) : null;
         _soakMenus = options.Start is Start.Menu or Start.Statistics or Start.Briefing or Start.EndMovie;
@@ -140,8 +154,23 @@ public sealed class Game : IDisposable
                 _soak?.PressMenu(_input, time);
             }
 
+            // The open console has the keys: the screen runs on without them.
+            _dev.Update(_input, elapsed);
+            if (_screen is not Viewer { ConsoleReady: false })
+            {
+                _dev.RunOnce(_options.Level.Console);
+            }
+
             var shot = test && !_levelShot && time >= _options.Wait ? _options.Screenshot : null;
-            var next = _screen.Frame(elapsed, shot);
+            var next = _screen.Frame(elapsed * _commands.TimeScale, shot);
+
+            // A console command leaves the screen (map, load, quit).
+            var command = _commands.TakeNext();
+            if (command != Event.None)
+            {
+                next = command;
+            }
+
             using (_ui.Dev.Profiler.Measure(Section.Audio))
             {
                 _audio.Update(elapsed);
@@ -393,6 +422,8 @@ public sealed class SavePromptScreen(Ui ui, SaveGames saves, SaveGame save, stri
         ui.Present(screenshot);
         return _prompt.Closed ? Event.Play : Event.None;
     }
+
+    public IReadOnlyList<string> Status => ["save prompt"];
 
     public void Dispose()
     {

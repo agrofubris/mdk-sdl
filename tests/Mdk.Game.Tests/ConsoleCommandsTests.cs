@@ -6,13 +6,18 @@ using Mdk.Game.Kurt;
 
 namespace Mdk.Game.Tests;
 
-/// <summary>The console's commands: their arguments reach the level (a fake one here).</summary>
+/// <summary>The console's commands: their arguments reach the game and the level (fakes here).</summary>
 public class ConsoleCommandsTests
 {
     private readonly FakeLevel _level = new();
+    private readonly FakeGame _game;
     private readonly CommandRegistry _registry = new();
 
-    public ConsoleCommandsTests() => ConsoleCommands.Register(_registry, _level);
+    public ConsoleCommandsTests()
+    {
+        _game = new FakeGame(_level);
+        ConsoleCommands.Register(_registry, _game);
+    }
 
     private string Run(string line) => string.Join('\n', _registry.Run(line));
 
@@ -51,9 +56,9 @@ public class ConsoleCommandsTests
     public void MapTakesALevelAndAnArena()
     {
         Run("map 6 ARENA_3");
-        Assert.Equal((6, "ARENA_3"), _level.Mapped);
+        Assert.Equal((6, "ARENA_3"), _game.Mapped);
         Run("map 4");
-        Assert.Equal((4, ""), _level.Mapped);
+        Assert.Equal((4, ""), _game.Mapped);
         Assert.StartsWith("No level 9", Run("map 9"));
     }
 
@@ -61,23 +66,26 @@ public class ConsoleCommandsTests
     public void TogglesAndSettings()
     {
         Assert.Equal("god on", Run("god"));
+        Assert.Equal(Switch.On, _level.God);
         Assert.Equal("god off", Run("god"));
         Assert.Equal("noclip on", Run("noclip"));
+        Assert.Equal(Switch.On, _level.Noclip);
         Run("health 50");
         Assert.Equal(50, _level.Health);
         Run("difficulty hard");
+        Assert.Equal(Difficulty.Hard, _game.Difficulty);
         Assert.Equal(Difficulty.Hard, _level.Difficulty);
-        Run("look enhanced");
-        Assert.Equal(Graphics.Enhanced, _level.Look);
+        Assert.Equal("look enhanced", Run("look enhanced"));
+        Assert.Equal(Graphics.Enhanced, _game.Look);
         Run("aa 4x");
-        Assert.Equal(AntiAliasing.X4, _level.AntiAliasing);
+        Assert.Equal(AntiAliasing.X4, _game.AntiAliasing);
         Run("timescale 0.5");
-        Assert.Equal(0.5f, _level.TimeScale);
+        Assert.Equal(0.5f, _game.TimeScale);
         Assert.StartsWith("Usage", Run("timescale -1"));
         Run("fps");
-        Assert.Equal(1, _level.Overlays);
+        Assert.Equal(1, _game.Overlays);
         Run("quit");
-        Assert.True(_level.Quitted);
+        Assert.True(_game.Quitted);
     }
 
     [Fact]
@@ -100,21 +108,117 @@ public class ConsoleCommandsTests
         Assert.StartsWith("No saved game", Run("load nothing"));
     }
 
-    private sealed class FakeLevel : ICommandTarget
+    /// <summary>Menus, the fall, the stream: the level's commands answer, the game's work.</summary>
+    [Theory]
+    [InlineData("pos")]
+    [InlineData("tp ARENA_2")]
+    [InlineData("give all")]
+    [InlineData("health 50")]
+    [InlineData("kill")]
+    [InlineData("save 7")]
+    public void LevelCommandsNeedALevel(string line)
     {
-        public (string Arena, Vector3? Point)? Teleported;
+        _game.Level = null;
+        Assert.Equal("Not in a level", Run(line));
+        Assert.Null(_level.Teleported);
+        Assert.Empty(_level.Given);
+    }
+
+    [Fact]
+    public void GameCommandsWorkOutsideALevel()
+    {
+        _game.Level = null;
+        Run("map 6");
+        Assert.Equal((6, ""), _game.Mapped);
+        Run("difficulty easy");
+        Assert.Equal(Difficulty.Easy, _game.Difficulty);
+        Assert.Equal("look enhanced from the next level", Run("look enhanced"));
+        Run("timescale 2");
+        Assert.Equal(2f, _game.TimeScale);
+        Run("fps");
+        Assert.Equal(1, _game.Overlays);
+
+        // God and noclip are the session's: they hold from the next level.
+        Assert.Equal("god on from the next level", Run("god"));
+        Assert.Equal("noclip on from the next level", Run("noclip"));
+        Assert.Equal(Switch.Off, _level.God);
+    }
+
+    /// <summary>The game: the session's switches reach the level, when there's one.</summary>
+    private sealed class FakeGame(FakeLevel level) : ICommandTarget
+    {
+        public ILevelTarget? Level { get; set; } = level;
         public (int, string)? Mapped;
-        public int Health;
         public Difficulty Difficulty;
         public Graphics Look;
         public AntiAliasing AntiAliasing;
         public float TimeScale = 1f;
         public int Overlays;
         public bool Quitted;
-        public string? Saved;
-        public readonly List<string> Given = [];
         private Switch _god;
         private Switch _noclip;
+
+        public bool Map(int number, string arena)
+        {
+            if (number > 8)
+            {
+                return false;
+            }
+
+            Mapped = (number, arena);
+            return true;
+        }
+
+        public bool Load(string slot) => false;
+
+        public Switch ToggleGod()
+        {
+            _god = _god == Switch.On ? Switch.Off : Switch.On;
+            Level?.SetGod(_god);
+            return _god;
+        }
+
+        public Switch ToggleNoclip()
+        {
+            _noclip = _noclip == Switch.On ? Switch.Off : Switch.On;
+            Level?.SetNoclip(_noclip);
+            return _noclip;
+        }
+
+        public void SetDifficulty(Difficulty difficulty)
+        {
+            Difficulty = difficulty;
+            Level?.SetDifficulty(difficulty);
+        }
+
+        public bool SetLook(Graphics look)
+        {
+            Look = look;
+            return Level != null;
+        }
+
+        public void SetAntiAliasing(AntiAliasing antiAliasing) => AntiAliasing = antiAliasing;
+
+        public void SetTimeScale(float scale) => TimeScale = scale;
+
+        public Switch ToggleOverlay()
+        {
+            Overlays++;
+            return Switch.On;
+        }
+
+        public void Quit() => Quitted = true;
+    }
+
+    private sealed class FakeLevel : ILevelTarget
+    {
+        public (string Arena, Vector3? Point)? Teleported;
+        public int Health;
+        public Difficulty Difficulty;
+        public Switch God;
+        public Switch Noclip;
+        public string? Saved;
+        public readonly List<string> Given = [];
 
         public Placement Where() => new(3, "ARENA_1", new Vector3(-4f, 0.5f, 195f), 90f);
 
@@ -124,20 +228,9 @@ public class ConsoleCommandsTests
             return true;
         }
 
-        public bool Map(int level, string arena)
-        {
-            if (level > 8)
-            {
-                return false;
-            }
+        public void SetGod(Switch god) => God = god;
 
-            Mapped = (level, arena);
-            return true;
-        }
-
-        public Switch ToggleGod() => _god = _god == Switch.On ? Switch.Off : Switch.On;
-
-        public Switch ToggleNoclip() => _noclip = _noclip == Switch.On ? Switch.Off : Switch.On;
+        public void SetNoclip(Switch noclip) => Noclip = noclip;
 
         public bool Give(string pickup)
         {
@@ -155,26 +248,8 @@ public class ConsoleCommandsTests
             return true;
         }
 
-        public bool Load(string slot) => false;
-
         public void SetDifficulty(Difficulty difficulty) => Difficulty = difficulty;
 
-        public bool SetLook(Graphics look)
-        {
-            Look = look;
-            return true;
-        }
-
-        public void SetAntiAliasing(AntiAliasing antiAliasing) => AntiAliasing = antiAliasing;
-
-        public void SetTimeScale(float scale) => TimeScale = scale;
-
-        public Switch ToggleOverlay()
-        {
-            Overlays++;
-            return Switch.On;
-        }
-
-        public void Quit() => Quitted = true;
+        public string? Snapshot() => "{}";
     }
 }

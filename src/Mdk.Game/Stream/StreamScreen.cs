@@ -114,6 +114,13 @@ public sealed class StreamScreen : IScreen
         return _flight.Outcome == Outcome.Died ? Event.Menu : Event.StreamEnded;
     }
 
+    /// <summary>The flight's segment, time, Kurt's speed and health.</summary>
+    public IReadOnlyList<string> Status =>
+    [
+        string.Create(CultureInfo.InvariantCulture,
+            $"stream after LEVEL{_level} segment {_flight.Tube.Tail} t {_flight.Time:0.0} speed {_flight.Kurt.Speed:0.000} health {Health}"),
+    ];
+
     /// <summary>The turn keys or strafe keys steer left and right, forward and back up and down.</summary>
     private static Steering SteeringOf(Input input)
     {

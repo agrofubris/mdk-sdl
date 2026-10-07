@@ -120,6 +120,61 @@ public class DevConsoleTests
         Assert.False(input.WasPressed(RawKey.Grave));
     }
 
+    /// <summary>Any screen: while the console is open (and on the frame Grave opens it) the screen
+    /// gets no keys, typing, clicks or mouse; keys held by tests stay. Closed, input passes.</summary>
+    [Fact]
+    public void OpenConsoleTakesTheScreensInput()
+    {
+        var log = new LogRing(10);
+        var console = NewConsole(log, out _);
+        var overlays = 0;
+        var dev = new DevUi(console, () => overlays++);
+        var input = new Input();
+
+        input.BeginFrame();
+        input.SetKey(SDL_Scancode.SDL_SCANCODE_W, Input.State.Down, Repeat.No);
+        input.SetKey(SDL_Scancode.SDL_SCANCODE_F3, Input.State.Down, Repeat.No);
+        Assert.Equal(ConsoleState.Closed, dev.Update(input, Step));
+        Assert.True(input.WasPressed(Key.Forward));
+        Assert.Equal(1, overlays);
+
+        input.BeginFrame();
+        input.SetKey(SDL_Scancode.SDL_SCANCODE_W, Input.State.Up, Repeat.No);
+        input.SetKey(SDL_Scancode.SDL_SCANCODE_GRAVE, Input.State.Down, Repeat.No);
+        input.AddText("`");
+        Assert.Equal(ConsoleState.Open, dev.Update(input, Step));
+        Assert.Equal("", input.Typed);
+
+        input.BeginFrame();
+        input.Hold(Key.Jump, Input.State.Down);
+        input.SetKey(SDL_Scancode.SDL_SCANCODE_W, Input.State.Down, Repeat.No);
+        input.SetButton(MouseButton.Left, Input.State.Down);
+        input.AddMouseMotion(5f, 5f);
+        input.AddText("w");
+        Assert.Equal(ConsoleState.Open, dev.Update(input, Step));
+        Assert.Equal("w", console.Line);
+        Assert.False(input.WasPressed(Key.Forward));
+        Assert.False(input.IsDown(Key.Forward));
+        Assert.False(input.WasClicked(Pointer.Left));
+        Assert.Equal(0f, input.MouseX);
+        Assert.Equal("", input.Typed);
+        Assert.True(input.IsDown(Key.Jump));
+    }
+
+    [Fact]
+    public void ConsoleOptionRunsOnce()
+    {
+        var log = new LogRing(10);
+        var console = NewConsole(log, out var ran);
+        var dev = new DevUi(console, () => { });
+        dev.RunOnce("health 5");
+        dev.RunOnce("health 6");
+        Assert.Equal(["health 5"], ran);
+        Assert.Equal(ConsoleState.Open, console.State);
+    }
+
+    private const float Step = 1f / 60f;
+
     /// <summary>A console with a "health" command that records its lines; its output goes to <paramref name="log"/>.</summary>
     private static DevConsole NewConsole(LogRing log, out List<string> ran)
     {
