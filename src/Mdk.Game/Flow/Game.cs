@@ -42,6 +42,8 @@ public sealed record GameOptions(Start Start, ViewerOptions Level)
     public Graphics? Graphics { get; init; }
     /// <summary>Gore instead of the settings' (the original's -bloodyes, -nobloodno).</summary>
     public bool? Gore { get; init; }
+    /// <summary>Keys pressed once at given times (--press; tests).</summary>
+    public TestPresses? Presses { get; init; }
 }
 
 /// <summary>The game: its screens one after the other, as the original's game states.
@@ -153,6 +155,8 @@ public sealed class Game : IDisposable
             {
                 _soak?.PressMenu(_input, time);
             }
+
+            _options.Presses?.Apply(_input, time);
 
             // The open console has the keys: the screen runs on without them.
             _dev.Update(_input, elapsed);

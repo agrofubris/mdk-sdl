@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Numerics;
+using System.Text;
 using Mdk.Engine.Audio;
 using Mdk.Engine.Diagnostics;
 using Mdk.Engine.Platform;
@@ -91,6 +92,8 @@ public sealed class Viewer : IScreen
     private const float StartDrop = 3f;
     /// <summary>A pickup's name stays this long.</summary>
     private const float PickupMessageSeconds = 2f;
+    /// <summary>Quick save and load messages ("Game saved") stay this long.</summary>
+    private const float NoticeSeconds = 2f;
     /// <summary>The test's "use" is held from 1 second on, for 0.1 (game time).</summary>
     private const float UseStart = 1f;
     private const float UseTime = 0.1f;
@@ -215,6 +218,7 @@ public sealed class Viewer : IScreen
         _scripts.Messages = _hud.Messages;
         CarryFromFall(state);
         RestoreSnapshot(state);
+        ShowNotice(state);
         _kurt.Inventory.PickedUp += name => _hud.Messages.Push(name, Messages.FlagZoom, PickupMessageSeconds);
 
         foreach (var pickup in options.Give)
@@ -386,9 +390,14 @@ public sealed class Viewer : IScreen
             BetaTeleport(input.Digit);
         }
 
-        if (input.WasPressed(MenuKey.Snapshot))
+        if (input.WasPressed(Key.QuickSave))
         {
             OpenSnapshot();
+        }
+
+        if (input.WasPressed(Key.QuickLoad))
+        {
+            QuickLoad();
         }
 
         RunSteps(input, elapsed);
@@ -659,11 +668,14 @@ public sealed class Viewer : IScreen
     {
         if (!_scripts.CanSnapshot() || _kurt.Sniping)
         {
+            Notify("Can't save now");
             return;
         }
 
         var name = (GameState.IndexOf(_level.Number) + 1).ToString(CultureInfo.InvariantCulture);
-        _snapshotPrompt = new SavePrompt(_ui, new Fonts(_renderer, _ui.Fti), SaveGames.In(_ui.UserFolder), SnapshotSave(_scripts.Capture()), name);
+        var json = _scripts.Capture();
+        Console.WriteLine($"snapshot hash {Snapshot.Hash(json)}, objects {_scripts.Objects.Count}");
+        _snapshotPrompt = new SavePrompt(_ui, new Fonts(_renderer, _ui.Fti), SaveGames.In(_ui.UserFolder), SnapshotSave(json), name);
         _ui.Window.CaptureMouse(Capture.Off);
     }
 
@@ -674,13 +686,56 @@ public sealed class Viewer : IScreen
         _snapshotPrompt!.Update(_ui.Input, elapsed);
         _snapshotPrompt.Draw();
         _ui.Present(screenshot);
-        if (_snapshotPrompt.Closed)
+        if (!_snapshotPrompt.Closed)
         {
-            _snapshotPrompt = null;
-            CaptureMouse();
+            return Event.None;
         }
 
+        if (_snapshotPrompt.Saved)
+        {
+            _state.QuickSlot = _snapshotPrompt.Name;
+            Notify("Game saved");
+        }
+
+        _snapshotPrompt = null;
+        CaptureMouse();
         return Event.None;
+    }
+
+    /// <summary>Quick load: this session's last full save, else the newest save; the level
+    /// reloads and says so (<see cref="GameState.Notice"/>).</summary>
+    private void QuickLoad()
+    {
+        var saves = SaveGames.In(_ui.UserFolder);
+        if (saves.QuickSlot(_state.QuickSlot) is not { } name || saves.Read(name) is not { } save)
+        {
+            Notify("Nothing to load");
+            return;
+        }
+
+        _state.Load(save);
+        _state.Notice = "Game loaded";
+        Console.WriteLine($"Loaded game {name}: level {save.Level}");
+        _next = save.Kind == SaveKind.BeforeLevel ? Event.Briefing : Event.Play;
+    }
+
+    /// <summary>A message of the port's own on the HUD (zooming, ahead of the others), also printed.</summary>
+    private void Notify(string text)
+    {
+        _hud.Messages.PushText(Encoding.ASCII.GetBytes(text), Messages.FlagZoom | Messages.FlagFront, NoticeSeconds);
+        Console.WriteLine(text);
+    }
+
+    /// <summary>The message the last level left for this one ("Game loaded").</summary>
+    private void ShowNotice(GameState state)
+    {
+        if (state.Notice is not { } notice)
+        {
+            return;
+        }
+
+        state.Notice = null;
+        Notify(notice);
     }
 
     /// <summary>The tests' full save (--snapshot): written at once, its hash printed.</summary>

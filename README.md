@@ -126,6 +126,8 @@ mdk.exe
   statistics...) is saved. `--soak[=seed]`: random but seeded keys on every screen (menu keys
   too when it starts in the menus), 0.1 s a frame; in a level Kurt is healed and problems print
   as `Soak problem` (`--tour`: every arena in turn during `--wait`, doors shut before each teleport).
+  `--press=QuickSave@1,Menu.Accept@1.5`: presses game keys, or menu keys after `Menu.`, once at
+  those times.
 
 Settings (volumes, music filter, mouse, fullscreen, anti-aliasing, difficulty, graphics, gore, key
 bindings) and saved games
@@ -136,7 +138,11 @@ Controls: W/S or Up/Down to run, A/D to strafe, the mouse or Left/Right to turn,
 (hold it while falling to open the chute; running into a ledge while falling grabs it), Shift for turbo, Ctrl or the left mouse button to fire,
 Enter or E to use the item, Tab, [ ] or the mouse wheel to select it (or 1-5), the right mouse button for sniper mode
 (the mouse wheel or PageUp/PageDown zoom, Tab or [ ] select the ammo), F1 for the flying camera (E/Q to go up and
-down), F2 for a full save, F3 for the debug overlay, the key left of 1 for the console, F12 for a screenshot, Esc for the pause menu (resume, options, main menu, quit). The bindings
+down), F2 for a quick save (the original's full save: the name is asked, the level's number
+offered), F9 for a quick load (this session's last F2 save, else the newest save; "Nothing to
+load" if none), F3 for the debug overlay, the key left of 1 for the console, F12 for a screenshot, Esc for the pause menu (resume, options, main menu, quit; it names the quick keys). Saving
+and loading show "Game saved", "Game loaded" or "Can't save now" (sniper mode, rides) on the HUD;
+outside a level the quick keys do nothing. The bindings
 can be changed in Options, Controls (to any key, mouse button or wheel direction). In the menus: the arrows or the mouse, Enter or a click, Esc
 back; the mouse cursor is the original's arrow. Typing `TOOSCARYFORME` in a level turns gore on or
 off for the session, `SEETHEWHOLEGAME` the main menu's debug keys (3-8 start that level, F the fall before LEVEL8,
@@ -228,6 +234,7 @@ sh tests/hud_test.sh
 sh tests/effects_test.sh
 sh tests/flow_test.sh
 sh tests/stream_test.sh
+sh tests/quicksave_test.sh
 sh tests/fall_test.sh
 sh tests/rides_test.sh
 sh tests/carry_test.sh

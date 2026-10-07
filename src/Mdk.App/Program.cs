@@ -11,7 +11,7 @@ using Mdk.Game.Scripts;
 // jumps, Shift runs, Ctrl or the left mouse button fires, Enter uses the item, Tab/[/] and 1-5
 // select it, the right mouse button toggles sniper mode (wheel or PageUp/PageDown zoom, Tab/[/]
 // select the ammo), F1 flying camera with E/Q up and down, F12 screenshot, Esc the pause menu,
-// F3 the debug overlay, the key left of 1 the console.
+// F2 quick save (names the save), F9 quick load, F3 the debug overlay, the key left of 1 the console.
 //
 //   --level=N               play level 3-8 at once (no menu); 961, 963, 966: the 1996 demo's
 //   --menu                  the main menu without the splash (--splash: with it)
@@ -56,6 +56,7 @@ using Mdk.Game.Scripts;
 //   --beta-teleport=N       the 1996 demo's teleport N after the delay (tests)
 //   --roll=left|right       hold a roll of the 1996 demo's levels after the delay (tests)
 //   --console="pos;god"     open the console after the delay and run these commands (tests)
+//   --press=QuickSave@1,Menu.Accept@1.5  press game or menu keys once at these times (tests)
 //   --soak[=seed]           random seeded keys on every screen, 6 steps a frame, checks in a level
 //                           (tests; --tour: every arena in turn during --wait; tests/soak_test.sh)
 
@@ -153,6 +154,7 @@ using var game = new Game(data, new GameOptions(start, viewer)
     Health = Number("health"),
     Graphics = options.ContainsKey("enhanced") ? Graphics.Enhanced : options.ContainsKey("original") ? Graphics.Original : null,
     Gore = options.ContainsKey("bloodyes") ? true : options.ContainsKey("nobloodno") ? false : null,
+    Presses = options.TryGetValue("press", out var presses) ? TestPresses.Parse(presses) : null,
 });
 game.Run();
 return 0;

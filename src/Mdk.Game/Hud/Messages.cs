@@ -32,9 +32,11 @@ public sealed class Messages(Fti fti, FontView big, FontView small)
     private float _zoom;
 
     /// <summary>Queues the text <paramref name="textName"/>; false if it doesn't exist.</summary>
-    public bool Push(string textName, int flags, float seconds)
+    public bool Push(string textName, int flags, float seconds) => PushText(fti.GetTextBytes(textName), flags, seconds);
+
+    /// <summary>Queues a text of the port's own ("Game saved"); false if it's empty.</summary>
+    public bool PushText(byte[] text, int flags, float seconds)
     {
-        var text = fti.GetTextBytes(textName);
         if (text.Length == 0)
         {
             return false;

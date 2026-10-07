@@ -18,10 +18,12 @@ public enum Key
     Sniper, ZoomIn, ZoomOut,
     /// <summary>The 1996 demo's levels: rolls, and teleports (held with a digit).</summary>
     RollLeft, RollRight, Teleport,
+    /// <summary>The level's full save (the original's F2), and loading the latest save.</summary>
+    QuickSave, QuickLoad,
 }
 
 /// <summary>Keys of the menus and prompts: fixed, whatever the game's bindings.</summary>
-public enum MenuKey { Up, Down, Left, Right, Accept, Back, Backspace, Delete, Home, End, Snapshot }
+public enum MenuKey { Up, Down, Left, Right, Accept, Back, Backspace, Delete, Home, End }
 
 /// <summary>Keys by their place on the keyboard, whatever the layout and the bindings (the console,
 /// the debug overlay); the keyboard's repeat presses them again. <see cref="Grave"/> is the key left
@@ -73,6 +75,8 @@ public sealed class Input
         [SDL_Scancode.SDL_SCANCODE_T] = Key.Teleport,
         [SDL_Scancode.SDL_SCANCODE_LALT] = Key.Teleport,
         [SDL_Scancode.SDL_SCANCODE_RALT] = Key.Teleport,
+        [SDL_Scancode.SDL_SCANCODE_F2] = Key.QuickSave,
+        [SDL_Scancode.SDL_SCANCODE_F9] = Key.QuickLoad,
     };
 
     /// <summary>The flying camera's keys: fixed, whatever the bindings (E also uses items).</summary>
@@ -120,7 +124,6 @@ public sealed class Input
         [SDL_Scancode.SDL_SCANCODE_DELETE] = MenuKey.Delete,
         [SDL_Scancode.SDL_SCANCODE_HOME] = MenuKey.Home,
         [SDL_Scancode.SDL_SCANCODE_END] = MenuKey.End,
-        [SDL_Scancode.SDL_SCANCODE_F2] = MenuKey.Snapshot,
     };
 
     private static readonly Dictionary<SDL_Scancode, RawKey> RawKeys = new()
@@ -211,6 +214,13 @@ public sealed class Input
     public void Press(MenuKey key)
     {
         _menuPressed.Add(key);
+        AnyPressed = true;
+    }
+
+    /// <summary>Presses a game key for this frame from the program (automated tests).</summary>
+    public void Press(Key key)
+    {
+        _pressed.Add(key);
         AnyPressed = true;
     }
 

@@ -28,6 +28,10 @@ public sealed class GameState
     public FallCarry? Carry;
     /// <summary>The level's state of a full save being loaded (JSON), until the level restores it.</summary>
     public string? Snapshot;
+    /// <summary>This session's last full save (its name), quick load's first choice.</summary>
+    public string? QuickSlot;
+    /// <summary>A HUD message the next level shows when it starts ("Game loaded"), once.</summary>
+    public string? Notice;
     /// <summary>The console's map: the arena the next level starts in (on a floor of it), once.</summary>
     public string? StartArena;
 

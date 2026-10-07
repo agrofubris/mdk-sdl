@@ -130,6 +130,18 @@ public sealed class SaveGames(string directory)
             .ToList();
     }
 
+    /// <summary>The save quick load takes: <paramref name="session"/> (this session's last full
+    /// save) while it exists, else the newest file; null when there is none.</summary>
+    public string? QuickSlot(string? session)
+    {
+        if (session != null && File.Exists(PathOf(session)))
+        {
+            return session;
+        }
+
+        return List().OrderByDescending(name => File.GetLastWriteTimeUtc(PathOf(name))).FirstOrDefault();
+    }
+
     private string PathOf(string name) => Path.Combine(directory, name + Extension);
 
     /// <summary>The saves of a user folder (<c>saves/</c> in it).</summary>

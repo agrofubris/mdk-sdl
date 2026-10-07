@@ -29,6 +29,7 @@ public sealed class Settings
         (Key.StrafeLeft, "Strafe left"), (Key.StrafeRight, "Strafe right"), (Key.Jump, "Jump"), (Key.Turbo, "Run"),
         (Key.Fire, "Fire"), (Key.Sniper, "Sniper mode"), (Key.ZoomIn, "Zoom in"), (Key.ZoomOut, "Zoom out"),
         (Key.UseItem, "Use item"), (Key.ItemNext, "Next item"), (Key.ItemPrevious, "Previous item"),
+        (Key.QuickSave, "Quick save"), (Key.QuickLoad, "Quick load"),
     ];
 
     /// <summary>Volumes from 0 to 100.</summary>
@@ -170,6 +171,12 @@ public sealed class Settings
         window.SetFullscreen(Fullscreen ? Engine.Platform.Fullscreen.On : Engine.Platform.Fullscreen.Off);
         input.MouseScale = MouseSensitivity;
         input.InvertMouse = InvertMouse;
+        Bind(input);
+    }
+
+    /// <summary>The defaults, then the rebound actions (files without an action keep its default).</summary>
+    public void Bind(Input input)
+    {
         input.ResetBindings();
         foreach (var (key, control) in Bindings)
         {

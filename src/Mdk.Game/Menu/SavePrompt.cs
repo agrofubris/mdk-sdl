@@ -48,6 +48,9 @@ public sealed class SavePrompt
     private float _ticks;
 
     public bool Closed { get; private set; }
+    /// <summary>Closed after writing the save, under <see cref="Name"/>.</summary>
+    public bool Saved { get; private set; }
+    public string Name => _name;
 
     /// <summary>Asks whether to save <paramref name="save"/>, offering <paramref name="name"/>.</summary>
     public SavePrompt(Ui ui, Fonts fonts, SaveGames saves, SaveGame save, string name)
@@ -197,6 +200,7 @@ public sealed class SavePrompt
         }
 
         Console.WriteLine($"Saved game {_name}: level {_save.Level}");
+        Saved = true;
         Closed = true;
     }
 
