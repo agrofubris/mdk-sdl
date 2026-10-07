@@ -105,8 +105,10 @@ filtered too (`Renderer.CanvasSampling`).
   then the haze (1 − e^(−density × distance)). Sprites: filtered, unlit, edges cut at half cover.
 - Shadows (`SunShadow`): an orthographic view along the sunlight, centred on the camera and
   snapped to whole texels; 2 × 2 compared texels, slope and normal offsets against acne.
-- `post.hlsl`: Alchemy ambient occlusion from the camera's depth, fading in the haze; glow from
-  the scene's blurred mips, screen-blended.
+- `occlusion.hlsl`: Alchemy ambient occlusion from the camera's depth, fading in the haze, 12
+  samples turned in a 4 x 4 ordered pattern, into its own target (`screen.hlsli` shared).
+- `post.hlsl`: the occlusion blurred over 4 x 4 pixels of the same plane (no grain, no shade
+  across edges); glow from the scene's blurred mips, screen-blended.
 
 ## Game flow
 
