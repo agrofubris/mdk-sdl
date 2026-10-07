@@ -212,7 +212,9 @@ so the game runs them unchanged:
    the objects and triangle groups they touch). Ledges (`Kurt/Kurt.Ledge.cs`), sliding in the
    wind tunnels (`Kurt/Kurt.Slide.cs`), hard landings and falling out of the arena, the camera's
    roll (`Kurt/CameraRoll.cs`), clearance and shake (`Kurt/FollowCamera.cs`,
-   `Collision/ArenaSpace.Probes.cs`).
+   `Collision/ArenaSpace.Probes.cs`). Each step the camera follows Kurt after the scripts (a
+   platform has carried him: `game_frame`'s order), and the XD2 and the XE are put with Kurt
+   (`Rides.Follow`), so nothing is drawn a step apart (`tests/carry_test.sh`, `--trace`).
 7. 🟡 Script VM and objects (`Scripts/`: ports of `script_vm.gd`, `script_runtime.gd`,
    `object_motion.gd`, `object_behaviors.gd`; 30 ticks per second, object moves are BSP box sweeps).
    Kurt's items and blasts are ported (`Items.cs`, `Twister.cs`; twisters drawn as ribbons, `Ribbon.cs`), so are the

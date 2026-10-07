@@ -298,6 +298,18 @@ public class KurtMovesTests
         Assert.True(died);
     }
 
+    /// <summary>Playtest: off LEVEL6's lift (OLYM_8, start of XTR_1000) Kurt falls past the floating
+    /// lamps; the arena's bottom is z −2900 (as in the original), so he dies after about 7 s.</summary>
+    [DataFact]
+    public void FallingOffTheLevel6LiftKills()
+    {
+        var space = SpaceOf(6, "OLYM_8");
+        var kurt = KurtIn(space, new Vector3(-1658f, 3406f, -1866f));
+
+        Assert.True(RunUntil(kurt, new Input(), State.Dead, 8f));
+        Assert.True(kurt.Feet.Z <= space.Bottom(kurt.Feet)!.Value - 50f);
+    }
+
     [Fact]
     public void RunningAndTurningRollsTheView()
     {

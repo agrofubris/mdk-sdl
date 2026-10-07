@@ -354,6 +354,8 @@ public sealed partial class ScriptRuntime
             RunTick();
             _tickCount++;
         }
+
+        Rides.Follow();
     }
 
     public ArenaState GetArenaState(string arena)
