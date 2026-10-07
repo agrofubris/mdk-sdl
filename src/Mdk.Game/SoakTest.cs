@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Numerics;
+using Mdk.Formats;
 using Mdk.Game.Level;
 using Mdk.Game.Scripts;
 
@@ -30,6 +31,8 @@ public sealed class SoakTest
     private const float FloorLift = 0.05f;
     /// <summary>Feet this far under a floor went through it (they touch it standing).</summary>
     private const float Sink = 0.5f;
+    /// <summary>The floor Kurt stands on is this close to his feet.</summary>
+    private const float FloorReach = 1f;
     /// <summary>Longer moves in a step are teleports (the fastest fall moves 250 / 60).</summary>
     private const float MaxStep = 10f;
 
@@ -40,6 +43,8 @@ public sealed class SoakTest
     private readonly HashSet<string> _visited = [];
     private int _stop = -1;
     private float _lost;
+    /// <summary>Seconds standing on another arena's floor than Kurt's.</summary>
+    private float _astray;
     private float _hole;
     private float _falling;
     private int _heals;
@@ -59,7 +64,7 @@ public sealed class SoakTest
     /// <summary>After each game step at game time <paramref name="time"/>.</summary>
     public void Step(Kurt.Kurt kurt, ScriptRuntime scripts, Collision.ArenaSpace space, float time)
     {
-        Travel(scripts, time);
+        Travel(scripts, space, time);
         _visited.Add(scripts.CurrentArena);
         if (kurt.Health < HealBelow && kurt.Current != Kurt.Kurt.State.Dead)
         {
@@ -82,7 +87,7 @@ public sealed class SoakTest
     }
 
     /// <summary>Teleports Kurt to the next arena of the tour when its time comes.</summary>
-    private void Travel(ScriptRuntime scripts, float time)
+    private void Travel(ScriptRuntime scripts, Collision.ArenaSpace space, float time)
     {
         if (_stops.Count == 0)
         {
@@ -100,7 +105,12 @@ public sealed class SoakTest
         Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
             $"Soak t {time:0.0}: teleport to {arena} {point.X:0} {point.Y:0} {point.Z:0}"));
         scripts.TeleportKurt(arena, point, scripts.Kurt.Yaw);
+
+        // Kurt's next move collides with his new arena, not the one the last tick left solid.
+        space.SetSolid([arena]);
+
         _lost = 0f;
+        _astray = 0f;
         _falling = 0f;
         _floor = point;
         _previous = point;
@@ -119,7 +129,8 @@ public sealed class SoakTest
             Problem(time, obj.Arena, $"{obj.TypeName} position is not a number", $"{obj.TypeName}_{obj.InstanceId} {obj.Position}");
         }
 
-        if (kurt.OnFloor)
+        // Dead, he counts as on a floor.
+        if (kurt.OnFloor && kurt.Current != Kurt.Kurt.State.Dead)
         {
             _floor = kurt.Feet;
         }
@@ -137,6 +148,15 @@ public sealed class SoakTest
         if (_lost >= LostTime)
         {
             Problem(time, arena, "Kurt outside every arena", Where(kurt));
+        }
+
+        // On a floor of another arena than his, Kurt missed its doorway: when his arena's
+        // neighbour goes, nothing holds him (he falls out).
+        var astray = kurt.OnFloor && !dead && StandsAstray(space, arena, kurt.Feet);
+        _astray = astray ? _astray + Viewer.Step : 0f;
+        if (_astray >= LostTime)
+        {
+            Problem(time, arena, "Kurt stands outside his arena", $"on {space.ArenaAt(kurt.Feet)}, {Where(kurt)}");
         }
 
         // A drawn door that isn't shut shows its other side: that arena must be drawn too.
@@ -189,6 +209,16 @@ public sealed class SoakTest
 
     private string Where(Kurt.Kurt kurt) => string.Create(CultureInfo.InvariantCulture,
         $"at {kurt.Feet.X:0.0} {kurt.Feet.Y:0.0} {kurt.Feet.Z:0.0} {kurt.Current} vz {kurt.VerticalSpeed:0.0}, stood at {_floor.X:0.0} {_floor.Y:0.0} {_floor.Z:0.0}");
+
+    /// <summary>Whether the floor under the feet is another arena's, not Kurt's (objects and
+    /// platforms aren't floors of any).</summary>
+    private static bool StandsAstray(Collision.ArenaSpace space, string arena, Vector3 feet)
+    {
+        var from = feet + new Vector3(0f, 0f, FloorReach);
+        var to = feet - new Vector3(0f, 0f, FloorReach);
+        var under = space.At(feet).Where(b => b.Segment(from, to, Collision.Bsp.SegmentMode.Floor, out _) != Collision.Bsp.None).ToList();
+        return under.Count != 0 && under.All(b => b.Arena.Name != arena);
+    }
 
     private static bool IsFinite(Vector3 v) => float.IsFinite(v.X) && float.IsFinite(v.Y) && float.IsFinite(v.Z);
 
