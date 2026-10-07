@@ -1103,7 +1103,7 @@ public sealed class ObjectMotion(ScriptRuntime runtime)
         (s, c) = (MathF.Abs(s), MathF.Abs(c));
         var size = bounds.Size() * obj.Scale;
         var half = new Vector3((c * size.X + s * size.Y) * WidthFactor, (s * size.X + c * size.Y) * WidthFactor,
-            MathF.Max(bounds.Max.Z * obj.Scale, MinHeight) * 0.5f);
+            MathF.Max(bounds.Max.Z * obj.Scale + obj.Lift, MinHeight) * 0.5f);
         var center = RotatedZ(bounds.Center(), obj.Yaw) * obj.Scale;
         center.Z = half.Z + (motion.Z != 0f ? VerticalLift : Lift);
         var a = obj.Position + center;
