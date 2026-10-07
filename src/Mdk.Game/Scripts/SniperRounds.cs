@@ -6,7 +6,7 @@ namespace Mdk.Game.Scripts;
 /// <summary>Kurt's sniper rounds (3 slots at 0x573c98, updated by 0x462708 after the objects; a port
 /// of godot-mdk's sniper_rounds.gd, docs/gameplay.md "Sniper mode"). A round starts at the eye along
 /// the view and is tested every tick along the segment it moved: objects (their boxes, then their
-/// parts), then the arena.
+/// parts' faces), then the arena.
 /// <code>
 ///   type 0  bullet          1100 u/s, 75 ticks, 8 damage
 ///   type 1  homing bullet    400 u/s, 240 ticks, steers at the locked object
@@ -525,32 +525,78 @@ public sealed class SniperRounds(ScriptRuntime runtime)
         return best;
     }
 
-    /// <summary>The nearest visible part of a model the segment crosses.</summary>
-    private (Vector3? Point, int Part) HitPart(MdkObject obj, Vector3 start, Vector3 end)
+    /// <summary>The nearest face of a visible part the segment crosses (0x414668): the segment in
+    /// model space against the pose's triangles, from either side. Faces, not part boxes: LEVEL8's
+    /// XBSHIP hull box holds its turrets.</summary>
+    private static (Vector3? Point, int Part) HitPart(MdkObject obj, Vector3 start, Vector3 end)
     {
-        Vector3? point = null;
-        var part = -1;
-        var parts = obj.PartBounds();
-        for (var i = 0; i < parts.Length; i++)
+        if (!Matrix4x4.Invert(obj.Transform, out var toModel))
         {
-            if ((obj.HiddenParts & (1 << i)) != 0 || parts[i] is not { } box)
+            return (null, -1);
+        }
+
+        // An affine map keeps the fraction along the segment.
+        var from = Vector3.Transform(start, toModel);
+        var to = Vector3.Transform(end, toModel);
+        var nearest = 1f;
+        var part = -1;
+        var pose = obj.PoseParts();
+        for (var i = 0; i < pose.Length; i++)
+        {
+            if ((obj.HiddenParts & (1 << i)) != 0)
             {
                 continue;
             }
 
-            if (runtime.GetWorldBounds(obj, box).SegmentEntry(start, end) is not { } p)
+            var vertices = pose[i];
+            var indices = obj.Model!.PartList[i].TriangleIndices;
+            for (var t = 0; t < indices.Length; t += 3)
             {
-                continue;
-            }
-
-            if (point is not { } q || Vector3.Distance(start, p) < Vector3.Distance(start, q))
-            {
-                point = p;
-                part = i;
+                var hit = SegmentFace(from, to, vertices[indices[t]], vertices[indices[t + 1]], vertices[indices[t + 2]]);
+                if (hit < nearest)
+                {
+                    nearest = hit;
+                    part = i;
+                }
             }
         }
 
-        return (point, part);
+        return part < 0 ? (null, -1) : (Vector3.Lerp(start, end, nearest), part);
+    }
+
+    /// <summary>Where the segment crosses the triangle, as a fraction of it (0x4144c0, either side);
+    /// infinity when it doesn't.</summary>
+    private static float SegmentFace(Vector3 from, Vector3 to, Vector3 a, Vector3 b, Vector3 c)
+    {
+        const float Parallel = 1e-9f;
+        var along = to - from;
+        var ab = b - a;
+        var ac = c - a;
+        var p = Vector3.Cross(along, ac);
+        var det = Vector3.Dot(ab, p);
+        if (MathF.Abs(det) < Parallel)
+        {
+            return float.PositiveInfinity;
+        }
+
+        // Barycentric u, v and the fraction t (Moller-Trumbore).
+        var inverse = 1f / det;
+        var s = from - a;
+        var u = Vector3.Dot(s, p) * inverse;
+        if (u < 0f || u > 1f)
+        {
+            return float.PositiveInfinity;
+        }
+
+        var q = Vector3.Cross(s, ab);
+        var v = Vector3.Dot(along, q) * inverse;
+        if (v < 0f || u + v > 1f)
+        {
+            return float.PositiveInfinity;
+        }
+
+        var t = Vector3.Dot(ac, q) * inverse;
+        return t is >= 0f and <= 1f ? t : float.PositiveInfinity;
     }
 
     /// <summary>A round hits an object (0x462708): grenades explode; bullets take 8 hit points (not
