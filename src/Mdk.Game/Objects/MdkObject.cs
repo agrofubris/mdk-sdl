@@ -380,13 +380,15 @@ public sealed class MdkObject
         var frame = (int)MathF.Round(AnimationTime) % count;
         if (frame != AnimationFrame)
         {
-            // Root motion: the object moves by each passed frame's motion (model space).
+            // Root motion: each passed frame's motion (model space) joins the push, so the next
+            // tick's move collides with the arena (anim_step_frames 0x43ab70): an alien's pose
+            // doesn't sink it through the floor.
             var step = frame > AnimationFrame ? frame - AnimationFrame : frame + count - AnimationFrame;
             var turn = Matrix4x4.CreateRotationZ(float.DegreesToRadians(Yaw));
             for (var i = 0; i < step; i++)
             {
                 var f = (AnimationFrame + 1 + i) % count;
-                Position += Vector3.Transform(Animation.RootMotion[f], turn);
+                Push += Vector3.Transform(Animation.RootMotion[f], turn) / delta;
             }
 
             AnimationFrame = frame;
