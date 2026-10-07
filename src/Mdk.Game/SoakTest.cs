@@ -104,6 +104,9 @@ public sealed class SoakTest
         var (arena, point) = _stops[stop];
         Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
             $"Soak t {time:0.0}: teleport to {arena} {point.X:0} {point.Y:0} {point.Z:0}"));
+
+        // Doors left open would freeze with their arenas (walking away shuts them first).
+        scripts.ShutDoors();
         scripts.TeleportKurt(arena, point, scripts.Kurt.Yaw);
 
         // Kurt's next move collides with his new arena, not the one the last tick left solid.

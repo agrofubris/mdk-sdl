@@ -33,6 +33,7 @@ public class DoorArenaTests
     private const string Far = "DANT_10";
     private static readonly Vector3 FarSpot = new(495f, 5005f, 24f);
     private static readonly Vector3 TunnelSpot = new(0f, 485f, 19f);
+    private static readonly Vector3 BeforeDoor = new(0f, 660f, Floor);
 
     private static readonly MdkData Data = MdkData.Find() ?? throw new InvalidOperationException("MDK data not found");
     private static readonly AudioDevice Device = new(Output.Muted);
@@ -142,5 +143,22 @@ public class DoorArenaTests
 
         Assert.Equal("", runtime.SecondArena);
         Assert.Equal([Corridor], runtime.DrawnArenas);
+    }
+
+    /// <summary>The soak tour shuts the doors before it teleports: a door left open freezes with its
+    /// arena and, back, closes onto an arena no longer drawn.</summary>
+    [DataFact]
+    public void ShutDoorsLeavesNoneOpen()
+    {
+        var runtime = CreateRuntime();
+        runtime.TeleportKurt(Tunnel, BeforeDoor, DoorYaw);
+        StandAt(runtime, BeforeDoor, SecondTicks);
+        var door = DoorAt(runtime, TunnelDoor);
+        Assert.Equal(0, door.DoorState & ObjectBehaviors.DoorClosed);
+
+        runtime.ShutDoors();
+
+        Assert.NotEqual(0, door.DoorState & ObjectBehaviors.DoorClosed);
+        Assert.True(door.IsAnimationDone);
     }
 }

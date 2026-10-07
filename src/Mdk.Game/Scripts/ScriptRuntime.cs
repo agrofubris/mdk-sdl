@@ -444,6 +444,16 @@ public sealed partial class ScriptRuntime
         }
     }
 
+    /// <summary>Shuts every door (the soak tour, before it teleports): a door left open freezes with
+    /// its arena, and later closes onto an arena no longer drawn; walking away shuts it first.</summary>
+    public void ShutDoors()
+    {
+        foreach (var door in Objects.Where(o => !o.Dead && (o.Flags & MdkObject.FlagDoor) != 0))
+        {
+            Behaviors.Shut(door);
+        }
+    }
+
     /// <summary>The second arena after a teleport (0x41bce4): none into an arena; into a corridor
     /// not loaded, the last arena (DTI order) leading to it (CDANT_1 → DANT_2), loaded ahead; into
     /// a loaded one (of the loaded arena, or Kurt's pair), unchanged. Kurt's show then activates it.</summary>

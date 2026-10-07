@@ -68,6 +68,8 @@ public sealed class ObjectBehaviors(ScriptRuntime runtime)
     /// <summary>A door moved to its other side turns around (0x43ca00).</summary>
     private const float DoorTurn = 180f;
     private const float FullTurn = 360f;
+    /// <summary>Ticks a door's closing may take when shut at once.</summary>
+    private const int MaxShutTicks = 1000;
 
     /// <summary>Opens the door when Kurt comes closer than its distance, closes it when he goes away.</summary>
     public void UpdateDoor(MdkObject obj)
@@ -142,6 +144,23 @@ public sealed class ObjectBehaviors(ScriptRuntime runtime)
         }
 
         obj.Flags = (state & DoorOpen) != 0 ? obj.Flags | MdkObject.FlagNotSolid : obj.Flags & ~MdkObject.FlagNotSolid;
+    }
+
+    /// <summary>Shuts a door at once, its closing played to the end (unless it stays open).</summary>
+    public void Shut(MdkObject door)
+    {
+        if ((door.DoorState & (DoorClosed | DoorStaysOpen)) != 0)
+        {
+            return;
+        }
+
+        door.RestartAnimation(runtime.GetAnimation(door, door.DoorAnimations[1]), MdkObject.Looping.Once);
+        for (var tick = 0; tick < MaxShutTicks && !door.IsAnimationDone; tick++)
+        {
+            door.AdvanceAnimation(Dt);
+        }
+
+        door.DoorState = (door.DoorState & DoorScriptBits) | DoorClosed;
     }
 
     /// <summary>Moves a door into the arena on its other side, turned around (0x43ca00): e.g. the

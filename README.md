@@ -125,7 +125,7 @@ mdk.exe
   `--screenshot` but without `--level`, the screen shown after `--wait` seconds (menu,
   statistics...) is saved. `--soak[=seed]`: random but seeded keys on every screen (menu keys
   too when it starts in the menus), 0.1 s a frame; in a level Kurt is healed and problems print
-  as `Soak problem` (`--tour`: every arena in turn during `--wait`).
+  as `Soak problem` (`--tour`: every arena in turn during `--wait`, doors shut before each teleport).
 
 Settings (volumes, music filter, mouse, fullscreen, anti-aliasing, difficulty, graphics, gore, key
 bindings) and saved games
