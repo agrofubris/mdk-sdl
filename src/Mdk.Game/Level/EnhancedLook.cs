@@ -18,8 +18,8 @@ public static class EnhancedLook
     private const float SunEnergy = 0.5f;
     private const float AmbientEnergy = 0.75f;
     private const float ShadowDistance = 300f;
-    private const float GlowBloom = 0.05f;
-    private const float HazeDensity = 0.0007f;
+    private const float GlowBloom = 0f;
+    private const float HazeDensity = 0.0002f;
 
     /// <summary>The way the sunlight goes (MDK coordinates, Z up).</summary>
     public static Vector3 SunDirection { get; } = Sun(SunPitch, SunYaw);
