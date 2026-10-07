@@ -2873,7 +2873,7 @@ public sealed partial class ScriptRuntime
         for (var i = 0; i < 8; i++)
         {
             var corner = new Vector3((i & 1) != 0 ? box.Max.X : box.Min.X, (i & 2) != 0 ? box.Max.Y : box.Min.Y, (i & 4) != 0 ? box.Max.Z : box.Min.Z);
-            var point = obj.Position + RotatedZ(corner * obj.Scale, obj.Yaw);
+            var point = obj.Position + Vector3.UnitZ * obj.Lift + RotatedZ(corner * obj.Scale, obj.Yaw);
             world = i == 0 ? new Box(point, point) : world.Expand(point);
         }
 

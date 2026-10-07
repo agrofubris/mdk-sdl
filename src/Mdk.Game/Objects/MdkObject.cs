@@ -255,7 +255,11 @@ public sealed class MdkObject
 
     /// <summary>Model space to the world (a rolling object turns by its rolling basis).</summary>
     public Matrix4x4 Transform =>
-        Matrix4x4.CreateScale(Scale) * ((Flags & FlagRolling) != 0 ? RollingBasis : Rotation) * Matrix4x4.CreateTranslation(Position);
+        Matrix4x4.CreateScale(Scale) * ((Flags & FlagRolling) != 0 ? RollingBasis : Rotation) * Matrix4x4.CreateTranslation(Position + Vector3.UnitZ * Lift);
+
+    /// <summary>A rolling object rests on its origin but its model is lifted by the height offset
+    /// (0x43b65c: z + obj+0x5c), e.g. LEVEL6's centred boulder XBO by 5 of its 5.15 radius.</summary>
+    public float Lift => (Flags & FlagRolling) != 0 ? HeightOffset : 0f;
 
     public enum Rolling { Off, On }
 
