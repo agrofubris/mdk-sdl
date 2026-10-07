@@ -32,13 +32,20 @@ public class SnowboardRunTests
     private static readonly MdkData Data = MdkData.Find() ?? throw new InvalidOperationException("MDK data not found");
     private static readonly AudioDevice Device = new(Output.Muted);
 
-    private static (ScriptRuntime Runtime, ArenaSpace Space) CreateRuntime()
+    /// <summary>The second run's corridor, near its board (first key 420, 4285).</summary>
+    private const string SecondRun = "CMEAT_3";
+    private static readonly Vector3 SecondBoard = new(420f, 4280f, -578f);
+    private const int RideSeconds = 5;
+
+    private static (ScriptRuntime Runtime, ArenaSpace Space) CreateRuntime() => CreateRuntime(out _);
+
+    private static (ScriptRuntime Runtime, ArenaSpace Space) CreateRuntime(out TriangleGroups groups)
     {
         var level = new LevelData(Data, Level);
         var cmi = Cmi.Load(Data.PathOf($"TRAVERSE/LEVEL{Level}/LEVEL{Level}.CMI"));
         var sprites = Bni.Load(Data.PathOf("TRAVERSE/TRAVSPRT.BNI"));
         var space = new ArenaSpace();
-        var groups = new TriangleGroups();
+        groups = new TriangleGroups();
         foreach (var arena in level.Arenas.Where(a => level.IsReachable(a.Name)))
         {
             space.Add(arena);
@@ -85,5 +92,27 @@ public class SnowboardRunTests
         Assert.False(runtime.Rides.OnBoard());
         Assert.Equal(End, runtime.CurrentArena);
         Assert.Equal(End, board.Arena);
+    }
+
+    /// <summary>Found by playtest: on the second run (CMEAT_3) the slope vanished. Its board runs
+    /// group_state_near_player 2, 10, 31, 1, 2: the original (0x453a1e) gives the groups near Kurt
+    /// the opposite op (shown) and the others the op (hidden), not the reverse.</summary>
+    [DataFact]
+    public void SecondRunShowsSlopeUnderKurt()
+    {
+        var (runtime, space) = CreateRuntime(out var groups);
+        runtime.TeleportKurt(SecondRun, SecondBoard, Yaw);
+        Run(runtime, space, StepsPerSecond);
+        var board = runtime.FindObjectNamed("XSNOWB")!;
+        runtime.TeleportKurt(SecondRun, board.Position + AboveBoard, Yaw);
+        Run(runtime, space, StepsPerSecond, () => runtime.Rides.OnBoard());
+        Assert.True(runtime.Rides.OnBoard());
+
+        Run(runtime, space, RideSeconds * StepsPerSecond);
+
+        var floor = runtime.GetKurtFloorGroup();
+        Assert.NotEqual(0, floor);
+        Assert.Equal(SecondRun, runtime.CurrentArena);
+        Assert.False(groups.Get(SecondRun, floor)!.State.HasFlag(TriangleGroups.State.Hidden));
     }
 }

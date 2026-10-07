@@ -1083,7 +1083,7 @@ public sealed class ScriptVm(ScriptRuntime runtime, ScriptDecoder decoder)
                 break;
             case 163: // if_arena_counter
                 return Branch(obj, ins, Compare(runtime.GetArenaState(obj.Arena).GroupCounters[GroupIndex(o[0])], L(o[1])));
-            case 194: // group_state_near_player: groups around the one under Kurt get the op, the others its opposite
+            case 194: // group_state_near_player: groups around the one under Kurt get the opposite op, the others the op (0x453a1e)
             {
                 var floorGroup = runtime.GetKurtFloorGroup();
                 var first = I(o[1]);
@@ -1096,7 +1096,7 @@ public sealed class ScriptVm(ScriptRuntime runtime, ScriptDecoder decoder)
                 for (var group = first; group <= last; group++)
                 {
                     var near = group >= floorGroup - I(o[3]) && group <= floorGroup + I(o[4]);
-                    runtime.SetGroupState(runtime.CurrentArena, group, near ? I(o[0]) : I(o[0]) ^ 1);
+                    runtime.SetGroupState(runtime.CurrentArena, group, near ? I(o[0]) ^ 1 : I(o[0]));
                 }
 
                 break;
