@@ -27,6 +27,23 @@ public sealed class LogRing(int capacity)
         }
     }
 
+    /// <summary><see cref="Lines"/> into <paramref name="lines"/> (emptied first): no list per call.</summary>
+    public void CopyLast(int count, List<string> lines)
+    {
+        lines.Clear();
+        lock (_lock)
+        {
+            var skip = Math.Max(_lines.Count - count, 0);
+            foreach (var line in _lines)
+            {
+                if (skip-- <= 0)
+                {
+                    lines.Add(line);
+                }
+            }
+        }
+    }
+
     public void Clear()
     {
         lock (_lock)

@@ -163,6 +163,10 @@ public sealed unsafe partial class Renderer : IDisposable
     private const int CanvasQuads = 4096;
     private const int QuadVertices = 6;
     private readonly int _canvasMesh;
+    /// <summary>The frame's streamed vertices (<see cref="Stream"/>), uploaded once before it's drawn.</summary>
+    private const int StreamVertices = 1 << 18;
+    private readonly int _streamMesh;
+    private readonly List<Vertex> _stream = [];
     private readonly List<Vertex> _canvasVertices = [];
     private readonly List<(int First, int Count, Material Material)> _canvasCommands = [];
 
@@ -176,8 +180,16 @@ public sealed unsafe partial class Renderer : IDisposable
     private readonly List<IntPtr> _textures = [];
     private readonly List<IntPtr> _buffers = [];
     private readonly List<DrawCommand> _commands = [];
-    /// <summary>Dynamic meshes: their upload buffer and the bytes to copy before the next frame.</summary>
-    private readonly Dictionary<int, (IntPtr Transfer, uint Pending)> _dynamic = [];
+    /// <summary>A dynamic mesh's upload buffer and the bytes to copy before the next frame.</summary>
+    private sealed class DynamicMesh(IntPtr transfer)
+    {
+        public readonly IntPtr Transfer = transfer;
+        public uint Pending;
+    }
+
+    private readonly Dictionary<int, DynamicMesh> _dynamic = [];
+    /// <summary>The passes in their drawing order.</summary>
+    private static readonly Pass[] Passes = Enum.GetValues<Pass>();
 
     private SDL_GPUTexture* _target;
     private SDL_GPUTexture* _depth;
@@ -207,6 +219,7 @@ public sealed unsafe partial class Renderer : IDisposable
         _mipSampler = CreateSampler(SDL_GPUSamplerAddressMode.SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE, Sampling.Linear);
 
         _canvasMesh = CreateDynamicMesh(CanvasQuads * QuadVertices);
+        _streamMesh = CreateDynamicMesh(StreamVertices);
         CreateColourSampler();
 
         // Texture 0 is bound for flat colours, so it must outlive every scope (Release).
@@ -547,19 +560,46 @@ public sealed unsafe partial class Renderer : IDisposable
         Check(buffer != null, "SDL_CreateGPUBuffer");
         _buffers.Add((IntPtr)buffer);
         var id = _buffers.Count - 1;
-        _dynamic[id] = ((IntPtr)CreateTransfer(size, SDL_GPUTransferBufferUsage.SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD), 0);
+        _dynamic[id] = new DynamicMesh((IntPtr)CreateTransfer(size, SDL_GPUTransferBufferUsage.SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD));
         return id;
     }
 
     /// <summary>New vertices for a dynamic mesh, uploaded before the next frame is drawn.</summary>
     public void UpdateMesh(int mesh, ReadOnlySpan<Vertex> vertices)
     {
-        var (transfer, _) = _dynamic[mesh];
+        var dynamic = _dynamic[mesh];
         var bytes = MemoryMarshal.AsBytes(vertices);
-        var mapped = SDL_MapGPUTransferBuffer(_device, (SDL_GPUTransferBuffer*)transfer, true);
+        var mapped = SDL_MapGPUTransferBuffer(_device, (SDL_GPUTransferBuffer*)dynamic.Transfer, true);
         bytes.CopyTo(new Span<byte>((void*)mapped, bytes.Length));
-        SDL_UnmapGPUTransferBuffer(_device, (SDL_GPUTransferBuffer*)transfer);
-        _dynamic[mesh] = (transfer, (uint)bytes.Length);
+        SDL_UnmapGPUTransferBuffer(_device, (SDL_GPUTransferBuffer*)dynamic.Transfer);
+        dynamic.Pending = (uint)bytes.Length;
+    }
+
+    /// <summary>Room for <paramref name="count"/> vertices of this frame only (posed models), drawn
+    /// from <paramref name="mesh"/> at <paramref name="first"/>; empty when the frame's stream is full.
+    /// No buffer is made or filled per draw: the stream is uploaded once, before the frame.</summary>
+    public Span<Vertex> Stream(int count, out int mesh, out int first)
+    {
+        mesh = _streamMesh;
+        first = _stream.Count;
+        if (first + count > StreamVertices)
+        {
+            return [];
+        }
+
+        CollectionsMarshal.SetCount(_stream, first + count);
+        return CollectionsMarshal.AsSpan(_stream).Slice(first, count);
+    }
+
+    /// <summary>The frame's streamed vertices go to their buffer.</summary>
+    private void QueueStream()
+    {
+        if (_stream.Count > 0)
+        {
+            UpdateMesh(_streamMesh, CollectionsMarshal.AsSpan(_stream));
+        }
+
+        _stream.Clear();
     }
 
     /// <summary>The canvas's quads become draws in screen space, after the scene.</summary>
@@ -567,7 +607,7 @@ public sealed unsafe partial class Renderer : IDisposable
     {
         if (_canvasVertices.Count > 0)
         {
-            UpdateMesh(_canvasMesh, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_canvasVertices));
+            UpdateMesh(_canvasMesh, CollectionsMarshal.AsSpan(_canvasVertices));
         }
 
         var screen = Matrix4x4.CreateOrthographicOffCenter(0f, CanvasWidth, CanvasHeight, 0f, 0f, 1f);
@@ -583,22 +623,29 @@ public sealed unsafe partial class Renderer : IDisposable
     /// <summary>Copies the pending dynamic meshes into their buffers.</summary>
     private void UploadDynamic(SDL_GPUCommandBuffer* commands)
     {
-        var pending = _dynamic.Where(d => d.Value.Pending > 0).ToList();
-        if (pending.Count == 0)
+        SDL_GPUCopyPass* copy = null;
+        foreach (var (mesh, dynamic) in _dynamic)
         {
-            return;
-        }
+            if (dynamic.Pending == 0)
+            {
+                continue;
+            }
 
-        var copy = SDL_BeginGPUCopyPass(commands);
-        foreach (var (mesh, (transfer, size)) in pending)
-        {
-            var source = new SDL_GPUTransferBufferLocation { transfer_buffer = (SDL_GPUTransferBuffer*)transfer };
-            var destination = new SDL_GPUBufferRegion { buffer = (SDL_GPUBuffer*)_buffers[mesh], size = size };
+            if (copy == null)
+            {
+                copy = SDL_BeginGPUCopyPass(commands);
+            }
+
+            var source = new SDL_GPUTransferBufferLocation { transfer_buffer = (SDL_GPUTransferBuffer*)dynamic.Transfer };
+            var destination = new SDL_GPUBufferRegion { buffer = (SDL_GPUBuffer*)_buffers[mesh], size = dynamic.Pending };
             SDL_UploadToGPUBuffer(copy, &source, &destination, true);
-            _dynamic[mesh] = (transfer, 0);
+            dynamic.Pending = 0;
         }
 
-        SDL_EndGPUCopyPass(copy);
+        if (copy != null)
+        {
+            SDL_EndGPUCopyPass(copy);
+        }
     }
 
     /// <summary>Queues triangles of a mesh for the next frame; <paramref name="frame"/> picks an animated texture's frame.</summary>
@@ -629,6 +676,7 @@ public sealed unsafe partial class Renderer : IDisposable
         {
             SDL_SubmitGPUCommandBuffer(commands);
             _commands.Clear();
+            _stream.Clear();
             ClearInsets();
             return;
         }
@@ -636,6 +684,7 @@ public sealed unsafe partial class Renderer : IDisposable
         var wait = Stopwatch.GetElapsedTime(waitStart);
         EnsureTargets(width, height);
         QueueCanvas();
+        QueueStream();
         UploadDynamic(commands);
         PrepareColours(commands);
         (_drawCalls, _triangles) = (0, 0);
@@ -748,11 +797,11 @@ public sealed unsafe partial class Renderer : IDisposable
 
         // With insets, the canvas waits for them (Renderer.Insets.cs).
         var canvasNow = _insets.Count == 0;
-        foreach (var order in Enum.GetValues<Pass>())
+        foreach (var order in Passes)
         {
-            foreach (var command in _commands.Where(c => c.Material.Pass == order && (canvasNow || order != Pass.Overlay)))
+            if (order != Pass.Overlay || canvasNow)
             {
-                DrawOne(commands, pass, command, view);
+                DrawPass(commands, pass, _commands, order, view);
             }
         }
 
@@ -796,7 +845,19 @@ public sealed unsafe partial class Renderer : IDisposable
         SDL_PushGPUFragmentUniformData(commands, 0, (IntPtr)(&uniforms), (uint)sizeof(PanoramaUniforms));
     }
 
-    private void DrawOne(SDL_GPUCommandBuffer* commands, SDL_GPURenderPass* pass, DrawCommand command, View view)
+    /// <summary>Draws the commands of one pass, in their order.</summary>
+    private void DrawPass(SDL_GPUCommandBuffer* commands, SDL_GPURenderPass* pass, List<DrawCommand> source, Pass order, View view)
+    {
+        foreach (ref readonly var command in CollectionsMarshal.AsSpan(source))
+        {
+            if (command.Material.Pass == order)
+            {
+                DrawOne(commands, pass, command, view);
+            }
+        }
+    }
+
+    private void DrawOne(SDL_GPUCommandBuffer* commands, SDL_GPURenderPass* pass, in DrawCommand command, View view)
     {
         var material = command.Material;
         var mode = ModeOf(command);
@@ -930,13 +991,51 @@ public sealed unsafe partial class Renderer : IDisposable
         return SDL_CreateGPUTransferBuffer(_device, &info);
     }
 
+    /// <summary>The upload buffer, now holding <paramref name="data"/> (unmapped).</summary>
+    private SDL_GPUTransferBuffer* Staging(ReadOnlySpan<byte> data)
+    {
+        data.CopyTo(MapStaging(data.Length, out var transfer, out _));
+        SDL_UnmapGPUTransferBuffer(_device, transfer);
+        return transfer;
+    }
+
+    /// <summary>Uploads up to this size go through one kept buffer, grown to the largest (cycled:
+    /// uploads still pending keep theirs); larger ones (a level's first frame) through a buffer of
+    /// their own, released by the caller when temporary.</summary>
+    private const int StagingKeep = 4 << 20;
+
+    /// <summary>An upload buffer of <paramref name="size"/> bytes, mapped (the caller unmaps it).</summary>
+    private Span<byte> MapStaging(int size, out SDL_GPUTransferBuffer* transfer, out bool temporary)
+    {
+        temporary = size > StagingKeep;
+        if (temporary)
+        {
+            transfer = CreateTransfer((uint)size, SDL_GPUTransferBufferUsage.SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD);
+            return new Span<byte>((void*)SDL_MapGPUTransferBuffer(_device, transfer, false), size);
+        }
+
+        if (_stagingSize < size)
+        {
+            if (_staging != null)
+            {
+                SDL_ReleaseGPUTransferBuffer(_device, _staging);
+            }
+
+            _stagingSize = Math.Max((uint)size, _stagingSize * 2);
+            _staging = CreateTransfer(_stagingSize, SDL_GPUTransferBufferUsage.SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD);
+        }
+
+        transfer = _staging;
+        return new Span<byte>((void*)SDL_MapGPUTransferBuffer(_device, transfer, true), size);
+    }
+
+    private SDL_GPUTransferBuffer* _staging;
+    private uint _stagingSize;
+
     private void Upload(SDL_GPUTexture* texture, uint width, uint height, byte[] pixels)
     {
-        var transfer = CreateTransfer((uint)pixels.Length, SDL_GPUTransferBufferUsage.SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD);
-        var mapped = SDL_MapGPUTransferBuffer(_device, transfer, false);
-        pixels.CopyTo(new Span<byte>((void*)mapped, pixels.Length));
-        SDL_UnmapGPUTransferBuffer(_device, transfer);
-
+        var transfer = Staging(pixels);
+        var temporary = pixels.Length > StagingKeep;
         var commands = SDL_AcquireGPUCommandBuffer(_device);
         var copy = SDL_BeginGPUCopyPass(commands);
         var source = new SDL_GPUTextureTransferInfo { transfer_buffer = transfer, pixels_per_row = width, rows_per_layer = height };
@@ -944,7 +1043,10 @@ public sealed unsafe partial class Renderer : IDisposable
         SDL_UploadToGPUTexture(copy, &source, &destination, false);
         SDL_EndGPUCopyPass(copy);
         SDL_SubmitGPUCommandBuffer(commands);
-        SDL_ReleaseGPUTransferBuffer(_device, transfer);
+        if (temporary)
+        {
+            SDL_ReleaseGPUTransferBuffer(_device, transfer);
+        }
     }
 
     public void Dispose()
@@ -961,9 +1063,9 @@ public sealed unsafe partial class Renderer : IDisposable
             SDL_ReleaseGPUBuffer(_device, (SDL_GPUBuffer*)buffer);
         }
 
-        foreach (var (transfer, _) in _dynamic.Values)
+        foreach (var dynamic in _dynamic.Values)
         {
-            SDL_ReleaseGPUTransferBuffer(_device, (SDL_GPUTransferBuffer*)transfer);
+            SDL_ReleaseGPUTransferBuffer(_device, (SDL_GPUTransferBuffer*)dynamic.Transfer);
         }
 
         foreach (var pipeline in _pipelines.Values)
@@ -979,6 +1081,11 @@ public sealed unsafe partial class Renderer : IDisposable
 
         ReleaseSizedTargets();
         ReleaseShadowMap();
+        if (_staging != null)
+        {
+            SDL_ReleaseGPUTransferBuffer(_device, _staging);
+        }
+
         SDL_ReleaseGPUSampler(_device, _repeatSampler);
         SDL_ReleaseGPUSampler(_device, _clampSampler);
         SDL_ReleaseGPUSampler(_device, _mipSampler);

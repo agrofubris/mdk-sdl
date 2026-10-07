@@ -210,7 +210,7 @@ public sealed unsafe partial class Renderer
 
     /// <summary>The enhanced shader's mode for a draw, or null for the original shaders. Lines have
     /// no plane to light; the canvas follows <see cref="CanvasSampling"/>.</summary>
-    private Mode? ModeOf(DrawCommand command)
+    private Mode? ModeOf(in DrawCommand command)
     {
         var material = command.Material;
         if (material.Pass == Pass.Overlay)
@@ -232,10 +232,10 @@ public sealed unsafe partial class Renderer
     }
 
     /// <summary>Opaque triangles: in the camera's depth, and in the sun's when lit.</summary>
-    private static bool Opaque(DrawCommand command) =>
+    private static bool Opaque(in DrawCommand command) =>
         command.Primitive == Primitive.Triangles && command.Material.Pass is Pass.Solid or Pass.DoubleSided or Pass.Mirror;
 
-    private static bool CastsShadow(DrawCommand command) =>
+    private static bool CastsShadow(in DrawCommand command) =>
         Opaque(command) && command.Material.Shading == Shading.Lit && command.Material.Pass != Pass.Mirror;
 
     private void EnsureEnhanced()
@@ -279,11 +279,11 @@ public sealed unsafe partial class Renderer
             DrawSky(commands, pass, view, Panorama);
         }
 
-        foreach (var order in Enum.GetValues<Pass>().Where(p => p != Pass.Overlay))
+        foreach (var order in Passes)
         {
-            foreach (var command in _commands.Where(c => c.Material.Pass == order))
+            if (order != Pass.Overlay)
             {
-                DrawOne(commands, pass, command, view);
+                DrawPass(commands, pass, _commands, order, view);
             }
         }
 
@@ -317,16 +317,18 @@ public sealed unsafe partial class Renderer
             stencil_store_op = SDL_GPUStoreOp.SDL_GPU_STOREOP_DONT_CARE,
         };
         var pass = SDL_BeginGPURenderPass(commands, null, 0, &depthTarget);
-        var casts = output == Output.Shadow ? (Func<DrawCommand, bool>)CastsShadow : Opaque;
-        foreach (var command in _commands.Where(casts))
+        foreach (ref readonly var command in CollectionsMarshal.AsSpan(_commands))
         {
-            DrawDepth(commands, pass, command, viewProjection, output);
+            if (output == Output.Shadow ? CastsShadow(command) : Opaque(command))
+            {
+                DrawDepth(commands, pass, command, viewProjection, output);
+            }
         }
 
         SDL_EndGPURenderPass(pass);
     }
 
-    private void DrawDepth(SDL_GPUCommandBuffer* commands, SDL_GPURenderPass* pass, DrawCommand command, Matrix4x4 viewProjection, Output output)
+    private void DrawDepth(SDL_GPUCommandBuffer* commands, SDL_GPURenderPass* pass, in DrawCommand command, Matrix4x4 viewProjection, Output output)
     {
         var material = command.Material;
         var cull = material.Pass == Pass.Solid ? Pass.Solid : Pass.DoubleSided;
@@ -352,7 +354,7 @@ public sealed unsafe partial class Renderer
     }
 
     /// <summary>A draw through the enhanced shader (its pipeline and vertex buffer bound).</summary>
-    private void DrawEnhanced(SDL_GPUCommandBuffer* commands, SDL_GPURenderPass* pass, DrawCommand command, Matrix4x4 transform, Mode mode, View view)
+    private void DrawEnhanced(SDL_GPUCommandBuffer* commands, SDL_GPURenderPass* pass, in DrawCommand command, Matrix4x4 transform, Mode mode, View view)
     {
         var vertex = new EnhancedVertexUniforms { Transform = transform, World = command.World };
         SDL_PushGPUVertexUniformData(commands, 0, (IntPtr)(&vertex), (uint)sizeof(EnhancedVertexUniforms));
