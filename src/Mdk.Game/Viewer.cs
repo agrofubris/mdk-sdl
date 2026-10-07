@@ -122,6 +122,8 @@ public sealed class Viewer : IScreen
     private readonly EffectsView _effects;
     private readonly RopeView _ropes;
     private readonly Dictionary<string, ObjectView.Look> _looks = [];
+    /// <summary>The HUD's inventory slots, filled again each time (kept: no list per frame).</summary>
+    private readonly List<(int Item, int Count)> _hudSlots = [];
     private readonly SniperView _sniper;
     private readonly SniperTest _sniperTest;
     private readonly RideTest _rideTest;
@@ -163,8 +165,12 @@ public sealed class Viewer : IScreen
         var renderer = _renderer;
         var groups = new TriangleGroups();
         var graphics = ui.Settings.Graphics;
-        _view = new LevelView(renderer, level, groups, EnhancedLook.Surfaces(graphics));
+        MdkObject.ForgetPoses();
+        var surfaces = new MaterialResolver(renderer, level.Dti, EnhancedLook.Surfaces(graphics));
+        Preload(surfaces, level);
+        _view = new LevelView(renderer, level, groups, EnhancedLook.Surfaces(graphics), surfaces);
         var bank = _beta != null ? SoundBank.ForBeta(_beta, options.Level) : SoundBank.ForLevel(data, options.Level);
+        bank.Preload();
         _mixer = new SoundMixer(_audio, bank.Get);
         var cmi = _beta != null
             ? _beta.LoadCmi(BetaDemo.LevelOf(options.Level))
@@ -226,16 +232,12 @@ public sealed class Viewer : IScreen
             _kurt.Collect(pickup);
         }
         _scripts.ArenaEntered += _view.Enter;
-        var objectLook = new MaterialResolver(renderer, level.Dti, EnhancedLook.Surfaces(graphics));
-        var effectsLook = new MaterialResolver(renderer, level.Dti, EnhancedLook.Surfaces(graphics));
-        _objects = new ObjectView(renderer, objectLook);
-        _effects = new EffectsView(renderer, effectsLook, level, EnhancedLook.Sprites(graphics));
-        _scripts.TextureStamped += texture =>
-        {
-            _view.Refresh(texture);
-            objectLook.Refresh(texture);
-            effectsLook.Refresh(texture);
-        };
+        _objects = new ObjectView(renderer, surfaces);
+        _scripts.PreparePoses();
+        PreloadModels(level);
+
+        _effects = new EffectsView(renderer, surfaces, level, EnhancedLook.Sprites(graphics));
+        _scripts.TextureStamped += surfaces.Refresh;
         _ropes = new RopeView(renderer, level);
         _sniper = new SniperView(renderer, _objects, level, _hud);
         _sniperTest = new SniperTest(options);
@@ -489,7 +491,7 @@ public sealed class Viewer : IScreen
             _soak?.Step(_kurt, _scripts, _space, _time);
             if (MathF.Floor(_time * Kurt.Kurt.Ticks) > MathF.Floor((_time - Step) * Kurt.Kurt.Ticks))
             {
-                _hud.Tick(HudStateOf(_kurt, _scripts));
+                _hud.Tick(HudStateOf(_kurt, _scripts, _hudSlots));
             }
 
             if (options.Profile && MathF.Floor(_time) > MathF.Floor(_time - Step))
@@ -603,7 +605,7 @@ public sealed class Viewer : IScreen
         }
 
         _scripts.Eye = camera.Position;
-        using var render = _ui.Dev.Profiler.Measure(Section.Render);
+        using var render = _ui.Dev.Profiler.Measure(Section.Scene);
         _view.Draw(_scripts.DrawnArenas, _scripts.AnimatedTextures);
         _view.DrawEnd(_scripts.EndLevel);
         DrawObjects(_objects, _scripts, _level, _looks);
@@ -613,7 +615,7 @@ public sealed class Viewer : IScreen
         _sprite.Draw(_kurt, camera.Position, eye.Forward, eye.Up, eye.FieldOfView);
 
         _hud.Messages.Update(elapsed);
-        _hud.Draw(HudStateOf(_kurt, _scripts));
+        _hud.Draw(HudStateOf(_kurt, _scripts, _hudSlots));
         return camera;
     }
 
@@ -649,7 +651,7 @@ public sealed class Viewer : IScreen
     /// <summary>The pitch the follow camera eases to: camera_track's (opcode 203) while a script
     /// asks for it, else the arena's.</summary>
     private float PitchGoal() =>
-        _scripts.CameraTrackTicks > 0 ? _scripts.CameraTrackPitch : ArenaPitch(_level, _scripts.CurrentArena);
+        _scripts.CameraTrackTicks > 0 ? _scripts.CameraTrackPitch : ArenaPitch(_scripts.CurrentArena);
 
     /// <summary>A full save being loaded: the level and Kurt as they were.</summary>
     private void RestoreSnapshot(GameState state)
@@ -766,6 +768,11 @@ public sealed class Viewer : IScreen
     /// <c>SEETHEWHOLEGAME</c> the main menu's debug keys (0x5742bc).</summary>
     private void TypeCheats(string typed)
     {
+        if (typed.Length == 0)
+        {
+            return;
+        }
+
         foreach (var c in typed.ToUpperInvariant().Where(char.IsAsciiLetterUpper))
         {
             var cheat = _cheats.Type(c);
@@ -800,13 +807,50 @@ public sealed class Viewer : IScreen
     }
 
     /// <summary>What the HUD shows of Kurt and the object he shoots at.</summary>
-    private static HudState HudStateOf(Kurt.Kurt kurt, ScriptRuntime scripts)
+    private static HudState HudStateOf(Kurt.Kurt kurt, ScriptRuntime scripts, List<(int Item, int Count)> slots)
     {
         var inventory = kurt.Inventory;
-        var slots = inventory.Slots.Select(s => ((int)s.Item, s.Count)).ToList();
+        slots.Clear();
+        for (var i = 0; i < inventory.Slots.Count; i++)
+        {
+            slots.Add(((int)inventory.Slots[i].Item, inventory.Slots[i].Count));
+        }
+
         var (barHealth, barMax) = scripts.GetBar();
         return new HudState(kurt.Health, kurt.HurtFlash, kurt.WhiteFlash, kurt.Current == Kurt.Kurt.State.Dead,
             slots, inventory.Selected, inventory.SuperChainGun, barHealth, barMax, scripts.Rides.Bomber?.Shown);
+    }
+
+    /// <summary>Lays out the models before they're drawn: each arena's own, and those of the objects
+    /// there at the start. (Every level model in every arena would make the enhanced look's colour
+    /// textures for every palette: hundreds of MB.)</summary>
+    private void PreloadModels(LevelData level)
+    {
+        foreach (var arena in level.Arenas)
+        {
+            foreach (var model in arena.Models.Values)
+            {
+                _objects.Preload(model, ObjectLook(level, _looks, arena.Name));
+            }
+        }
+
+        foreach (var obj in _scripts.Objects)
+        {
+            if (obj.Model != null)
+            {
+                _objects.Preload(obj.Model, ObjectLook(level, _looks, obj.Arena));
+            }
+        }
+    }
+
+    /// <summary>Every texture of the level with each arena's palette (and the level's), on the GPU.</summary>
+    private static void Preload(MaterialResolver surfaces, LevelData level)
+    {
+        surfaces.Preload(level.Dti.Palette, [level.LevelTextures]);
+        foreach (var arena in level.Arenas)
+        {
+            surfaces.Preload(level.PaletteOf(arena), level.ArchivesOf(arena));
+        }
     }
 
     /// <summary>The visible objects, each with its arena's palette and textures.</summary>
@@ -819,16 +863,22 @@ public sealed class Viewer : IScreen
                 continue;
             }
 
-            if (!looks.TryGetValue(obj.Arena, out var look))
-            {
-                var arena = level.Arenas.Find(a => a.Name == obj.Arena);
-                look = looks[obj.Arena] = arena != null
-                    ? new ObjectView.Look(level.PaletteOf(arena), level.ArchivesOf(arena))
-                    : new ObjectView.Look(level.Dti.Palette, [level.LevelTextures]);
-            }
-
-            view.Draw(obj, look);
+            view.Draw(obj, ObjectLook(level, looks, obj.Arena));
         }
+    }
+
+    /// <summary>An arena's palette and textures for its objects (the level's outside the arenas).</summary>
+    private static ObjectView.Look ObjectLook(LevelData level, Dictionary<string, ObjectView.Look> looks, string name)
+    {
+        if (looks.TryGetValue(name, out var look))
+        {
+            return look;
+        }
+
+        var arena = level.ArenaNamed(name);
+        return looks[name] = arena != null
+            ? new ObjectView.Look(level.PaletteOf(arena), level.ArchivesOf(arena))
+            : new ObjectView.Look(level.Dti.Palette, [level.LevelTextures]);
     }
 
     /// <summary>For tests: the objects of Kurt's arena (like the Godot port's --profile).</summary>
@@ -922,11 +972,19 @@ public sealed class Viewer : IScreen
     }
 
     /// <summary>The camera pitch of Kurt's arena (DTI, degrees; camera_update 0x4174d0).</summary>
-    private static float ArenaPitch(LevelData level, string name)
+    private float ArenaPitch(string name)
     {
         const float DefaultPitch = 4f;
-        return level.Dti.Arenas.FirstOrDefault(a => a.Name == name)?.Pitch ?? DefaultPitch;
+        if (!_pitches.TryGetValue(name, out var pitch))
+        {
+            pitch = _pitches[name] = _level.EntryNamed(name)?.Pitch ?? DefaultPitch;
+        }
+
+        return pitch;
     }
+
+    /// <summary>The arenas' camera pitches, found once.</summary>
+    private readonly Dictionary<string, float> _pitches = [];
 
     /// <summary>The level's sky and the panorama its mirrors show, through the level's palette.</summary>
     private static Panorama CreatePanorama(Renderer renderer, Dti dti)

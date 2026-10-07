@@ -33,6 +33,13 @@ public sealed class RopeView(Renderer renderer, LevelData level)
     public static List<Vector3> LinesOf(MdkObject obj)
     {
         var lines = new List<Vector3>();
+        AddLines(obj, lines);
+        return lines;
+    }
+
+    /// <summary><see cref="LinesOf"/> added to <paramref name="lines"/>.</summary>
+    private static void AddLines(MdkObject obj, List<Vector3> lines)
+    {
         if (obj.RopeMask == AllLines)
         {
             for (var i = 0; i < obj.RopePoints.Length; i++)
@@ -44,7 +51,7 @@ public sealed class RopeView(Renderer renderer, LevelData level)
                 }
             }
 
-            return lines;
+            return;
         }
 
         for (var i = 0; i < Pairs; i++)
@@ -55,12 +62,13 @@ public sealed class RopeView(Renderer renderer, LevelData level)
                 lines.Add(obj.RopePoints[i * 2 + 1]);
             }
         }
-
-        return lines;
     }
 
+    /// <summary>An object's line ends (kept: no list per frame).</summary>
+    private readonly List<Vector3> _lines = [];
+
     /// <summary>Queues the ropes of the drawn objects.</summary>
-    public void Draw(IEnumerable<MdkObject> objects)
+    public void Draw(List<MdkObject> objects)
     {
         _vertices.Clear();
         _draws.Clear();
@@ -71,14 +79,19 @@ public sealed class RopeView(Renderer renderer, LevelData level)
                 continue;
             }
 
-            var lines = LinesOf(obj);
+            var lines = _lines;
+            lines.Clear();
+            AddLines(obj, lines);
             if (lines.Count == 0 || _vertices.Count + lines.Count > MaxVertices)
             {
                 continue;
             }
 
             _draws.Add((_vertices.Count, lines.Count, Material.Flat(Colour(obj.Arena, obj.RopeColor), Pass.Solid)));
-            _vertices.AddRange(lines.Select(p => new Vertex(p, Vector2.Zero)));
+            foreach (var point in lines)
+            {
+                _vertices.Add(new Vertex(point, Vector2.Zero));
+            }
         }
 
         if (_vertices.Count == 0)
@@ -98,7 +111,7 @@ public sealed class RopeView(Renderer renderer, LevelData level)
     {
         if (!_palettes.TryGetValue(arena, out var palette))
         {
-            var found = level.Arenas.Find(a => a.Name == arena);
+            var found = level.ArenaNamed(arena);
             palette = _palettes[arena] = found != null ? level.PaletteOf(found) : level.Dti.Palette;
         }
 

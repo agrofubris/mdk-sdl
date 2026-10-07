@@ -185,8 +185,17 @@ public sealed class ScriptVm(ScriptRuntime runtime, ScriptDecoder decoder)
         0 => runtime.GlobalVariables,
         1 => runtime.GetArenaState(obj.Arena).Variables,
         2 => obj.Variables,
-        _ => obj.Linked?.Variables ?? new float[VariableCount],
+        _ => obj.Linked?.Variables ?? NoVariables(),
     };
+
+    /// <summary>The variables of a missing linked object: zeros, written to in vain (one array, cleared).</summary>
+    private float[] NoVariables()
+    {
+        Array.Clear(_noVariables);
+        return _noVariables;
+    }
+
+    private readonly float[] _noVariables = new float[VariableCount];
 
     private int GetFlags(MdkObject obj, int source) => source switch
     {
@@ -220,10 +229,19 @@ public sealed class ScriptVm(ScriptRuntime runtime, ScriptDecoder decoder)
     }
 
     /// <summary>A comparison operand [op, a] or [op, a, b] (compare_values).</summary>
-    private static bool Compare(float value, object?[] cond)
+    private static bool Compare(float value, object?[] cond) =>
+        Compare(value, cond[0], cond[1], cond.Length > 2 ? cond[2] : null);
+
+    /// <summary>A missing operand's 0, boxed once.</summary>
+    private static readonly object BoxedZero = 0f;
+    /// <summary>FindObject's candidates (kept: no list per call).</summary>
+    private readonly List<MdkObject> _found = [];
+
+    /// <summary><see cref="Compare(float, object?[])"/> on separate operands (no array).</summary>
+    private static bool Compare(float value, object? op, object? first, object? second)
     {
-        var a = F(cond[1]);
-        return I(cond[0]) switch
+        var a = F(first);
+        return I(op) switch
         {
             1 => value < a,
             2 => value > a,
@@ -231,10 +249,93 @@ public sealed class ScriptVm(ScriptRuntime runtime, ScriptDecoder decoder)
             4 => value > a - Epsilon,
             5 => MathF.Abs(value - a) < Epsilon,
             6 => MathF.Abs(value - a) >= Epsilon,
-            7 => value >= a && value <= F(cond[2]),
-            8 => value <= a || value >= F(cond[2]),
+            7 => value >= a && value <= F(second),
+            8 => value <= a || value >= F(second),
             _ => false,
         };
+    }
+
+    /// <summary>The highest instance id of the live objects following <paramref name="leader"/>, or -1.
+    /// (No lambda in <see cref="Execute"/>: one capturing its object would be made at every instruction.)</summary>
+    private int LastFollowerId(MdkObject leader)
+    {
+        int? maxId = null;
+        foreach (var other in runtime.Objects)
+        {
+            if (other.Leader == leader && !other.Dead)
+            {
+                maxId = Math.Max(maxId ?? int.MinValue, other.InstanceId);
+            }
+        }
+
+        return maxId ?? -1;
+    }
+
+    /// <summary>The link of <paramref name="leader"/>'s chain (command 30) with the highest instance id, or null.</summary>
+    private MdkObject? LastChainLink(MdkObject leader)
+    {
+        const int ChainCommand = 30;
+        MdkObject? best = null;
+        foreach (var other in runtime.Objects)
+        {
+            if (IsArenaOther(leader, other) && other.Leader == leader && other.MoveCommand == ChainCommand
+                && (best == null || other.InstanceId > best.InstanceId))
+            {
+                best = other;
+            }
+        }
+
+        return best;
+    }
+
+    /// <summary>The other live objects of <paramref name="obj"/>'s arena, as
+    /// <see cref="ScriptRuntime.GetArenaObjects"/>, tested without a list.</summary>
+    private bool IsArenaOther(MdkObject obj, MdkObject other) => other != obj && !other.Dead && other.Arena == obj.Arena;
+
+    /// <summary>How the counting conditions count.</summary>
+    private enum Counting { Commandable, Alive }
+
+    private int CountOthers(MdkObject obj, object? type, Counting counting)
+    {
+        var count = 0;
+        foreach (var other in runtime.Objects)
+        {
+            if (IsArenaOther(obj, other) && Is(other.TypeName, type)
+                && (counting == Counting.Alive ? other.Health > 0 : ScriptRuntime.MayCommand(obj, other)))
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    /// <summary>The first other object of the arena of a type (and instance, unless any).</summary>
+    private MdkObject? FirstOther(MdkObject obj, object? type, int instance)
+    {
+        const int AnyInstance = -1;
+        foreach (var other in runtime.Objects)
+        {
+            if (IsArenaOther(obj, other) && Is(other.TypeName, type) && (instance == AnyInstance || other.InstanceId == instance))
+            {
+                return other;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Whether <paramref name="name"/> is "TYPE_ID" of the object (as $"{TypeName}_{InstanceId}").</summary>
+    private static bool IsNamed(MdkObject other, object? name)
+    {
+        const int MaxDigits = 11;
+        var text = (name as string ?? "").AsSpan();
+        var type = other.TypeName.AsSpan();
+        Span<char> id = stackalloc char[MaxDigits];
+        other.InstanceId.TryFormat(id, out var digits);
+        return text.Length == type.Length + 1 + digits && text[type.Length] == '_'
+            && text[..type.Length].Equals(type, StringComparison.OrdinalIgnoreCase)
+            && text[(type.Length + 1)..].Equals(id[..digits], StringComparison.OrdinalIgnoreCase);
     }
 
     private MdkObject? Bomb() => runtime.Items.Bomb is { Dead: false } bomb ? bomb : null;
@@ -250,7 +351,12 @@ public sealed class ScriptVm(ScriptRuntime runtime, ScriptDecoder decoder)
     /// <summary>Picks a weighted random target ([[weight, target], ...]).</summary>
     private int WeightedTarget(object?[] entries)
     {
-        var total = entries.Sum(e => I(L(e)[0]));
+        var total = 0;
+        foreach (var entry in entries)
+        {
+            total += I(L(entry)[0]);
+        }
+
         var r = runtime.Rng.Next(Math.Max(total, 1));
         foreach (var entry in entries)
         {
@@ -588,7 +694,7 @@ public sealed class ScriptVm(ScriptRuntime runtime, ScriptDecoder decoder)
                 }
                 else if (mode == 3)
                 {
-                    var other = runtime.GetArenaObjects(obj).FirstOrDefault(other => Is(other.TypeName, face[1]));
+                    var other = FirstOther(obj, face[1], -1);
                     if (other != null)
                     {
                         obj.Yaw = other.Yaw;
@@ -838,17 +944,25 @@ public sealed class ScriptVm(ScriptRuntime runtime, ScriptDecoder decoder)
                 break;
             case 10: // if_count_objects: objects of a type that this object may command
             {
-                var count = runtime.GetArenaObjects(obj).Count(other => Is(other.TypeName, o[0]) && ScriptRuntime.MayCommand(obj, other));
+                var count = CountOthers(obj, o[0], Counting.Commandable);
                 return Branch(obj, ins, count == I(o[1]));
             }
             case 119: // if_count_alive
             {
-                var count = runtime.GetArenaObjects(obj).Count(other => Is(other.TypeName, o[0]) && other.Health > 0);
+                var count = CountOthers(obj, o[0], Counting.Alive);
                 return Branch(obj, ins, Compare(count, L(o[1])));
             }
             case 74: // attach_to: the object named "<type>_<id>"
             {
-                var found = runtime.GetArenaObjects(obj).LastOrDefault(other => Is($"{other.TypeName}_{other.InstanceId}", o[2]));
+                MdkObject? found = null;
+                foreach (var other in runtime.Objects)
+                {
+                    if (IsArenaOther(obj, other) && IsNamed(other, o[2]))
+                    {
+                        found = other;
+                    }
+                }
+
                 if (found != null)
                 {
                     obj.Leader = found;
@@ -860,20 +974,26 @@ public sealed class ScriptVm(ScriptRuntime runtime, ScriptDecoder decoder)
             }
             case 175: // if_inventory: how many items of a type Kurt has
             {
-                var count = runtime.Kurt.Inventory.Slots.Where(slot => (int)slot.Item == I(o[0])).Sum(slot => slot.Count);
-                return Branch(obj, ins, Compare(count, [o[1], o[2], o[3] ?? 0f]));
+                var count = 0;
+                var slots = runtime.Kurt.Inventory.Slots;
+                for (var i = 0; i < slots.Count; i++)
+                {
+                    count += (int)slots[i].Item == I(o[0]) ? slots[i].Count : 0;
+                }
+
+                return Branch(obj, ins, Compare(count, o[1], o[2], o[3] ?? BoxedZero));
             }
             case 174: // if_ammo: 0 the super chain gun's ticks, 1-5 sniper ammo
             {
                 var inventory = runtime.Kurt.Inventory;
                 var kind = I(o[0]);
                 var amount = kind == 0 ? inventory.SuperChainGun : kind <= inventory.Ammo.Count ? inventory.Ammo[kind - 1] : 0;
-                return Branch(obj, ins, Compare(amount, [o[1], o[2], o[3] ?? 0f]));
+                return Branch(obj, ins, Compare(amount, o[1], o[2], o[3] ?? BoxedZero));
             }
             case 29: // spawn_chain: links that hang off this object, nearest one first
             {
                 const int ChainCommand = 30;
-                var maxId = runtime.Objects.Where(other => other.Leader == obj && !other.Dead).Select(other => other.InstanceId).DefaultIfEmpty(-1).Max();
+                var maxId = LastFollowerId(obj);
                 for (var n = I(o[0]) - 1; n >= 0; n--)
                 {
                     var link = runtime.Spawn(obj, (string)o[1]!, obj.Position, 0f, n + maxId + 1, I(o[2]), ScriptRuntime.Spawning.Plain);
@@ -1513,9 +1633,7 @@ public sealed class ScriptVm(ScriptRuntime runtime, ScriptDecoder decoder)
                 break;
             case 157: // vel_away_from (a negative speed moves towards it)
             {
-                const int AnyInstance = -1;
-                var other = runtime.GetArenaObjects(obj)
-                    .FirstOrDefault(other => Is(other.TypeName, o[0]) && (I(o[1]) == AnyInstance || other.InstanceId == I(o[1])));
+                var other = FirstOther(obj, o[0], I(o[1]));
                 var away = other == null ? Vector3.Zero : obj.Position - other.Position;
                 if (away != Vector3.Zero)
                 {
@@ -1597,9 +1715,7 @@ public sealed class ScriptVm(ScriptRuntime runtime, ScriptDecoder decoder)
             case 49: // release_children: lets go of the last followers of a chain
                 for (var i = 0; i < I(o[0]); i++)
                 {
-                    var last = runtime.GetArenaObjects(obj)
-                        .Where(other => other.Leader == obj && other.MoveCommand == 30)
-                        .Aggregate((MdkObject?)null, (best, other) => best == null || other.InstanceId > best.InstanceId ? other : best);
+                    var last = LastChainLink(obj);
                     if (last == null)
                     {
                         return Branch(obj, ins, true);
@@ -1780,6 +1896,9 @@ public sealed class ScriptVm(ScriptRuntime runtime, ScriptDecoder decoder)
 
     /// <summary>if_in_box: an object of a type (o[0] = 0xFF) inside a box (mode 2: XY [x0, y0, x1, y1];
     /// else [x0, y0, z0, x1, y1, z1], Z tested with mode 3).</summary>
+    /// <summary>A box operand's values: min x, y, z, max x, y, z (4 for a flat one).</summary>
+    private const int BoxValues = 6;
+
     private bool InBox(MdkObject obj, object?[] o)
     {
         const int ByType = 0xFF;
@@ -1790,7 +1909,13 @@ public sealed class ScriptVm(ScriptRuntime runtime, ScriptDecoder decoder)
             return false;
         }
 
-        var box = L(o[3]).Select(F).ToArray();
+        Span<float> box = stackalloc float[BoxValues];
+        var values = L(o[3]);
+        for (var i = 0; i < Math.Min(values.Length, BoxValues); i++)
+        {
+            box[i] = F(values[i]);
+        }
+
         var mode = I(o[2]);
         foreach (var other in runtime.Objects)
         {
@@ -1819,7 +1944,8 @@ public sealed class ScriptVm(ScriptRuntime runtime, ScriptDecoder decoder)
         const int ItemsMode = 2;
         const float ItemRange = 200f;
         const float ItemAbove = 9f;
-        var found = new List<MdkObject>();
+        var found = _found;
+        found.Clear();
         MdkObject? best = null;
         var bestDistance = float.PositiveInfinity;
         foreach (var other in runtime.GetArenaObjects(obj))

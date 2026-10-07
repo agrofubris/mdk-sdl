@@ -69,6 +69,12 @@ public sealed class LevelData
     /// borrow their arena's: <c>CHMO_1</c> from <c>HMO_1</c>).</summary>
     public Palette PaletteOf(Arena arena)
     {
+        // One per arena: the GPU palette and the enhanced look's colour textures are made once for it.
+        if (_palettes.TryGetValue(arena, out var made))
+        {
+            return made;
+        }
+
         var source = arena;
         if (source.PaletteRgb.Length == 0)
         {
@@ -76,8 +82,10 @@ public sealed class LevelData
             source = Mto.Has(owner) ? Mto.GetArena(owner) : Arenas[0];
         }
 
-        return Dti.Palette.WithArenaColors(source.PaletteRgb);
+        return _palettes[arena] = Dti.Palette.WithArenaColors(source.PaletteRgb);
     }
+
+    private readonly Dictionary<Arena, Palette> _palettes = [];
 
     /// <summary>Texture archives searched for an arena's materials: its own, the level's, then every
     /// other arena's (some borrow, e.g. <c>O3_*</c> in level 6).</summary>
@@ -86,6 +94,34 @@ public sealed class LevelData
         var archives = new List<TextureArchive> { arena.Textures, LevelTextures };
         archives.AddRange(Arenas.Select(a => a.Textures));
         return archives;
+    }
+
+    /// <summary>The arena of that name, or null (a loop: no closure per call).</summary>
+    public Arena? ArenaNamed(string name)
+    {
+        foreach (var arena in Arenas)
+        {
+            if (arena.Name == name)
+            {
+                return arena;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>The DTI entry of the arena of that name, or null.</summary>
+    public Dti.ArenaEntry? EntryNamed(string name)
+    {
+        foreach (var entry in Dti.Arenas)
+        {
+            if (entry.Name == name)
+            {
+                return entry;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>Whether an arena can be entered from the start: the starting one, or one with a connection.</summary>

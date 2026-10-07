@@ -98,9 +98,10 @@ filtered too (`Renderer.CanvasSampling`).
 
 - Colour textures (`Renderer.Colours.cs`, `ColourMips`): surfaces and sprites sample each index
   texture expanded through its palette to RGBA8 (premultiplied, index 0 clear), with box-filtered
-  mips and a 2D array layer per animated frame, trilinear and 16x anisotropic. Made before the
-  first frame that draws them, again when their indices or palette change (bullet holes); about
-  5.3 times the index textures' memory (20-41 MB a level).
+  mips and a 2D array layer per animated frame, trilinear and 16x anisotropic. Asked for as the
+  level's surfaces resolve (`Renderer.Prepare`) and made together before its first frame (55-75
+  MB a level, expanded on every core, through one upload buffer); rewritten in place when their
+  indices or palette change (bullet holes).
 - `palette_filtered.hlsli` (the canvas): bilinear by hand, each of the four texels through the
   palette; index 0 transparent; animated textures keep to their frame.
 - `enhanced.hlsl`: flat normals from the world position's screen derivatives (the triangle's
@@ -112,6 +113,33 @@ filtered too (`Renderer.CanvasSampling`).
   samples turned in a 4 x 4 ordered pattern, into its own target (`screen.hlsli` shared).
 - `post.hlsl`: the occlusion blurred over 4 x 4 pixels of the same plane (no grain, no shade
   across edges); glow from the scene's blurred mips, screen-blended.
+
+## Loading and frames
+
+A level loads everything it draws and plays, so its frames make nothing: no GPU resource, no
+texture expansion, no decoding, (almost) no managed allocation, so no garbage collection.
+
+```
+ load (Viewer)                                          a frame
+ ─────────────                                          ───────
+ every archive's index textures, palettes ─► GPU        draws of existing meshes and textures
+ arenas' meshes, colour textures (enhanced) ─► GPU      posed models ─► Renderer.Stream (one buffer)
+ every model × animation that moves it: poses, boxes    effects, canvas ─► dynamic meshes (kept)
+ models' layouts (by surface), Kurt's sprite frames     uploads ─► one kept staging buffer (cycled)
+ every sound converted, every script decoded            lists, pools: kept from frame to frame
+```
+
+- Objects (`ObjectView`): each model is laid out once per palette (batches by surface: part,
+  vertex, UV per corner); every frame its pose (shared, baked at load: `ScriptRuntime.PreparePoses`,
+  `ModelAnimation.Animates`) is written into the renderer's per-frame vertex stream.
+- Kept, not made per frame: debris pieces (a pool of 600), sound voices (both mixers), insets,
+  the ticks' object copies (`ListCopy`), scratch lists. No LINQ, no `foreach` over interfaces
+  and no lambda capturing a parameter (made at the method's entry) on a frame's path.
+- Still allocated: objects spawned by the scripts (`MdkObject`, about 1 KB each: shots, fire
+  sprites, explosions) and the first use of something the load missed (a level model drawn in
+  another arena's palette); `tests/alloc_test.sh` keeps a level's frames under 512 bytes.
+- Hidden, frames are paced by the last frame's fence (a shown window by its swapchain): no
+  frames pile up in memory. `--perf` waits for the GPU each frame and prints the frame costs.
 
 ## Game flow
 
@@ -145,7 +173,7 @@ The console (Grave, the key left of 1 by its scancode) and the debug overlay (F3
                                                                 session god/noclip, time scale; TakeNext:
                                                                 map, load, quit) ──► ILevelTarget?: the
                                                                 Viewer's LevelCommands (Kurt, scripts)
- Profiler (render, physics, scripts, audio), Renderer.Stats, GC,
+ Profiler (scene, render, physics, scripts, audio), Renderer.Stats (GPU wait), GC,
  IScreen.Status (the screen's lines) ──► OverlayText ──► OverlayView
 ```
 

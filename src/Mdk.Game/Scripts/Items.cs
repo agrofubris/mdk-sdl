@@ -138,6 +138,14 @@ public sealed class Items(ScriptRuntime runtime, Bni sprites)
         }
     }
 
+    /// <summary>The items' animations the game plays (a level's load bakes them).</summary>
+    public IEnumerable<ModelAnimation> Animations() =>
+        new[] { DecoyThrown, DecoyWalk, BombAnimation, MortarAnimation, Nuke, HamsterRun, HamsterIdle }.Select(GetAnimation).OfType<ModelAnimation>();
+
+    /// <summary>SW_H150's run and idle (<see cref="ObjectBehaviors"/>).</summary>
+    public const string HamsterRun = "H150_R";
+    public const string HamsterIdle = "H150_I";
+
     /// <summary>A model animation of the items (TRAVSPRT.BNI: SW_INTER, SW_DUM_I, H150_R...).</summary>
     public ModelAnimation? GetAnimation(string name)
     {
@@ -438,7 +446,8 @@ public sealed class Items(ScriptRuntime runtime, Bni sprites)
     /// <summary>Moves the twisters of Kurt's arena (one tick).</summary>
     public void UpdateTwisters()
     {
-        foreach (var twister in _twisters.ToList())
+        using var copy = ListCopy<Twister>.Of(_twisters);
+        foreach (var twister in copy)
         {
             if (twister.Arena != runtime.CurrentArena || twister.Tick(_twisters))
             {
@@ -474,7 +483,8 @@ public sealed class Items(ScriptRuntime runtime, Bni sprites)
         }
 
         runtime.RaiseShake(MortarShake);
-        foreach (var other in runtime.Objects.ToList())
+        using var copy = ListCopy<MdkObject>.Of(runtime.Objects);
+        foreach (var other in copy)
         {
             if (other == obj || other.Dead || other.Arena != obj.Arena || (other.Flags & MortarIgnored) != 0
                 || MortarSpared.Contains(other.TypeName.ToUpperInvariant()))
@@ -612,7 +622,8 @@ public sealed class Items(ScriptRuntime runtime, Bni sprites)
     private void BlastObjects(Vector3 center, int damage, float radius, int hitType, MdkObject? source, Kills kills)
     {
         const int BlastEvent = -2;
-        foreach (var obj in runtime.Objects.ToList())
+        using var copy = ListCopy<MdkObject>.Of(runtime.Objects);
+        foreach (var obj in copy)
         {
             if (obj.Dead || obj.Arena != runtime.CurrentArena || obj.Health == 0
                 || (obj.Flags & (MdkObject.FlagNotSolid | MdkObject.FlagNotTarget)) != 0)

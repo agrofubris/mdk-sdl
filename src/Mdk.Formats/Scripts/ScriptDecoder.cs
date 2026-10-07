@@ -65,6 +65,48 @@ public sealed partial class ScriptDecoder(byte[] bytes)
         return _cache[pc] = new Instruction(pc, opcode, [.. operands], _p, _action);
     }
 
+    /// <summary>Decodes every instruction reachable from <paramref name="starts"/> into the cache (a
+    /// level's load: the scripts then run without decoding); returns how many. The retail dialect only.</summary>
+    public int Preload(IEnumerable<int> starts)
+    {
+        if (_dialect != ScriptDialect.Retail)
+        {
+            return 0;
+        }
+
+        var seen = new HashSet<int>();
+        var work = new Stack<int>(starts);
+        while (work.Count > 0)
+        {
+            var p = work.Pop();
+            while (seen.Add(p))
+            {
+                var ins = Decode(p);
+                if (ins == null || ins.Opcode == End)
+                {
+                    break;
+                }
+
+                foreach (var target in Targets(ins))
+                {
+                    work.Push(target);
+                }
+
+                if (ScriptOpcodes.NoFallthrough.Contains(ins.Opcode))
+                {
+                    break;
+                }
+
+                p = ins.Next;
+            }
+        }
+
+        return seen.Count;
+    }
+
+    /// <summary>The instructions decoded so far (after <see cref="Preload"/>: every reachable one).</summary>
+    public IEnumerable<Instruction> Decoded => _cache.Values.OfType<Instruction>();
+
     /// <summary>The code offsets an instruction can continue to besides the next one.</summary>
     public static List<int> Targets(Instruction ins)
     {

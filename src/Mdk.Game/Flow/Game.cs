@@ -44,6 +44,9 @@ public sealed record GameOptions(Start Start, ViewerOptions Level)
     public bool? Gore { get; init; }
     /// <summary>Keys pressed once at given times (--press; tests).</summary>
     public TestPresses? Presses { get; init; }
+    /// <summary>Measure the frames after this many seconds of game time, waiting for the GPU each
+    /// frame, and print their costs at the end (--perf; tests).</summary>
+    public float? Perf { get; init; }
 }
 
 /// <summary>The game: its screens one after the other, as the original's game states.
@@ -92,6 +95,7 @@ public sealed class Game : IDisposable
     private bool _levelShot;
     /// <summary>The level that ended, for its counts.</summary>
     private Viewer? _viewer;
+    private readonly PerfLog? _perf;
 
     public Game(MdkData data, GameOptions options)
     {
@@ -125,10 +129,17 @@ public sealed class Game : IDisposable
         ConsoleCommands.Register(registry, _commands);
         _dev = new DevUi(new DevConsole(registry, _ui.Dev.History, _ui.Dev.Log, Console.WriteLine), () => _ui.Dev.ToggleOverlay());
         var devView = new DevUiView(_renderer, new Fonts(_renderer, _ui.Fti).Small);
-        _renderer.Overlay = () => devView.Draw(_dev, _ui.Dev, () => _screen?.Status ?? [Loading]);
+        // Made once: a lambda made in the overlay's would be made every frame.
+        Func<IReadOnlyList<string>> status = () => _screen?.Status ?? [Loading];
+        _renderer.Overlay = () => devView.Draw(_dev, _ui.Dev, status);
         _scope = _renderer.Mark();
         _soak = options.Level.Soak is { } seed ? new SoakKeys(seed) : null;
         _soakMenus = options.Start is Start.Menu or Start.Statistics or Start.Briefing or Start.EndMovie;
+        if (options.Perf is { } warmup)
+        {
+            _perf = new PerfLog(warmup);
+            _renderer.Sync = GpuSync.Wait;
+        }
     }
 
     /// <summary>Runs the screens until the window closes or one quits.</summary>
@@ -181,16 +192,22 @@ public sealed class Game : IDisposable
             }
 
             _ui.Dev.Profiler.EndFrame();
+            _perf?.Frame(time, _ui.Dev.Profiler, _renderer.Stats);
             if (shot != null)
             {
                 Console.WriteLine($"Saved {shot}");
-                return;
+                break;
             }
 
             if (next != Event.None)
             {
                 Handle(next);
             }
+        }
+
+        foreach (var line in _perf?.Report() ?? [])
+        {
+            Console.WriteLine(line);
         }
     }
 
@@ -312,7 +329,9 @@ public sealed class Game : IDisposable
         Show(() => null);
         var test = _firstLevel ? _options.Level : new ViewerOptions(0, null, null, 0f, _options.Level.Sound);
         _levelShot = _firstLevel && _options.Start == Start.Level && test.Screenshot != null;
+        var loading = Stopwatch.StartNew();
         _viewer = new Viewer(_ui, test with { Level = _state.Level }, _state);
+        _perf?.Loaded(loading.Elapsed);
         _screen = _viewer;
         if (_firstLevel && _options.Save is { } name && _saves.Write(name, _state.Save(SaveKind.LevelStart)))
         {

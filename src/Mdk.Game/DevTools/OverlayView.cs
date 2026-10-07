@@ -14,13 +14,19 @@ public sealed class OverlayView(DevTextView text)
 
     public void Draw(IReadOnlyList<string> lines, float top)
     {
-        var width = lines.Max(text.Width) + 2f * Margin;
+        var widest = 0f;
+        for (var i = 0; i < lines.Count; i++)
+        {
+            widest = MathF.Max(widest, text.Width(lines[i]));
+        }
+
+        var width = widest + 2f * Margin;
         var height = lines.Count * DevTextView.LineHeight + 2f * Margin;
         text.Fill(new RectangleF(0f, top, width, height), Background);
         var baseline = top + Margin + Ascent;
-        foreach (var line in lines)
+        for (var i = 0; i < lines.Count; i++)
         {
-            text.Text(line, Margin, baseline);
+            text.Text(lines[i], Margin, baseline);
             baseline += DevTextView.LineHeight;
         }
     }

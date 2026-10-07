@@ -7,6 +7,7 @@ namespace Mdk.Engine.Render;
 /// <code>
 ///   level 0   r g r g      level 1   (r+g+r+g)/4 ...
 ///             r g r g
+///   chain: [level 0][level 1]...[1 x 1], written into a buffer the caller keeps
 /// </code></summary>
 public static class ColourMips
 {
@@ -18,19 +19,26 @@ public static class ColourMips
     public static byte[] Expand(ReadOnlySpan<byte> indices, ReadOnlySpan<byte> palette)
     {
         var rgba = new byte[indices.Length * Channels];
+        Expand(indices, palette, rgba);
+        return rgba;
+    }
+
+    /// <summary><see cref="Expand(ReadOnlySpan{byte}, ReadOnlySpan{byte})"/> into <paramref name="rgba"/>.</summary>
+    public static void Expand(ReadOnlySpan<byte> indices, ReadOnlySpan<byte> palette, Span<byte> rgba)
+    {
         for (var i = 0; i < indices.Length; i++)
         {
             var colour = indices[i] * Channels;
+            var texel = rgba.Slice(i * Channels, Channels);
             if (indices[i] == 0 || colour + Channels > palette.Length)
             {
+                texel.Clear();
                 continue;
             }
 
-            palette.Slice(colour, Alpha).CopyTo(rgba.AsSpan(i * Channels));
-            rgba[i * Channels + Alpha] = Opaque;
+            palette.Slice(colour, Alpha).CopyTo(texel);
+            texel[Alpha] = Opaque;
         }
-
-        return rgba;
     }
 
     /// <summary>Levels from <paramref name="width"/> x <paramref name="height"/> down to 1 x 1.</summary>
@@ -39,25 +47,62 @@ public static class ColourMips
     /// <summary>A size's next level.</summary>
     public static int Half(int size) => Math.Max(size / 2, 1);
 
+    /// <summary>Bytes of a level.</summary>
+    public static int LevelSize(int width, int height) => width * height * Channels;
+
+    /// <summary>Bytes of all levels of a <paramref name="width"/> x <paramref name="height"/> image.</summary>
+    public static int ChainSize(int width, int height)
+    {
+        var size = 0;
+        var count = Levels(width, height);
+        for (var level = 0; level < count; level++)
+        {
+            size += LevelSize(width, height);
+            (width, height) = (Half(width), Half(height));
+        }
+
+        return size;
+    }
+
     /// <summary>All levels of an RGBA8 image, the image first.</summary>
     public static List<byte[]> Chain(byte[] rgba, int width, int height)
     {
-        var levels = new List<byte[]> { rgba };
-        var count = Levels(width, height);
-        for (var level = 1; level < count; level++)
+        var chain = new byte[ChainSize(width, height)];
+        rgba.CopyTo(chain, 0);
+        FillChain(chain, width, height);
+
+        var levels = new List<byte[]>();
+        var offset = 0;
+        for (var level = 0; level < Levels(width, height); level++)
         {
-            levels.Add(Downsample(levels[^1], width, height));
-            (width, height) = (Half(width), Half(height));
+            var (w, h) = (width >> level, height >> level);
+            var size = LevelSize(Math.Max(w, 1), Math.Max(h, 1));
+            levels.Add(chain.AsSpan(offset, size).ToArray());
+            offset += size;
         }
 
         return levels;
     }
 
+    /// <summary>Fills the levels after the first (already in <paramref name="chain"/>'s start).</summary>
+    public static void FillChain(Span<byte> chain, int width, int height)
+    {
+        var offset = 0;
+        var count = Levels(width, height);
+        for (var level = 1; level < count; level++)
+        {
+            var size = LevelSize(width, height);
+            var next = LevelSize(Half(width), Half(height));
+            Downsample(chain.Slice(offset, size), width, height, chain.Slice(offset + size, next));
+            offset += size;
+            (width, height) = (Half(width), Half(height));
+        }
+    }
+
     /// <summary>The next level: each texel the mean of the 2 x 2 (up to 3 x 3 at odd edges) it covers.</summary>
-    private static byte[] Downsample(byte[] rgba, int width, int height)
+    private static void Downsample(ReadOnlySpan<byte> rgba, int width, int height, Span<byte> result)
     {
         var (halfWidth, halfHeight) = (Half(width), Half(height));
-        var result = new byte[halfWidth * halfHeight * Channels];
         Span<int> sum = stackalloc int[Channels];
         for (var y = 0; y < halfHeight; y++)
         {
@@ -85,8 +130,6 @@ public static class ColourMips
                 }
             }
         }
-
-        return result;
     }
 
     /// <summary>The source texels [first, last) a texel of the next level covers: two, the whole

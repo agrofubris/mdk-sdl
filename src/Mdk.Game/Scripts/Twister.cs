@@ -98,7 +98,8 @@ public sealed class Twister(ScriptRuntime runtime, string arena, Vector3 origin,
     /// <summary>The objects it's inside lose 2 health a tick (and the twister a tick of life).</summary>
     private void HurtObjects()
     {
-        foreach (var obj in runtime.Objects.ToList())
+        using var copy = ListCopy<MdkObject>.Of(runtime.Objects);
+        foreach (var obj in copy)
         {
             if (obj.Dead || obj.Arena != Arena || obj.Health == 0 || (obj.Flags & (MdkObject.FlagNotSolid | MdkObject.FlagNotTarget)) != 0)
             {

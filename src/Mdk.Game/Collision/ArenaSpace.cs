@@ -32,15 +32,39 @@ public sealed partial class ArenaSpace
     private const int Slides = 4;
     private const float BoundsMargin = 2f;
 
+    /// <summary>The arenas, smallest first (equal volumes in the order added).</summary>
     private readonly List<(Bsp Bsp, Vector3 Min, Vector3 Max, float Volume)> _arenas = [];
     /// <summary>The arenas Kurt collides with, his first (empty: those around him by bounds).</summary>
-    private List<Bsp> _solid = [];
+    private readonly List<Bsp> _solid = [];
+    /// <summary>The queries' arenas around points (kept: no list per query).</summary>
+    private readonly List<Bsp> _around = [];
+    private readonly List<Bsp> _kurts = [];
 
     /// <summary>Kurt collides with his arena and the active second one only (0x465e34); rays and
     /// objects still see every arena.</summary>
     public void SetSolid(IReadOnlyList<string> arenas)
     {
-        _solid = arenas.Select(name => _arenas.Find(a => a.Bsp.Arena.Name == name).Bsp).Where(b => b != null).ToList();
+        _solid.Clear();
+        for (var i = 0; i < arenas.Count; i++)
+        {
+            if (Named(arenas[i]) is { } bsp)
+            {
+                _solid.Add(bsp);
+            }
+        }
+    }
+
+    private Bsp? Named(string name)
+    {
+        foreach (var arena in _arenas)
+        {
+            if (arena.Bsp.Arena.Name == name)
+            {
+                return arena.Bsp;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>Adds an arena once (a teleport may add one no connection leads to).</summary>
@@ -54,21 +78,56 @@ public sealed partial class ArenaSpace
         var min = arena.Vertices.Aggregate(Vector3.Min);
         var max = arena.Vertices.Aggregate(Vector3.Max);
         var size = max - min;
-        _arenas.Add((new Bsp(arena), min, max, size.X * size.Y * size.Z));
+        var volume = size.X * size.Y * size.Z;
+        var at = _arenas.Count;
+        while (at > 0 && _arenas[at - 1].Volume > volume)
+        {
+            at--;
+        }
+
+        _arenas.Insert(at, (new Bsp(arena), min, max, volume));
     }
 
     /// <summary>The arenas around a point, smallest first.</summary>
-    public IEnumerable<Bsp> At(Vector3 point) => _arenas
-        .Where(a => Contains(a.Min, a.Max, point))
-        .OrderBy(a => a.Volume)
-        .Select(a => a.Bsp);
+    public IEnumerable<Bsp> At(Vector3 point)
+    {
+        var around = new List<Bsp>();
+        AddAt(point, around);
+        return around;
+    }
+
+    /// <summary>Adds the arenas around a point not in <paramref name="arenas"/> yet, smallest first.</summary>
+    private void AddAt(Vector3 point, List<Bsp> arenas)
+    {
+        foreach (var arena in _arenas)
+        {
+            if (Contains(arena.Min, arena.Max, point) && !arenas.Contains(arena.Bsp))
+            {
+                arenas.Add(arena.Bsp);
+            }
+        }
+    }
+
+    /// <summary>The smallest arena around a point, or null.</summary>
+    private Bsp? First(Vector3 point)
+    {
+        foreach (var arena in _arenas)
+        {
+            if (Contains(arena.Min, arena.Max, point))
+            {
+                return arena.Bsp;
+            }
+        }
+
+        return null;
+    }
 
     private static bool Contains(Vector3 min, Vector3 max, Vector3 p) =>
         p.X >= min.X - BoundsMargin && p.Y >= min.Y - BoundsMargin && p.Z >= min.Z - BoundsMargin
         && p.X <= max.X + BoundsMargin && p.Y <= max.Y + BoundsMargin && p.Z <= max.Z + BoundsMargin;
 
     /// <summary>The name of the arena around a point, or null.</summary>
-    public string? ArenaAt(Vector3 point) => At(point).FirstOrDefault()?.Arena.Name;
+    public string? ArenaAt(Vector3 point) => First(point)?.Arena.Name;
 
     /// <summary>Moves Kurt's feet by <paramref name="delta"/>, sliding along faces met obliquely
     /// enough (<c>(D·n)² ≤ slideK·|D|²</c>).</summary>
@@ -76,7 +135,15 @@ public sealed partial class ArenaSpace
     {
         var (box, lift) = motion == Motion.Walk ? (WalkBox, WalkLift) : (FallBox, FallLift);
         var a = feet + new Vector3(0f, 0f, box.Z + lift);
-        var arenas = _solid.Count > 0 ? _solid : At(feet).Union(At(feet + delta)).ToList();
+        var arenas = _solid;
+        if (arenas.Count == 0)
+        {
+            arenas = _around;
+            arenas.Clear();
+            AddAt(feet, arenas);
+            AddAt(feet + delta, arenas);
+        }
+
         if (arenas.Count == 0)
         {
             return new Result(feet + delta, Bsp.None, null, Bsp.None);
@@ -85,8 +152,9 @@ public sealed partial class ArenaSpace
         var own = arenas[0];
         var triangle = own.SweepBox(a, a + delta, box, Slides, slideK, out var end, out var node);
         var hit = own;
-        foreach (var other in arenas.Skip(1))
+        for (var i = 1; i < arenas.Count; i++)
         {
+            var other = arenas[i];
             if (triangle != Bsp.None)
             {
                 break;
@@ -116,15 +184,18 @@ public sealed partial class ArenaSpace
     }
 
     /// <summary>The owners of the solids Kurt's walking box at <paramref name="feet"/> touches or is in.</summary>
-    public static IEnumerable<object> Touching(Vector3 feet, IReadOnlyList<Solids.Solid> solids) =>
-        Solids.Touching(feet + new Vector3(0f, 0f, WalkBox.Z + WalkLift), WalkBox, solids);
+    public static void Touching(Vector3 feet, IReadOnlyList<Solids.Solid> solids, List<object> owners) =>
+        Solids.Touching(feet + new Vector3(0f, 0f, WalkBox.Z + WalkLift), WalkBox, solids, owners);
 
     /// <summary>The nearest floor a segment crosses (0x421708), in any arena around its ends.</summary>
     public bool Floor(Vector3 from, Vector3 to, out Vector3 point)
     {
         point = to;
         var best = float.MaxValue;
-        foreach (var bsp in At(from).Union(At(to)))
+        _around.Clear();
+        AddAt(from, _around);
+        AddAt(to, _around);
+        foreach (var bsp in _around)
         {
             if (bsp.Segment(from, to, Bsp.SegmentMode.Floor, out var hit) == Bsp.None)
             {

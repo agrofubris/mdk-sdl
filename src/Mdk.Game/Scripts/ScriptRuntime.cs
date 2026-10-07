@@ -262,7 +262,28 @@ public sealed partial class ScriptRuntime
     public IReadOnlyList<string> DrawnArenas => _drawnArenas;
 
     /// <summary>The arenas Kurt collides with: the drawn ones, not the second on the snowboard (0x465e34).</summary>
-    public IReadOnlyList<string> SolidArenas => Rides.OnBoard() ? _drawnArenas.Take(1).ToList() : _drawnArenas;
+    public IReadOnlyList<string> SolidArenas
+    {
+        get
+        {
+            if (!Rides.OnBoard())
+            {
+                return _drawnArenas;
+            }
+
+            _solidFirst.Clear();
+            if (_drawnArenas.Count > 0)
+            {
+                _solidFirst.Add(_drawnArenas[0]);
+            }
+
+            return _solidFirst;
+        }
+    }
+
+    /// <summary>On the board, Kurt's arena alone (kept: no list per step).</summary>
+    private readonly List<string> _solidFirst = [];
+
     public readonly List<MdkObject> Objects = [];
     /// <summary>camera_track (opcode 203): the camera pitch the scripts want (0x573918), for this
     /// many more ticks (0x5739b0).</summary>
@@ -283,8 +304,10 @@ public sealed partial class ScriptRuntime
     private readonly List<MdkObject> _boxes = [];
     /// <summary>The voices following each object: they stop when it's removed.</summary>
     private readonly Dictionary<MdkObject, List<int>> _following = [];
-    private List<string> _loadedArenas = [];
-    private List<string> _drawnArenas = [];
+    /// <summary>The voice lists of removed objects, reused.</summary>
+    private readonly Stack<List<int>> _spareVoiceLists = new();
+    private readonly List<string> _loadedArenas = [];
+    private readonly List<string> _drawnArenas = [];
     /// <summary>The one arena (not corridor) loaded (_g_current_arena); its corridors are loaded too.</summary>
     private string _residentArena = "";
     private int _nextInstance = 1000;
@@ -325,7 +348,10 @@ public sealed partial class ScriptRuntime
         Mixer = mixer;
         _space = space;
         _groups = groups;
-        Vm = new ScriptVm(this, ScriptDecoder.For(cmi));
+        var decoder = ScriptDecoder.For(cmi);
+        decoder.Preload(cmi.EntryPoints());
+        _decoder = decoder;
+        Vm = new ScriptVm(this, decoder);
         Motion = new ObjectMotion(this);
         Behaviors = new ObjectBehaviors(this);
         foreach (var arena in level.Arenas)
@@ -413,7 +439,7 @@ public sealed partial class ScriptRuntime
     private void EnterArena(string arena)
     {
         ArenaEntered?.Invoke(arena);
-        if (Level.Arenas.Find(a => a.Name == arena) is { } entered)
+        if (Level.ArenaNamed(arena) is { } entered)
         {
             _space.Add(entered);
         }
@@ -494,11 +520,31 @@ public sealed partial class ScriptRuntime
             r.Type == LevelData.Connection && _connections.GetValueOrDefault((_residentArena, r.Id)) == corridor);
     }
 
+    /// <summary>Whether two lists hold the same names in the same order.</summary>
+    private static bool Same(List<string> a, List<string> b)
+    {
+        if (a.Count != b.Count)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < a.Count; i++)
+        {
+            if (a[i] != b[i])
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     /// <summary>The triangle groups of his arena that Kurt ran into this tick get a hit (0x46634e;
     /// how the snowboard breaks the ice walls).</summary>
     private void KurtTouchesGroups()
     {
-        var touched = new HashSet<int>();
+        var touched = _touchedGroups;
+        touched.Clear();
         foreach (var (arena, triangle) in Kurt.TakeContacts())
         {
             var group = TriangleGroup(arena, triangle);
@@ -591,21 +637,26 @@ public sealed partial class ScriptRuntime
     /// thrown items there go), and started again when it comes back (arena_activate 0x43f8e0).</summary>
     private void UpdateArenas()
     {
-        var loaded = new List<string> { CurrentArena };
+        var loaded = _loadedNext;
+        loaded.Clear();
+        loaded.Add(CurrentArena);
         if (SecondArena.Length != 0)
         {
             loaded.Add(SecondArena);
         }
 
-        var drawn = new List<string> { CurrentArena };
+        var drawn = _drawnNext;
+        drawn.Clear();
+        drawn.Add(CurrentArena);
         if (SecondActive && SecondArena.Length != 0)
         {
             drawn.Add(SecondArena);
         }
 
-        if (!loaded.SequenceEqual(_loadedArenas))
+        if (!Same(loaded, _loadedArenas))
         {
-            foreach (var obj in Objects.ToList())
+            using var copy = ListCopy<MdkObject>.Of(Objects);
+            foreach (var obj in copy)
             {
                 if (_loadedArenas.Contains(obj.Arena) && !loaded.Contains(obj.Arena))
                 {
@@ -626,10 +677,12 @@ public sealed partial class ScriptRuntime
                 }
             }
 
-            _loadedArenas = loaded;
+            _loadedArenas.Clear();
+            _loadedArenas.AddRange(loaded);
         }
 
-        _drawnArenas = drawn;
+        _drawnArenas.Clear();
+        _drawnArenas.AddRange(drawn);
         foreach (var obj in Objects)
         {
             obj.Visible = drawn.Contains(obj.Arena) && !Rides.Hides(obj);
@@ -768,8 +821,26 @@ public sealed partial class ScriptRuntime
     /// <summary>Whether a move from a to b on one axis is within [min, max] or crosses it.</summary>
     private static bool Spans(float a, float b, float min, float max) => MathF.Max(a, b) >= min && MathF.Min(a, b) <= max;
 
-    private IEnumerable<Dti.Record> ArenaRecords(string arena) =>
-        Level.Dti.Arenas.FirstOrDefault(a => a.Name == arena)?.Records ?? [];
+    private List<Dti.Record> ArenaRecords(string arena)
+    {
+        if (!_records.TryGetValue(arena, out var records))
+        {
+            records = _records[arena] = Level.EntryNamed(arena)?.Records ?? [];
+        }
+
+        return records;
+    }
+
+    /// <summary>Each arena's DTI records, by name (found once).</summary>
+    private readonly Dictionary<string, List<Dti.Record>> _records = [];
+    /// <summary>The ticks' scratch lists (kept: no list per tick).</summary>
+    private readonly List<Dti.Record> _spotRecords = [];
+    private readonly List<int> _weights = [];
+    private readonly List<Vector3> _spots = [];
+    private readonly HashSet<int> _touchedGroups = [];
+    private readonly List<string> _loadedNext = [];
+    private readonly List<string> _drawnNext = [];
+    private static readonly int[] NearerFirst = [0, 0, 0, 1, 1, 2];
 
     /// <summary>Pairs the connection records (DTI type 6) of the arenas by their id (0x41c22c).</summary>
     private void FindConnections()
@@ -878,7 +949,8 @@ public sealed partial class ScriptRuntime
         UpdateSniperTarget();
 
         // Only the objects of Kurt's arena and of the active second arena are updated (0x43c7dc).
-        foreach (var obj in Objects.ToList())
+        using var objects = ListCopy<MdkObject>.Of(Objects);
+        foreach (var obj in objects)
         {
             if (obj.Dead || !IsLiveArena(obj.Arena))
             {
@@ -1136,7 +1208,7 @@ public sealed partial class ScriptRuntime
 
     /// <summary>The DTI camera pitch of Kurt's arena (arena+0x462).</summary>
     private float ArenaCameraPitch() =>
-        Level.Dti.Arenas.FirstOrDefault(a => a.Name == CurrentArena)?.Pitch ?? DefaultCameraPitch;
+        Level.EntryNamed(CurrentArena)?.Pitch ?? DefaultCameraPitch;
 
     /// <summary>The scope's target lock (during projection in the original, 0x43b65c): the nearest
     /// object whose screen box overlaps a 64-pixel square around the crosshair (640x480 pixels), not
@@ -1247,7 +1319,7 @@ public sealed partial class ScriptRuntime
     /// <summary>A texture as an arena's objects find it (their archives, see <see cref="LevelData.ArchivesOf"/>).</summary>
     private Texture? ArenaTexture(string arena, string name)
     {
-        var found = Level.Arenas.Find(a => a.Name == arena);
+        var found = Level.ArenaNamed(arena);
         var archives = found != null ? Level.ArchivesOf(found) : [Level.LevelTextures];
         return archives.Select(a => a.Textures.GetValueOrDefault(name)).FirstOrDefault(t => t != null);
     }
@@ -1281,7 +1353,8 @@ public sealed partial class ScriptRuntime
     private void CutsceneTick()
     {
         Kurt.Visible = Cutscene is CutsceneStrike or CutsceneEnd;
-        foreach (var obj in Objects.ToList())
+        using var copy = ListCopy<MdkObject>.Of(Objects);
+        foreach (var obj in copy)
         {
             if (obj.Dead || obj.Arena != CurrentArena)
             {
@@ -1509,6 +1582,34 @@ public sealed partial class ScriptRuntime
     /// (FIRE, PULSE). The triangles themselves aren't drawn.</summary>
     public MdkObject SpawnBox(MdkObject parent, Vector3 position, Vector3 size, string texture, int script)
     {
+        // One model per size and texture: the models' poses and boxes are kept by model.
+        if (!_boxModels.TryGetValue((size, texture), out var model))
+        {
+            model = _boxModels[(size, texture)] = BoxModel(size, texture);
+        }
+
+        var obj = new MdkObject
+        {
+            Arena = parent.Arena,
+            TypeName = texture,
+            Model = model,
+            InstanceId = _nextInstance++,
+            Position = position,
+            SpawnPosition = position,
+            PreviousPosition = position,
+            Restart = script,
+        };
+        Objects.Add(obj);
+        _boxes.RemoveAll(b => b.Dead);
+        _boxes.Add(obj);
+        return obj;
+    }
+
+    private readonly Dictionary<(Vector3, string), Model> _boxModels = [];
+
+    /// <summary>model_create_box (0x404188): 8 corners, 12 triangles, not drawn.</summary>
+    private static Model BoxModel(Vector3 size, string texture)
+    {
         const int NoMaterial = -256;
         int[][] triangles =
         [
@@ -1527,26 +1628,12 @@ public sealed partial class ScriptRuntime
             TriangleUvs = new Vector2[triangles.Length * 3],
             Bounds = bounds,
         };
-        var model = new Model { Name = texture, PartList = [part], Bounds = bounds };
-        var obj = new MdkObject
-        {
-            Arena = parent.Arena,
-            TypeName = texture,
-            Model = model,
-            InstanceId = _nextInstance++,
-            Position = position,
-            SpawnPosition = position,
-            PreviousPosition = position,
-            Restart = script,
-        };
-        Objects.Add(obj);
-        _boxes.RemoveAll(b => b.Dead);
-        _boxes.Add(obj);
-        return obj;
+        return new Model { Name = texture, PartList = [part], Bounds = bounds };
     }
 
-    /// <summary>The objects made by spawn_box: their model's name is the texture their sprite shows.</summary>
-    public IEnumerable<MdkObject> Boxes => _boxes.Where(b => !b.Dead);
+    /// <summary>The objects made by spawn_box (dead ones too: skip them): their model's name is the
+    /// texture their sprite shows.</summary>
+    public List<MdkObject> Boxes => _boxes;
 
     public void Remove(MdkObject obj)
     {
@@ -1561,7 +1648,13 @@ public sealed partial class ScriptRuntime
         Mixer.StopVoice(obj.TrackedVoice);
         if (_following.Remove(obj, out var voices))
         {
-            voices.ForEach(Mixer.StopVoice);
+            foreach (var voice in voices)
+            {
+                Mixer.StopVoice(voice);
+            }
+
+            voices.Clear();
+            _spareVoiceLists.Push(voices);
         }
 
         obj.LoopSound = 0;
@@ -1859,7 +1952,7 @@ public sealed partial class ScriptRuntime
     /// <summary>The centres of a group's triangles, none while the group isn't solid (blasts).</summary>
     public IEnumerable<Vector3> GroupCenters(string arena, int group)
     {
-        var data = Level.Arenas.Find(a => a.Name == arena);
+        var data = Level.ArenaNamed(arena);
         var triangles = _groups.Get(arena, group);
         if (data == null || triangles == null || (triangles.State & TriangleGroups.State.NotSolid) != 0)
         {
@@ -2140,7 +2233,7 @@ public sealed partial class ScriptRuntime
     /// <summary>The triangles of an arena's group with their current material, for shattering.</summary>
     private Debris.Group? GroupFacets(string arena, int number)
     {
-        var data = Level.Arenas.Find(a => a.Name == arena);
+        var data = Level.ArenaNamed(arena);
         var group = _groups.Get(arena, number);
         if (data == null || group == null || number == 0)
         {
@@ -2219,7 +2312,7 @@ public sealed partial class ScriptRuntime
     {
         const int PickCommand = 221;
         obj.MoveCommand = 0;
-        var records = ArenaRecords(obj.Arena).Where(r => r.Type == DtiWaypoint).ToList();
+        var records = OfType(ArenaRecords(obj.Arena), DtiWaypoint);
         var nearestId = 0;
         if (mode == 1)
         {
@@ -2235,7 +2328,8 @@ public sealed partial class ScriptRuntime
             }
         }
 
-        var weights = new List<int>();
+        var weights = _weights;
+        weights.Clear();
         var total = 0;
         foreach (var record in records)
         {
@@ -2294,8 +2388,9 @@ public sealed partial class ScriptRuntime
         const int AdvanceCommand = 197;
         obj.MoveCommand = 0;
         var toKurt = Distance2D(obj.Position, KurtPosition);
-        var spots = new List<Vector3>();
-        foreach (var record in ArenaRecords(obj.Arena).Where(r => r.Type == DtiCover))
+        var spots = _spots;
+        spots.Clear();
+        foreach (var record in OfType(ArenaRecords(obj.Arena), DtiCover))
         {
             var spot = record.Position;
             var distance = Distance2D(spot, obj.Position);
@@ -2325,11 +2420,12 @@ public sealed partial class ScriptRuntime
     public void FindCoverSpot(MdkObject obj)
     {
         const int CoverCommand = 43;
-        int[] nearerFirst = [0, 0, 0, 1, 1, 2];
+        var nearerFirst = NearerFirst;
         var up = new Vector3(0f, 0f, EyeHeight);
         var toKurt = obj.DistanceTo(KurtPosition);
-        var spots = new List<Vector3>();
-        foreach (var record in ArenaRecords(obj.Arena).Where(r => r.Type == DtiCover))
+        var spots = _spots;
+        spots.Clear();
+        foreach (var record in OfType(ArenaRecords(obj.Arena), DtiCover))
         {
             var spot = record.Position;
             var distance = obj.DistanceTo(spot);
@@ -2359,6 +2455,21 @@ public sealed partial class ScriptRuntime
         obj.MoveDestination = destination;
         obj.Waypoint = destination;
         obj.Path = 0;
+    }
+
+    /// <summary>The records of a type, in a scratch list (valid until the next call).</summary>
+    private List<Dti.Record> OfType(List<Dti.Record> records, uint type)
+    {
+        _spotRecords.Clear();
+        foreach (var record in records)
+        {
+            if (record.Type == type)
+            {
+                _spotRecords.Add(record);
+            }
+        }
+
+        return _spotRecords;
     }
 
     /// <summary>Plays a sound at a point, independently of any object.</summary>
@@ -2435,7 +2546,8 @@ public sealed partial class ScriptRuntime
     public void CollectPickups()
     {
         const float ShrinkTicks = 30f;
-        foreach (var obj in Objects.ToList())
+        using var objects = ListCopy<MdkObject>.Of(Objects);
+        foreach (var obj in objects)
         {
             if (obj.Dead || obj.Arena != CurrentArena || (obj.Flags & MdkObject.FlagPickup) == 0
                 || (obj.Flags & (MdkObject.FlagCollected | MdkObject.FlagNotSolid)) != 0)
@@ -2585,7 +2697,9 @@ public sealed partial class ScriptRuntime
     /// and doors' LOCK parts.</summary>
     private IReadOnlyList<Solids.Solid> SolidsWithin(Box region)
     {
-        var solids = new List<Solids.Solid>();
+        // Kurt uses each answer at once: one list does.
+        var solids = _solidsWithin;
+        solids.Clear();
         foreach (var obj in Objects)
         {
             if (obj.Dead || obj.Arena != CurrentArena || obj.Health == 0 || obj.Model == null || obj.Footing is not { } footing
@@ -2608,6 +2722,8 @@ public sealed partial class ScriptRuntime
 
         return solids;
     }
+
+    private readonly List<Solids.Solid> _solidsWithin = [];
 
     /// <summary>Contact damage (touch_damage 0x45cf60): targets 1 hurts Kurt once per visible part
     /// touching him, 2 hurts the other objects touching its box (hit event -3, hit type -4). With
@@ -2641,7 +2757,8 @@ public sealed partial class ScriptRuntime
 
         if ((targets & HurtsObjects) != 0)
         {
-            foreach (var other in Objects.ToList())
+            using var copy = ListCopy<MdkObject>.Of(Objects);
+            foreach (var other in copy)
             {
                 if (other == obj || other.Dead || other.Arena != obj.Arena || (other.Flags & Untouchable) != 0)
                 {
@@ -2715,11 +2832,33 @@ public sealed partial class ScriptRuntime
     /// <summary>Lowest point (Z) of an arena's geometry.</summary>
     public float GetArenaFloor(string arena) => _floors.GetValueOrDefault(arena, NoArenaFloor);
 
+    /// <summary>The arenas rays meet: Kurt's and the second, or every arena before he has one
+    /// (arrays kept: no list per ray).</summary>
+    private string[] RayArenas()
+    {
+        if (CurrentArena.Length == 0)
+        {
+            if (_bspNames.Length != _bsps.Count)
+            {
+                _bspNames = [.. _bsps.Keys];
+            }
+
+            return _bspNames;
+        }
+
+        _rayPair[0] = CurrentArena;
+        _rayPair[1] = SecondArena;
+        return _rayPair;
+    }
+
+    private string[] _bspNames = [];
+    private readonly string[] _rayPair = new string[2];
+
     /// <summary>The nearest arena triangle a segment crosses, or null. Only Kurt's arena and the second
     /// one (loaded, active or not) stop rays (0x421680); the others are passed through.</summary>
     public RayHit? Raycast(Vector3 from, Vector3 to)
     {
-        IEnumerable<string> arenas = CurrentArena.Length == 0 ? _bsps.Keys : [CurrentArena, SecondArena];
+        var arenas = RayArenas();
         RayHit? best = null;
         var bestDistance = float.MaxValue;
         foreach (var name in arenas)
@@ -2749,7 +2888,7 @@ public sealed partial class ScriptRuntime
     /// the box centre at the contact, the normal the face's plane.</summary>
     public RayHit? Sweep(Vector3 from, Vector3 to, Vector3 half)
     {
-        IEnumerable<string> arenas = CurrentArena.Length == 0 ? _bsps.Keys : [CurrentArena, SecondArena];
+        var arenas = RayArenas();
         foreach (var name in arenas)
         {
             if (!_bsps.TryGetValue(name, out var bsp))
@@ -2988,6 +3127,44 @@ public sealed partial class ScriptRuntime
         return animation;
     }
 
+    private readonly ScriptDecoder _decoder;
+    /// <summary>anim_once, anim_loop (the animation) and door_set_anims (two): their animation operands.</summary>
+    private static readonly Dictionary<int, int> AnimationOperands = new() { [3] = 1, [59] = 1, [150] = 2 };
+
+    /// <summary>The models of the level's CMI (any arena's objects may have them).</summary>
+    public IEnumerable<Model> LevelModels() => Cmi.ModelOffsets.Keys.Select(Cmi.GetModel).OfType<Model>();
+
+    /// <summary>Bakes the poses and boxes of every model with every animation that moves it: the
+    /// arenas' animations and those the scripts play (a level's load: nothing is baked while playing).</summary>
+    public void PreparePoses()
+    {
+        var animations = Level.Arenas.SelectMany(a => a.Animations.Values).Concat(Items.Animations()).ToList();
+        var anyObject = new MdkObject();
+        foreach (var ins in _decoder.Decoded)
+        {
+            for (var i = 0; i < AnimationOperands.GetValueOrDefault(ins.Opcode); i++)
+            {
+                if (ins.Operands[i] is int offset && offset != 0 && Bin.U32(Cmi.Bytes, offset) != 0
+                    && GetAnimation(anyObject, offset) is { } animation)
+                {
+                    animations.Add(animation);
+                }
+            }
+        }
+
+        foreach (var model in LevelModels().Concat(Level.Arenas.SelectMany(a => a.Models.Values)).Distinct())
+        {
+            MdkObject.Prepare(model, null);
+            foreach (var animation in animations.Distinct())
+            {
+                if (animation.Animates(model))
+                {
+                    MdkObject.Prepare(model, animation);
+                }
+            }
+        }
+    }
+
     /// <summary>An animation of an arena's models, by name (arena_find_animation 0x440adc).</summary>
     public ModelAnimation? FindArenaAnimation(string arena, string name) =>
         Level.Mto.Has(arena) ? Level.Mto.GetArena(arena).Animations.GetValueOrDefault(name) : null;
@@ -3037,6 +3214,9 @@ public sealed partial class ScriptRuntime
     /// stop (3D) or nothing (2D). 0x80: without position; 0x10: following the object at an offset;
     /// 0x20: at a reference point; 0x40: at a point; none: where the object is (following it with
     /// flag 4, which also makes it the object's tracked sound).</summary>
+    /// <summary>play_sound's start modes 0-2.</summary>
+    private static readonly SoundMixer.Start[] SoundStarts = [SoundMixer.Start.New, SoundMixer.Start.Restart, SoundMixer.Start.Once];
+
     public void PlaySound(MdkObject obj, string name, int flags, object? position)
     {
         const int ModeMask = 3;
@@ -3046,7 +3226,7 @@ public sealed partial class ScriptRuntime
         const int AtReference = 0x20;
         const int AtPoint = 0x40;
         const int Flat = 0x80;
-        SoundMixer.Start[] starts = [SoundMixer.Start.New, SoundMixer.Start.Restart, SoundMixer.Start.Once];
+        var starts = SoundStarts;
         var mode = flags & ModeMask;
         if ((flags & Flat) != 0)
         {
@@ -3097,14 +3277,21 @@ public sealed partial class ScriptRuntime
     /// <summary>A sound following an object, at an offset in its frame (kept to stop it with the object).</summary>
     private int PlayOn(string name, MdkObject obj, SoundMixer.Start start, Vector3 offset)
     {
-        var voice = Mixer.PlayOn(name, () => obj.Position + RotatedZ(offset, obj.Yaw), start);
+        var voice = Mixer.PlayOn(name, obj, offset, start);
         if (!_following.TryGetValue(obj, out var voices))
         {
-            _following[obj] = voices = [];
+            _following[obj] = voices = _spareVoiceLists.Count > 0 ? _spareVoiceLists.Pop() : [];
         }
 
         // Ended voices are forgotten.
-        voices.RemoveAll(v => !Mixer.IsVoicePlaying(v));
+        for (var i = voices.Count - 1; i >= 0; i--)
+        {
+            if (!Mixer.IsVoicePlaying(voices[i]))
+            {
+                voices.RemoveAt(i);
+            }
+        }
+
         voices.Add(voice);
         return voice;
     }

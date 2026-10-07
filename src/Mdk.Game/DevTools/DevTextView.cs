@@ -20,8 +20,20 @@ public sealed class DevTextView(Renderer renderer, FontView font)
 
     public float Width(string text) => font.Width(Bytes(text)) * Scale;
 
+    /// <summary>The last line's Latin-1 bytes (kept: no array per line drawn).</summary>
+    private byte[] _bytes = [];
+
     public void Fill(RectangleF area, Vector4 colour) => renderer.FillRect(area, colour);
 
     /// <summary>The font's characters are Latin-1 (the console's line only holds those).</summary>
-    private static byte[] Bytes(string text) => Encoding.Latin1.GetBytes(text);
+    private ReadOnlySpan<byte> Bytes(string text)
+    {
+        if (_bytes.Length < text.Length)
+        {
+            _bytes = new byte[Math.Max(text.Length, _bytes.Length * 2)];
+        }
+
+        var count = Encoding.Latin1.GetBytes(text, _bytes);
+        return _bytes.AsSpan(0, count);
+    }
 }

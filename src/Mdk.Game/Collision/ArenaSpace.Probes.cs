@@ -39,7 +39,7 @@ public sealed partial class ArenaSpace
     /// to <paramref name="to"/> (centres) through Kurt's arena without a hit.</summary>
     public bool Free(Vector3 from, Vector3 to, Vector3 half)
     {
-        var own = Kurts(from).FirstOrDefault();
+        var own = Kurt(from);
         return own == null || own.SweepBox(from, to, half, 0, 0f, out _, out _) == Bsp.None;
     }
 
@@ -62,7 +62,7 @@ public sealed partial class ArenaSpace
     /// <summary>Whether the segment crosses a face of Kurt's arena (0x421680).</summary>
     public bool Crosses(Vector3 from, Vector3 to)
     {
-        var own = Kurts(from).FirstOrDefault();
+        var own = Kurt(from);
         return own != null && own.Segment(from, to, Bsp.SegmentMode.Any, out _) != Bsp.None;
     }
 
@@ -70,10 +70,32 @@ public sealed partial class ArenaSpace
     /// arena is known a step after a teleport), or null.</summary>
     public float? Bottom(Vector3 feet)
     {
-        var arenas = Kurts(feet).Take(1).Union(At(feet)).ToList();
-        return arenas.Count == 0 ? null : _arenas.Where(a => arenas.Contains(a.Bsp)).Min(a => a.Min.Z);
+        float? bottom = null;
+        var own = Kurt(feet);
+        foreach (var arena in _arenas)
+        {
+            if (arena.Bsp == own || Contains(arena.Min, arena.Max, feet))
+            {
+                bottom = MathF.Min(bottom ?? float.MaxValue, arena.Min.Z);
+            }
+        }
+
+        return bottom;
     }
 
     /// <summary>Kurt's arena and the second (or those around the point).</summary>
-    private List<Bsp> Kurts(Vector3 point) => _solid.Count > 0 ? _solid : At(point).ToList();
+    private List<Bsp> Kurts(Vector3 point)
+    {
+        if (_solid.Count > 0)
+        {
+            return _solid;
+        }
+
+        _kurts.Clear();
+        AddAt(point, _kurts);
+        return _kurts;
+    }
+
+    /// <summary>Kurt's arena (or the smallest around the point).</summary>
+    private Bsp? Kurt(Vector3 point) => _solid.Count > 0 ? _solid[0] : First(point);
 }

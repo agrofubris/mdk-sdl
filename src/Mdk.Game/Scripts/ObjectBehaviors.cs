@@ -290,13 +290,13 @@ public sealed class ObjectBehaviors(ScriptRuntime runtime)
     /// </code></summary>
     private void UpdateRunner(MdkObject obj)
     {
-        var run = runtime.Items.GetAnimation("H150_R");
+        var run = runtime.Items.GetAnimation(Items.HamsterRun);
         var kurt = runtime.KurtPosition;
         if (obj.Animation != run)
         {
             if ((obj.Animation == null || obj.IsAnimationDone) && runtime.Rng.Next(ChanceRange) < RunnerIdleChance)
             {
-                obj.RestartAnimation(runtime.Items.GetAnimation("H150_I"), MdkObject.Looping.Once);
+                obj.RestartAnimation(runtime.Items.GetAnimation(Items.HamsterIdle), MdkObject.Looping.Once);
                 return;
             }
 
@@ -318,7 +318,7 @@ public sealed class ObjectBehaviors(ScriptRuntime runtime)
         obj.Flags |= MdkObject.FlagGravity;
         if (new Vector2(kurt.X - obj.Position.X, kurt.Y - obj.Position.Y).LengthSquared() > RunnerStopSquared)
         {
-            obj.RestartAnimation(runtime.Items.GetAnimation("H150_I"), MdkObject.Looping.Once);
+            obj.RestartAnimation(runtime.Items.GetAnimation(Items.HamsterIdle), MdkObject.Looping.Once);
         }
     }
 
@@ -357,7 +357,8 @@ public sealed class ObjectBehaviors(ScriptRuntime runtime)
     {
         var bounds = runtime.GetWorldBounds(obj);
         var hit = false;
-        foreach (var other in runtime.Objects.ToList())
+        using var copy = ListCopy<MdkObject>.Of(runtime.Objects);
+        foreach (var other in copy)
         {
             if (other == obj || other.Dead || other.Arena != obj.Arena || (other.Flags & (MdkObject.FlagNotTarget | MdkObject.FlagNotSolid2)) != 0)
             {

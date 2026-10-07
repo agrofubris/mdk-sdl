@@ -56,11 +56,13 @@ public sealed class LevelView
     private int _piecesMesh = -1;
     private Vertex[] _pieceVertices = [];
 
-    public LevelView(Renderer renderer, LevelData level, TriangleGroups groups, Shading shading)
+    /// <summary>The arenas' surfaces come from <paramref name="resolver"/> (shared with the objects
+    /// and effects: one GPU copy of each texture, one upload per bullet hole).</summary>
+    public LevelView(Renderer renderer, LevelData level, TriangleGroups groups, Shading shading, MaterialResolver resolver)
     {
         _renderer = renderer;
         _groups = groups;
-        _resolver = new MaterialResolver(renderer, level.Dti, shading);
+        _resolver = resolver;
         _edges = shading == Shading.Original ? OutlineEdges.Flagged : OutlineEdges.Frame;
         foreach (var arena in level.Arenas)
         {
@@ -81,9 +83,6 @@ public sealed class LevelView
     /// <summary>The outlined edges built (glass frames).</summary>
     public int OutlineCount { get; private set; }
 
-    /// <summary>A texture's pixels changed (a bullet hole): uploaded again.</summary>
-    public void Refresh(Texture texture) => _resolver.Refresh(texture);
-
     /// <summary>Shows an arena Kurt can only reach by a teleport.</summary>
     public void Enter(string arena)
     {
@@ -96,29 +95,49 @@ public sealed class LevelView
     /// <summary>Queues the visible groups of <paramref name="arenas"/> (the original draws Kurt's
     /// arena and the active second one, 0x41e344), or of every reachable arena when empty, animated
     /// textures at their <paramref name="frames"/>.</summary>
-    public void Draw(IReadOnlyCollection<string> arenas, AnimatedTextures frames)
+    public void Draw(IReadOnlyList<string> arenas, AnimatedTextures frames)
     {
-        var shown = arenas.Count == 0 ? _arenas.Values.Where(a => a.Reachable) : arenas.Where(_arenas.ContainsKey).Select(a => _arenas[a]);
-        foreach (var view in shown)
+        if (arenas.Count == 0)
         {
-            foreach (var (number, mesh) in view.Groups)
+            foreach (var view in _arenas.Values)
             {
-                if (mesh == null || (_groups.Get(view.Arena.Name, number)!.State & TriangleGroups.State.Hidden) != 0)
+                if (view.Reachable)
                 {
+                    Draw(view, frames);
+                }
+            }
+
+            return;
+        }
+
+        for (var i = 0; i < arenas.Count; i++)
+        {
+            if (_arenas.TryGetValue(arenas[i], out var view))
+            {
+                Draw(view, frames);
+            }
+        }
+    }
+
+    private void Draw(ArenaView view, AnimatedTextures frames)
+    {
+        foreach (var (number, mesh) in view.Groups)
+        {
+            if (mesh == null || (_groups.Get(view.Arena.Name, number)!.State & TriangleGroups.State.Hidden) != 0)
+            {
+                continue;
+            }
+
+            foreach (var batch in mesh.Batches)
+            {
+                if (batch.Primitive == Primitive.Lines)
+                {
+                    _renderer.DrawLines(mesh.Mesh, batch.First, batch.Count, batch.Material);
                     continue;
                 }
 
-                foreach (var batch in mesh.Batches)
-                {
-                    if (batch.Primitive == Primitive.Lines)
-                    {
-                        _renderer.DrawLines(mesh.Mesh, batch.First, batch.Count, batch.Material);
-                        continue;
-                    }
-
-                    var frame = batch.Animated != null ? frames.FrameOf(view.Arena.Name, batch.Animated) : 0;
-                    _renderer.Draw(mesh.Mesh, batch.First, batch.Count, batch.Material, frame);
-                }
+                var frame = batch.Animated != null ? frames.FrameOf(view.Arena.Name, batch.Animated) : 0;
+                _renderer.Draw(mesh.Mesh, batch.First, batch.Count, batch.Material, frame);
             }
         }
     }

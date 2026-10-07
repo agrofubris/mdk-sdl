@@ -57,10 +57,14 @@ using Mdk.Game.Scripts;
 //   --roll=left|right       hold a roll of the 1996 demo's levels after the delay (tests)
 //   --console="pos;god"     open the console after the delay and run these commands (tests)
 //   --press=QuickSave@1,Menu.Accept@1.5  press game or menu keys once at these times (tests)
+//   --perf[=warmup]         after warmup seconds (2) of game time, wait for the GPU each frame and print
+//                           the frames' costs at the end: sections, allocations, collections (tests)
 //   --soak[=seed]           random seeded keys on every screen, 6 steps a frame, checks in a level
 //                           (tests; --tour: every arena in turn during --wait; tests/soak_test.sh)
 
 const int DefaultLevel = 7;
+// --perf's game seconds before frames are measured.
+const float DefaultWarmup = 2f;
 
 var options = args.Where(a => a.StartsWith("--"))
     .Select(a => a[2..].Split('=', 2))
@@ -155,6 +159,7 @@ using var game = new Game(data, new GameOptions(start, viewer)
     Graphics = options.ContainsKey("enhanced") ? Graphics.Enhanced : options.ContainsKey("original") ? Graphics.Original : null,
     Gore = options.ContainsKey("bloodyes") ? true : options.ContainsKey("nobloodno") ? false : null,
     Presses = options.TryGetValue("press", out var presses) ? TestPresses.Parse(presses) : null,
+    Perf = options.TryGetValue("perf", out var perf) ? (perf.Length != 0 ? float.Parse(perf, CultureInfo.InvariantCulture) : DefaultWarmup) : null,
 });
 game.Run();
 return 0;

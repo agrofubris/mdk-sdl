@@ -21,7 +21,13 @@ public sealed class Sound(float[] samples, int channels, int sampleRate, Looping
         const int ByteMiddle = 128;
         if (bitsPerSample == 8)
         {
-            return new Sound(data.Select(b => (b - ByteMiddle) * ByteScale).ToArray(), channels, sampleRate, looping);
+            var bytes = new float[data.Length];
+            for (var i = 0; i < data.Length; i++)
+            {
+                bytes[i] = (data[i] - ByteMiddle) * ByteScale;
+            }
+
+            return new Sound(bytes, channels, sampleRate, looping);
         }
 
         var shorts = MemoryMarshal.Cast<byte, short>(data.AsSpan(0, data.Length & ~1));
@@ -70,17 +76,20 @@ public sealed unsafe class AudioDevice : IDisposable
     /// <summary>The music is 8-bit at 14-20 kHz and hisses: the filter cuts it above 6 kHz.</summary>
     private const float MusicCutoff = 6000f;
 
-    private sealed class Voice(Sound sound, float gain, float pitch, float pan, Bus bus)
+    /// <summary>A voice playing; voices are made once (<see cref="MaxVoices"/>) and reused.</summary>
+    private sealed class Voice
     {
-        public readonly Sound Sound = sound;
-        public readonly Bus Bus = bus;
-        public float Gain = gain;
-        public float Pitch = pitch;
-        public float Pan = pan;
+        public Sound Sound = null!;
+        public Bus Bus;
+        public float Gain;
+        public float Pitch;
+        public float Pan;
         public double Position;
         /// <summary>A streamed voice: frames pushed and not played yet (stereo).</summary>
         public Queue<(float Left, float Right)>? Pending;
     }
+
+    private readonly Stack<Voice> _spare = new(Enumerable.Range(0, MaxVoices).Select(_ => new Voice()));
 
     private readonly SDL_AudioStream* _stream;
     private readonly Dictionary<int, Voice> _voices = [];
@@ -122,7 +131,10 @@ public sealed unsafe class AudioDevice : IDisposable
             return 0;
         }
 
-        _voices[_nextId] = new Voice(sound, gain, pitch, pan, bus);
+        var voice = _spare.Pop();
+        (voice.Sound, voice.Gain, voice.Pitch, voice.Pan, voice.Bus) = (sound, gain, pitch, pan, bus);
+        (voice.Position, voice.Pending) = (0d, null);
+        _voices[_nextId] = voice;
         return _nextId++;
     }
 
@@ -158,7 +170,15 @@ public sealed unsafe class AudioDevice : IDisposable
         _voices.TryGetValue(voice, out var v) && v.Pending != null ? (float)v.Pending.Count / v.Sound.SampleRate : 0f;
 
     /// <summary>Stops every voice (a screen of the game ends).</summary>
-    public void StopAll() => _voices.Clear();
+    public void StopAll()
+    {
+        foreach (var voice in _voices.Values)
+        {
+            _spare.Push(voice);
+        }
+
+        _voices.Clear();
+    }
 
     public bool IsPlaying(int voice) => _voices.ContainsKey(voice);
 
@@ -174,7 +194,13 @@ public sealed unsafe class AudioDevice : IDisposable
         v.Pan = pan;
     }
 
-    public void Stop(int voice) => _voices.Remove(voice);
+    public void Stop(int voice)
+    {
+        if (_voices.Remove(voice, out var stopped))
+        {
+            _spare.Push(stopped);
+        }
+    }
 
     /// <summary>A voice's gain, 0 when it isn't playing.</summary>
     public float GainOf(int voice) => _voices.TryGetValue(voice, out var v) ? v.Gain : 0f;
@@ -206,12 +232,14 @@ public sealed unsafe class AudioDevice : IDisposable
         var music = _music.AsSpan(0, frames * OutputChannels);
         mix.Clear();
         music.Clear();
-        foreach (var (id, voice) in _voices.ToList())
+        // Removing while enumerating is allowed: the enumeration goes on.
+        foreach (var (id, voice) in _voices)
         {
             var mixed = voice.Pending != null ? MixStream(voice, mix, frames) : MixVoice(voice, voice.Bus == Bus.Music ? music : mix, frames);
             if (!mixed)
             {
                 _voices.Remove(id);
+                _spare.Push(voice);
             }
         }
 

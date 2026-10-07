@@ -472,7 +472,7 @@ public sealed class ObjectMotion(ScriptRuntime runtime)
             return;
         }
 
-        var links = runtime.Objects.Where(other => other.Leader == leader && !other.Dead).OrderBy(other => other.InstanceId).ToList();
+        var links = Links(leader);
         for (var i = 0; i < link.InstanceId; i++)
         {
             if (i >= links.Count || links[i].InstanceId != i)
@@ -497,6 +497,32 @@ public sealed class ObjectMotion(ScriptRuntime runtime)
             previous = current;
         }
     }
+
+    /// <summary>The live followers of <paramref name="leader"/> by instance id, in a list kept from
+    /// call to call (an insertion sort: stable, like OrderBy).</summary>
+    private List<MdkObject> Links(MdkObject leader)
+    {
+        _links.Clear();
+        foreach (var other in runtime.Objects)
+        {
+            if (other.Leader != leader || other.Dead)
+            {
+                continue;
+            }
+
+            var at = _links.Count;
+            while (at > 0 && _links[at - 1].InstanceId > other.InstanceId)
+            {
+                at--;
+            }
+
+            _links.Insert(at, other);
+        }
+
+        return _links;
+    }
+
+    private readonly List<MdkObject> _links = [];
 
     /// <summary>A pendulum (0x43cfe8, flag 0x400000 set by jump_to): the pitch swings by
     /// ω -= sin θ·k·t, θ += ω·k·t (t in ticks) and the object hangs on its rope below the pivot, in the
@@ -1114,10 +1140,18 @@ public sealed class ObjectMotion(ScriptRuntime runtime)
         var a = obj.Position + center;
 
         // The first contact counts, even if the box slid off it and ended free.
-        Vector3? first = null;
-        bsp.SweepBox(a, a + motion, half, SweepIterations, SweepSlide, out var end, out _,
-            contact => first ??= contact.Node >= 0 ? bsp.Arena.Nodes[contact.Node].Normal : Vector3.UnitZ);
+        (_firstContact, _sweeping) = (null, bsp);
+        _onContact ??= FirstContact;
+        bsp.SweepBox(a, a + motion, half, SweepIterations, SweepSlide, out var end, out _, _onContact);
         obj.Position += end - a;
-        return first;
+        return _firstContact;
     }
+
+    /// <summary>The sweep's first contact's normal (one delegate for every sweep: no closure per move).</summary>
+    private void FirstContact(Bsp.Contact contact) =>
+        _firstContact ??= contact.Node >= 0 ? _sweeping!.Arena.Nodes[contact.Node].Normal : Vector3.UnitZ;
+
+    private Action<Bsp.Contact>? _onContact;
+    private Vector3? _firstContact;
+    private Bsp? _sweeping;
 }

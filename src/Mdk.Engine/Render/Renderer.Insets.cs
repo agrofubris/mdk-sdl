@@ -18,9 +18,18 @@ public enum InsetLayer { UnderCanvas, OverCanvas }
 /// </code></summary>
 public sealed unsafe partial class Renderer
 {
-    private sealed record Inset(View View, RectangleF Area, InsetContent Content, InsetLayer Layer, List<DrawCommand> Commands);
+    private sealed class Inset
+    {
+        public View View;
+        public RectangleF Area;
+        public InsetContent Content;
+        public InsetLayer Layer;
+        public readonly List<DrawCommand> Commands = [];
+    }
 
     private readonly List<Inset> _insets = [];
+    /// <summary>Insets of earlier frames, reused.</summary>
+    private readonly Stack<Inset> _spareInsets = new();
     private Inset? _open;
 
     /// <summary>Where draws go: the open inset's own list, or the scene's.</summary>
@@ -31,7 +40,9 @@ public sealed unsafe partial class Renderer
     /// <see cref="EndInset"/> go into it.</summary>
     public void BeginInset(View view, RectangleF area, InsetContent content, InsetLayer layer)
     {
-        _open = new Inset(view, area, content, layer, []);
+        _open = _spareInsets.Count > 0 ? _spareInsets.Pop() : new Inset();
+        (_open.View, _open.Area, _open.Content, _open.Layer) = (view, area, content, layer);
+        _open.Commands.Clear();
         _insets.Add(_open);
     }
 
@@ -39,24 +50,33 @@ public sealed unsafe partial class Renderer
 
     private void ClearInsets()
     {
+        foreach (var inset in _insets)
+        {
+            _spareInsets.Push(inset);
+        }
+
         _insets.Clear();
         _open = null;
     }
 
     private void RenderInsets(SDL_GPUCommandBuffer* commands)
     {
-        foreach (var inset in _insets.Where(i => i.Layer == InsetLayer.UnderCanvas))
-        {
-            RenderInset(commands, inset);
-        }
-
+        RenderInsets(commands, InsetLayer.UnderCanvas);
         RenderCanvas(commands);
-        foreach (var inset in _insets.Where(i => i.Layer == InsetLayer.OverCanvas))
-        {
-            RenderInset(commands, inset);
-        }
+        RenderInsets(commands, InsetLayer.OverCanvas);
 
         ClearInsets();
+    }
+
+    private void RenderInsets(SDL_GPUCommandBuffer* commands, InsetLayer layer)
+    {
+        foreach (var inset in _insets)
+        {
+            if (inset.Layer == layer)
+            {
+                RenderInset(commands, inset);
+            }
+        }
     }
 
     private void RenderInset(SDL_GPUCommandBuffer* commands, Inset inset)
@@ -89,11 +109,11 @@ public sealed unsafe partial class Renderer
         }
 
         var source = scene ? _commands : inset.Commands;
-        foreach (var order in Enum.GetValues<Pass>().Where(p => p != Pass.Overlay))
+        foreach (var order in Passes)
         {
-            foreach (var command in source.Where(c => c.Material.Pass == order))
+            if (order != Pass.Overlay)
             {
-                DrawOne(commands, pass, command, inset.View);
+                DrawPass(commands, pass, source, order, inset.View);
             }
         }
 
@@ -103,10 +123,7 @@ public sealed unsafe partial class Renderer
     private void RenderCanvas(SDL_GPUCommandBuffer* commands)
     {
         var pass = BeginOver(commands);
-        foreach (var command in _commands.Where(c => c.Material.Pass == Pass.Overlay))
-        {
-            DrawOne(commands, pass, command, default);
-        }
+        DrawPass(commands, pass, _commands, Pass.Overlay, default);
 
         SDL_EndGPURenderPass(pass);
     }

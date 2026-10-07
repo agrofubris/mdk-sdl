@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Mdk.Engine.Platform;
 using Mdk.Engine.Render;
 using Mdk.Game.Hud;
@@ -54,9 +55,15 @@ public sealed class DevUi(DevConsole console, Action toggleOverlay)
 /// timings, then the screen's lines) and the console.</summary>
 public sealed class DevUiView
 {
+    /// <summary>The overlay's text is made again this often (seconds): its numbers are averages, and
+    /// making it every frame would make garbage every frame.</summary>
+    private const double Refresh = 0.25;
+
     private readonly Renderer _renderer;
     private readonly OverlayView _overlay;
     private readonly ConsoleView _console;
+    private IReadOnlyList<string> _lines = [];
+    private long _made;
 
     public DevUiView(Renderer renderer, FontView font)
     {
@@ -71,8 +78,14 @@ public sealed class DevUiView
     {
         if (session.Overlay == Switch.On)
         {
-            var sample = new OverlaySample(session.Profiler, _renderer.Stats, MemorySample.Now(), screen());
-            _overlay.Draw(OverlayText.Lines(sample), ConsoleView.Bottom(dev.Console));
+            if (_lines.Count == 0 || Stopwatch.GetElapsedTime(_made).TotalSeconds >= Refresh)
+            {
+                var sample = new OverlaySample(session.Profiler, _renderer.Stats, MemorySample.Now(), screen());
+                _lines = OverlayText.Lines(sample);
+                _made = Stopwatch.GetTimestamp();
+            }
+
+            _overlay.Draw(_lines, ConsoleView.Bottom(dev.Console));
         }
 
         _console.Draw(dev.Console, session.Log);
