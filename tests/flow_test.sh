@@ -31,6 +31,14 @@ echo "$OUT" | grep "^Menu"
 echo "$OUT" | grep -q "^Menu: New Game | Level: 1 | Saved Game | Options | Quit$"; check "main menu" $?
 [ -f "$SHOT" ]; check "menu screenshot" $?
 
+# The frame a page opens draws its items in their rows, not piled at the view's top left: the
+# hidden 1280 x 960 canvas letterboxes the 600 x 360 view, its top 96 rows stay black.
+TOP_BAND=$((1280 * 4 * 96))
+BLACK=ff000000
+run --menu --press=Menu.Down@0.5,Menu.Down@0.6,Menu.Down@0.7,Menu.Accept@1 --wait=1 > /dev/null
+LIT=$(tail -c +55 "$SHOT" | head -c $TOP_BAND | od -An -v -tx4 | tr -s ' ' '\n' | grep -v "^$\|^$BLACK$" | wc -l)
+[ "$LIT" = 0 ]; check "page drawn laid out on its first frame" $?
+
 OUT=$(run --menu --options --wait=1)
 echo "$OUT" | grep -q "^Menu: Master volume: 80 | .* | Gore: On | Controls | Back$"; check "options page" $?
 

@@ -304,6 +304,8 @@ public sealed class MenuItems
             return;
         }
 
+        // A press may have just opened another page: its items have no rows yet.
+        Layout();
         var row = _entries[0].Area.Height;
         var font = UsesBigFont(row) ? _fonts.Big : _fonts.Small;
         var baseline = MathF.Round(row * Baseline);
