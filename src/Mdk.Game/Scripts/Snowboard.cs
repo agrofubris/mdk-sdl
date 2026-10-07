@@ -20,6 +20,10 @@ public sealed class Snowboard
     /// <summary>Steering: ±30° at 4°/tick (reached over 15 ticks on the ground), back at 3°/tick.</summary>
     private const float SteerMax = 30f;
     private const float SteerRate = 4f;
+    /// <summary>The mouse: 4 × clamp(dx / dt, ±4) °/tick (input_read_axes 0x408334), dx in the
+    /// original's units: its walk turns 3° a unit, the port's 0.15° a mouse unit.</summary>
+    private const float MouseUnits = 0.05f;
+    private const float MouseLimit = 4f;
     private const float SteerRampTicks = 15f;
     private const float SteerReturn = 3f;
     /// <summary>Sideways speed <c>L = −S·V/96</c>, braked in the air by 0.0055556 per tick.</summary>
@@ -125,7 +129,7 @@ public sealed class Snowboard
         var controls = (Board.Flags & Rides.FlagLocked) == 0;
         _pitch -= MathF.Abs(_steer) * CarveTilt;
 
-        _steer = Steer(_steer, controls ? Axis(input, Key.TurnRight, Key.TurnLeft) : 0f, _grounded, ref _turnTicks, dt);
+        _steer = Steer(_steer, controls ? TurnInput(input, dt) : 0f, _grounded, ref _turnTicks, dt);
         if (_grounded)
         {
             UpdateSpeed(controls ? Axis(input, Key.Forward, Key.Back) : 0f, controls, dt);
@@ -183,9 +187,9 @@ public sealed class Snowboard
         _kurt.GetOffBoard(_speed * Ticks, _side * Ticks);
     }
 
-    /// <summary>The carve angle <c>S</c> (positive left): the keys (<paramref name="right"/> &gt; 0
-    /// right) turn it by up to 4°/tick, ramping up over 15 ticks on the ground; the other way snaps
-    /// it straight; without keys it goes back at 3°/tick.</summary>
+    /// <summary>The carve angle <c>S</c> (positive left): the turn input <paramref name="right"/>
+    /// (°/tick, &gt; 0 right) turns it, ramping up over 15 ticks on the ground; the other way snaps
+    /// it straight; without input it goes back at 3°/tick.</summary>
     public static float Steer(float steer, float right, bool grounded, ref float turnTicks, float dt)
     {
         if (right == 0f)
@@ -200,8 +204,8 @@ public sealed class Snowboard
             return 0f;
         }
 
-        var rate = SteerRate * (grounded && turnTicks < SteerRampTicks ? turnTicks * 2f / Ticks : 1f);
-        return Math.Clamp(steer - MathF.Sign(right) * rate * dt, -SteerMax, SteerMax);
+        var rate = right * (grounded && turnTicks < SteerRampTicks ? turnTicks * 2f / Ticks : 1f);
+        return Math.Clamp(steer - rate * dt, -SteerMax, SteerMax);
     }
 
     /// <summary>Speed on the ground: the keys speed up (to 2.5) or brake (to 1.1667), else back to
@@ -476,6 +480,20 @@ public sealed class Snowboard
     /// <paramref name="pivot"/> after <paramref name="seconds"/>.</summary>
     public static float JumpPivot(float frame, float pivot, float seconds) =>
         frame < JumpHoldFrame ? Kurt.Kurt.DefaultPivot - (int)frame * PivotDip : MathF.Min(pivot + seconds, Kurt.Kurt.DefaultPivot);
+
+    /// <summary>The turn input <c>I</c> (°/tick, &gt; 0 right; 0x5014ec): the larger of the turn and
+    /// strafe keys × 4 (the strafe on a tie), or the mouse's 4 × clamp(dx / dt, ±4) when it moved.</summary>
+    public static float TurnInput(Input input, float dt)
+    {
+        if (input.MouseX != 0f && dt > 0f)
+        {
+            return SteerRate * Math.Clamp(input.MouseX * MouseUnits / dt, -MouseLimit, MouseLimit);
+        }
+
+        var turn = Axis(input, Key.TurnRight, Key.TurnLeft);
+        var strafe = Axis(input, Key.StrafeRight, Key.StrafeLeft);
+        return SteerRate * (MathF.Abs(strafe) < MathF.Abs(turn) ? turn : strafe);
+    }
 
     private static float Axis(Input input, Key positive, Key negative) =>
         (input.IsDown(positive) ? 1f : 0f) - (input.IsDown(negative) ? 1f : 0f);
