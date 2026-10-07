@@ -1,4 +1,5 @@
 using System.Numerics;
+using Mdk.Engine.Platform;
 using Mdk.Formats;
 using Mdk.Game.Level;
 using Mdk.Game.Scripts;
@@ -10,13 +11,17 @@ namespace Mdk.Game.Tests;
 public class RideTests
 {
     private const float Tick = 1f;
+    /// <summary>A key turns the board by 4°/tick (0x5014ec = ±1 × 4).</summary>
+    private const float KeyTurn = 4f;
+    /// <summary>A 60 Hz step: half a tick.</summary>
+    private const float HalfTick = 0.5f;
 
     [Fact]
     public void SteeringRampsUpOnTheGroundAndSnapsBack()
     {
         // Right turns lower S: 4°/tick × (ticks × 2 / 30) during the first 15 ticks on the ground.
         var turnTicks = 0f;
-        var steer = Snowboard.Steer(0f, 1f, true, ref turnTicks, Tick);
+        var steer = Snowboard.Steer(0f, KeyTurn, true, ref turnTicks, Tick);
         Assert.Equal(-4f * 2f / 30f, steer, 4);
 
         // Full rate at once in the air, clamped to ±30.
@@ -24,14 +29,44 @@ public class RideTests
         steer = 0f;
         for (var i = 0; i < 20; i++)
         {
-            steer = Snowboard.Steer(steer, 1f, false, ref turnTicks, Tick);
+            steer = Snowboard.Steer(steer, KeyTurn, false, ref turnTicks, Tick);
         }
 
         Assert.Equal(-30f, steer);
 
         // The other way snaps it straight; no key brings it back by 3°/tick.
-        Assert.Equal(0f, Snowboard.Steer(-30f, -1f, true, ref turnTicks, Tick));
+        Assert.Equal(0f, Snowboard.Steer(-30f, -KeyTurn, true, ref turnTicks, Tick));
         Assert.Equal(-27f, Snowboard.Steer(-30f, 0f, true, ref turnTicks, Tick));
+    }
+
+    /// <summary>Found by playtest: only the arrows steered the board. The original's turn input
+    /// (0x5014ec, input_read_axes 0x408334) is the larger of the turn and strafe keys, × 4.</summary>
+    [Theory]
+    [InlineData(Key.TurnRight, KeyTurn)]
+    [InlineData(Key.TurnLeft, -KeyTurn)]
+    [InlineData(Key.StrafeRight, KeyTurn)]
+    [InlineData(Key.StrafeLeft, -KeyTurn)]
+    public void TurnAndStrafeKeysSteer(Key key, float expected)
+    {
+        var input = new Input();
+        input.Hold(key, Input.State.Down);
+
+        Assert.Equal(expected, Snowboard.TurnInput(input, HalfTick));
+    }
+
+    /// <summary>The mouse steers too: 4 × clamp(dx / dt, ±4), dx in the original's units (its walk
+    /// turns 3° a unit, the port 0.15° a mouse unit); it wins over the keys.</summary>
+    [Theory]
+    [InlineData(10f, KeyTurn)]
+    [InlineData(-10f, -KeyTurn)]
+    [InlineData(1000f, 4f * KeyTurn)]
+    public void TheMouseSteersTheBoard(float mouse, float expected)
+    {
+        var input = new Input();
+        input.Hold(Key.TurnLeft, Input.State.Down);
+        input.AddMouseMotion(mouse, 0f);
+
+        Assert.Equal(expected, Snowboard.TurnInput(input, HalfTick), 4);
     }
 
     [Theory]

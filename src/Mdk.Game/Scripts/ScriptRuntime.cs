@@ -649,14 +649,26 @@ public sealed partial class ScriptRuntime
     /// corner to the other, ending on its left or right (unused by the levels).</summary>
     private enum Doorway { MinusX, PlusX, MinusY, PlusY, Left, Right, MinusZ, PlusZ }
 
-    /// <summary>The arena Kurt enters when his move crosses a connection of his arena (0x41c550,
-    /// every tick), or "". E.g. LEVEL4 MEAT_7 1012 (+y at y = 14822) → CMEAT_7.</summary>
-    private string CrossedArena(Vector3 from, Vector3 to)
+    /// <summary>An object with <see cref="MdkObject.FlagChangesArena"/> goes into the arena whose
+    /// connection its last move crossed (0x45e810, 0x43ca00): the board follows Kurt, so its
+    /// script keeps running (LEVEL4's first run ends in MEAT_3).</summary>
+    public void FollowArenas(MdkObject obj)
     {
-        foreach (var record in ArenaRecords(CurrentArena))
+        var arena = CrossedArena(obj.Arena, obj.PreviousPosition, obj.Position);
+        if (arena.Length != 0)
+        {
+            obj.Arena = arena;
+        }
+    }
+
+    /// <summary>The arena a move enters when it crosses a connection of <paramref name="arena"/>
+    /// (0x41c550, every tick), or "". E.g. LEVEL4 MEAT_7 1012 (+y at y = 14822) → CMEAT_7.</summary>
+    private string CrossedArena(string arena, Vector3 from, Vector3 to)
+    {
+        foreach (var record in ArenaRecords(arena))
         {
             if (record.Type == LevelData.Connection && CrossesDoorway(record, from, to)
-                && _connections.TryGetValue((CurrentArena, record.Id), out var other))
+                && _connections.TryGetValue((arena, record.Id), out var other))
             {
                 return other;
             }
@@ -761,7 +773,7 @@ public sealed partial class ScriptRuntime
         // Kurt changes arena only through a connection of his (0x41c550); a teleport puts him anywhere.
         // The 1996 demo's connections have no direction: there the arenas' boxes decide.
         var arena = IsBeta ? BetaArena()
-            : CurrentArena.Length == 0 ? _space.ArenaAt(KurtPosition) ?? "" : CrossedArena(_previousKurtPosition, KurtPosition);
+            : CurrentArena.Length == 0 ? _space.ArenaAt(KurtPosition) ?? "" : CrossedArena(CurrentArena, _previousKurtPosition, KurtPosition);
         if (arena.Length != 0 && arena != CurrentArena)
         {
             // Crossing into another arena: the one left stays as the active second arena.

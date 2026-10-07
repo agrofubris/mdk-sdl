@@ -30,6 +30,8 @@ public sealed class MdkObject
     public const int FlagLanded = 0x20000;
     /// <summary>A pickup Kurt has taken (it vanishes).</summary>
     public const int FlagCollected = 0x40000;
+    /// <summary>Goes into the arena whose connection it crosses (the ridden board, thrown items; 0x45e810).</summary>
+    public const int FlagChangesArena = 0x80000;
     public const int FlagDoor = 0x100000;
     public const int FlagPickup = 0x200000;
     /// <summary>Swings on a rope (jump_to, opcode 226).</summary>
