@@ -101,6 +101,11 @@ public sealed class ObjectMotion(ScriptRuntime runtime)
             return;
         }
 
+        if ((obj.Flags & MdkObject.FlagChangesArena) != 0)
+        {
+            runtime.FollowArenas(obj);
+        }
+
         // Kurt's items and effects (0x1000), or else pickups (0x200000).
         if (obj.ThrownKind > 0)
         {

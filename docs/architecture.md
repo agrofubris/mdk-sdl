@@ -209,7 +209,8 @@ so the game runs them unchanged:
    (`Kurt/Kurt.Sniper.cs`, `Kurt/Scope.cs`: look, zoom, clip, the scope's off-centre projection).
    The camera's climb term (−40 × the smoothed rise per tick), the rides (`Scripts/Rides.cs`,
    `Snowboard.cs`, `Bomber.cs`, `Kurt/Kurt.Ride.cs`, `Hud/BomberOverlay.cs`; Kurt's moves report
-   the objects and triangle groups they touch). Ledges (`Kurt/Kurt.Ledge.cs`), sliding in the
+   the objects and triangle groups they touch; the board steers with the turn or strafe keys or
+   the mouse, and goes into the arena Kurt rides into, flag 0x80000). Ledges (`Kurt/Kurt.Ledge.cs`), sliding in the
    wind tunnels (`Kurt/Kurt.Slide.cs`), hard landings and falling out of the arena, the camera's
    roll (`Kurt/CameraRoll.cs`), clearance and shake (`Kurt/FollowCamera.cs`,
    `Collision/ArenaSpace.Probes.cs`). Each step the camera follows Kurt after the scripts (a
