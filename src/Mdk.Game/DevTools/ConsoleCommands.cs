@@ -15,7 +15,7 @@ public static class ConsoleCommands
     private const int Coordinates = 3;
     private const float MaxTimeScale = 10f;
     private const string NotInLevel = "Not in a level";
-    /// <summary>God mode and noclip switched outside a level.</summary>
+    /// <summary>God mode, noclip and onehit switched outside a level.</summary>
     private const string NextLevel = " from the next level";
 
     /// <summary>"give all": every item (as many as the slots hold), every sniper round, health.</summary>
@@ -36,6 +36,7 @@ public static class ConsoleCommands
         registry.Add(new Command("pos", "pos", _ => InLevel(target, level => Pos(level.Where()))));
         registry.Add(new Command("noclip", "noclip", _ => Session(target, "noclip", target.ToggleNoclip())));
         registry.Add(new Command("god", "god", _ => Session(target, "god", target.ToggleGod())));
+        registry.Add(new Command("onehit", "onehit", _ => Session(target, "onehit", target.ToggleOneHit())));
         registry.Add(new Command("give", "give <all | SW_...>", args => InLevel(target, level => Give(level, args))));
         registry.Add(new Command("health", "health <n>", args => InLevel(target, level => Health(level, args))));
         registry.Add(new Command("kill", "kill", _ => InLevel(target, level => $"Killed {level.KillEnemies()} enemies")));

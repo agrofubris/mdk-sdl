@@ -253,6 +253,7 @@ public sealed class Viewer : IScreen
         // The session's cheats hold in every level.
         _commands.SetGod(ui.Dev.God);
         _commands.SetNoclip(ui.Dev.Noclip);
+        _commands.SetOneHit(ui.Dev.OneHit);
         EnterStartArena(state);
     }
 

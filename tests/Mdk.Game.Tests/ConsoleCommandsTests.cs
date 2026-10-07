@@ -141,7 +141,17 @@ public class ConsoleCommandsTests
         // God and noclip are the session's: they hold from the next level.
         Assert.Equal("god on from the next level", Run("god"));
         Assert.Equal("noclip on from the next level", Run("noclip"));
+        Assert.Equal("onehit on from the next level", Run("onehit"));
         Assert.Equal(Switch.Off, _level.God);
+    }
+
+    [Fact]
+    public void OneHitTogglesInTheLevel()
+    {
+        Assert.Equal("onehit on", Run("onehit"));
+        Assert.Equal(Switch.On, _level.OneHit);
+        Assert.Equal("onehit off", Run("onehit"));
+        Assert.Equal(Switch.Off, _level.OneHit);
     }
 
     /// <summary>The game: the session's switches reach the level, when there's one.</summary>
@@ -157,6 +167,7 @@ public class ConsoleCommandsTests
         public bool Quitted;
         private Switch _god;
         private Switch _noclip;
+        private Switch _oneHit;
 
         public bool Map(int number, string arena)
         {
@@ -183,6 +194,13 @@ public class ConsoleCommandsTests
             _noclip = _noclip == Switch.On ? Switch.Off : Switch.On;
             Level?.SetNoclip(_noclip);
             return _noclip;
+        }
+
+        public Switch ToggleOneHit()
+        {
+            _oneHit = _oneHit == Switch.On ? Switch.Off : Switch.On;
+            Level?.SetOneHit(_oneHit);
+            return _oneHit;
         }
 
         public void SetDifficulty(Difficulty difficulty)
@@ -217,6 +235,7 @@ public class ConsoleCommandsTests
         public Difficulty Difficulty;
         public Switch God;
         public Switch Noclip;
+        public Switch OneHit;
         public string? Saved;
         public readonly List<string> Given = [];
 
@@ -231,6 +250,8 @@ public class ConsoleCommandsTests
         public void SetGod(Switch god) => God = god;
 
         public void SetNoclip(Switch noclip) => Noclip = noclip;
+
+        public void SetOneHit(Switch oneHit) => OneHit = oneHit;
 
         public bool Give(string pickup)
         {

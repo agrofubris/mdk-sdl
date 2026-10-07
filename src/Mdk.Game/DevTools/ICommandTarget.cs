@@ -28,9 +28,10 @@ public interface ICommandTarget
     /// <summary>Loads a saved game; false when there's none of that name.</summary>
     bool Load(string slot);
 
-    /// <summary>The session's god mode and noclip: the level's Kurt now, or the next level's.</summary>
+    /// <summary>The session's god mode, noclip and onehit: the level's Kurt now, or the next level's.</summary>
     Switch ToggleGod();
     Switch ToggleNoclip();
+    Switch ToggleOneHit();
 
     void SetDifficulty(Difficulty difficulty);
 
@@ -54,6 +55,9 @@ public interface ILevelTarget
 
     void SetGod(Switch god);
     void SetNoclip(Switch noclip);
+
+    /// <summary>Kurt's hits kill at once.</summary>
+    void SetOneHit(Switch oneHit);
 
     /// <summary>Kurt takes a pickup (its model name); false when he can't.</summary>
     bool Give(string pickup);

@@ -34,6 +34,8 @@ public sealed class LevelCommands(LevelData level, Kurt.Kurt kurt, ScriptRuntime
 
     public void SetNoclip(Switch noclip) => kurt.Clipping = noclip == Switch.On ? Clipping.Off : Clipping.On;
 
+    public void SetOneHit(Switch oneHit) => scripts.Lethality = oneHit == Switch.On ? Lethality.OneHit : Lethality.Normal;
+
     public bool Give(string pickup) => kurt.Collect(pickup).Length != 0;
 
     public void SetHealth(int health) => kurt.SetHealth(health);

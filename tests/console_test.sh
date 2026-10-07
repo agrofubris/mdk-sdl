@@ -1,6 +1,6 @@
 #!/bin/sh
 # The console on level 3 (--console opens it and runs commands): pos prints options that start
-# there, god survives --die, tp moves Kurt to an arena, save and load a full save, map loads
+# there, god survives --die, onehit kills a grunt with the chain gun at once, tp moves Kurt to an arena, save and load a full save, map loads
 # another level, kill and unknown commands answer; the game's own lines still print. Outside a
 # level (the menu, the stream, the fall) the game's commands work and the level's answer.
 # Run from the project folder after `dotnet build`: sh tests/console_test.sh
@@ -39,6 +39,14 @@ OUT=$(run --wait=2 --die --console="god")
 expect "god survives" "^Kurt at .* health 100"
 echo "$OUT" | grep -q "^Kurt died" && { echo "  god: FAILED (died)"; FAILED=1; }
 
+# The grunt XG_1006 in front of Kurt: hurt by the chain gun, or blown up with onehit.
+GRUNT="--at=-2,172,135,20 --fire --delay=0.5 --profile --wait=1.6"
+OUT=$(run $GRUNT --console="pos")
+expect "chain gun hurts" "^  XG_1006 .* health [1-9]"
+OUT=$(run $GRUNT --console="onehit")
+expect "onehit" "^onehit on"
+echo "$OUT" | grep -q "^  XG_1006 " && { echo "  onehit kills: FAILED"; FAILED=1; } || echo "  onehit kills: ok"
+
 OUT=$(run --wait=1.5 --console="tp HMO_4;health 40;save console_t")
 expect "tp to an arena" "^Kurt at .* arena HMO_4 health 40"
 expect "save" "^Saved console_t"
@@ -54,10 +62,11 @@ expect "menu: fps" "^overlay on"
 expect "menu: pos" "^Not in a level"
 expect "menu: map starts the level" "^Level 6: "
 
-OUT=$(run_on --stream=7 --wait=1 --console="help;give all;god")
+OUT=$(run_on --stream=7 --wait=1 --console="help;give all;god;onehit")
 expect "stream: help" "^map <level> \[arena\]"
 expect "stream: give" "^Not in a level"
 expect "stream: god" "^god on from the next level"
+expect "stream: onehit" "^onehit on from the next level"
 expect "stream: flies on" "^Saved "
 
 OUT=$(run_on --fall=7 --wait=1 --console="kill;difficulty easy")

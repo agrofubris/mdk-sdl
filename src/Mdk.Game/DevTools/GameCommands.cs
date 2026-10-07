@@ -69,6 +69,14 @@ public sealed class GameCommands(Ui ui, GameState state, Func<ILevelTarget?> lev
         return dev.Noclip;
     }
 
+    public Switch ToggleOneHit()
+    {
+        var dev = ui.Dev;
+        dev.OneHit = Flip(dev.OneHit);
+        Level?.SetOneHit(dev.OneHit);
+        return dev.OneHit;
+    }
+
     public void SetDifficulty(Difficulty difficulty)
     {
         ui.Settings.Difficulty = difficulty;

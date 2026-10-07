@@ -1792,7 +1792,7 @@ public sealed partial class ScriptRuntime
             return;
         }
 
-        var reacted = (HitGroupAt(hit, damage, HitChainGun, superGun ? -2 : -1) & 1) != 0;
+        var reacted = (HitGroupAt(hit, KurtDamage(damage, Indestructible), HitChainGun, superGun ? -2 : -1) & 1) != 0;
         SparkAt(hit.Point - Vector3.Normalize(shot), 1, "", reacted ? Spark.Group : Spark.Hard);
     }
 
@@ -1983,7 +1983,7 @@ public sealed partial class ScriptRuntime
 
         if (part >= 0 && part < obj.PartHealth.Length)
         {
-            obj.PartHealth[part] -= damage;
+            obj.PartHealth[part] -= KurtDamage(damage, obj.PartHealth[part]);
             if (obj.PartHealth[part] <= 0)
             {
                 obj.PartHealth[part] = 0;
@@ -1998,7 +1998,7 @@ public sealed partial class ScriptRuntime
 
         if (obj.Health < Indestructible)
         {
-            obj.Health -= damage;
+            obj.Health -= KurtDamage(damage, obj.Health);
         }
 
         obj.HitType = superGun ? -2 : -1;

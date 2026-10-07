@@ -490,7 +490,7 @@ public sealed class Items(ScriptRuntime runtime, Bni sprites)
             var direction = Heading(runtime.KurtPosition, runtime.GetWorldBounds(other).Center());
             if (other.Health < ScriptRuntime.Indestructible)
             {
-                other.Health -= MortarDamage;
+                other.Health -= runtime.KurtDamage(MortarDamage, other.Health);
             }
 
             other.HitEvent = -1;
@@ -605,7 +605,7 @@ public sealed class Items(ScriptRuntime runtime, Bni sprites)
 
         if ((targets & TargetGroups) != 0)
         {
-            BlastGroups(center, damage, radius, hitType, kills == Kills.Counted ? ScriptRuntime.HitBlast : ScriptRuntime.HitOtherBlast);
+            BlastGroups(center, damage, radius, hitType, kills);
         }
     }
 
@@ -620,7 +620,7 @@ public sealed class Items(ScriptRuntime runtime, Bni sprites)
                 continue;
             }
 
-            var (best, distance, point, hitEvent) = BlastWeakParts(obj, center, damage, radius);
+            var (best, distance, point, hitEvent) = BlastWeakParts(obj, center, damage, radius, kills);
             if (obj == source)
             {
                 // The grenade itself takes it all.
@@ -644,7 +644,7 @@ public sealed class Items(ScriptRuntime runtime, Bni sprites)
             var direction = Heading(center, point);
             if (obj.Health < ScriptRuntime.Indestructible)
             {
-                obj.Health -= best;
+                obj.Health -= BlastHit(best, obj.Health, kills);
             }
 
             obj.HitEvent = hitEvent == 0 ? BlastEvent : hitEvent;
@@ -666,7 +666,7 @@ public sealed class Items(ScriptRuntime runtime, Bni sprites)
 
     /// <summary>A blast on an object's weak parts: the best damage, its distance and point, and the
     /// event of a part it destroyed (part + 1, or 0).</summary>
-    private (int Best, float Distance, Vector3 Point, int Event) BlastWeakParts(MdkObject obj, Vector3 center, int damage, float radius)
+    private (int Best, float Distance, Vector3 Point, int Event) BlastWeakParts(MdkObject obj, Vector3 center, int damage, float radius, Kills kills)
     {
         var result = (Best: 0, Distance: 0f, Point: obj.Position, Event: 0);
         if ((obj.Flags & MdkObject.FlagWeakParts) == 0 || obj.Model == null)
@@ -695,7 +695,7 @@ public sealed class Items(ScriptRuntime runtime, Bni sprites)
                 result = (amount, distance, box.Center(), result.Event);
             }
 
-            obj.PartHealth[i] -= amount;
+            obj.PartHealth[i] -= BlastHit(amount, obj.PartHealth[i], kills);
             if (obj.PartHealth[i] < 1)
             {
                 obj.PartHealth[i] = 0;
@@ -729,8 +729,9 @@ public sealed class Items(ScriptRuntime runtime, Bni sprites)
 
     /// <summary>A blast on the triangle groups that react to hits: each gets one hit, on the first of
     /// its triangles within the radius that the blast reaches, of the damage less the falloff.</summary>
-    private void BlastGroups(Vector3 center, int damage, float radius, int hitType, int kind)
+    private void BlastGroups(Vector3 center, int damage, float radius, int hitType, Kills kills)
     {
+        var kind = kills == Kills.Counted ? ScriptRuntime.HitBlast : ScriptRuntime.HitOtherBlast;
         var arena = runtime.CurrentArena;
         var state = runtime.GetArenaState(arena);
         var origin = center + new Vector3(0f, 0f, BlastLift);
@@ -761,11 +762,14 @@ public sealed class Items(ScriptRuntime runtime, Bni sprites)
                 }
 
                 var distance = Vector3.Distance(origin, point);
-                runtime.HitGroup(arena, i + 1, Round(damage * (radius - distance) / radius), kind, hitType);
+                runtime.HitGroup(arena, i + 1, BlastHit(Round(damage * (radius - distance) / radius), ScriptRuntime.Indestructible, kills), kind, hitType);
                 break;
             }
         }
     }
+
+    /// <summary>A blast's damage on a target: Kurt's blasts (counted kills) follow onehit.</summary>
+    private int BlastHit(int damage, int health, Kills kills) => kills == Kills.Counted ? runtime.KurtDamage(damage, health) : damage;
 
     /// <summary>Damage of a blast on a box (0x463958) and its distance: to the box's centre, less half
     /// the box's size; 0 beyond the radius or behind a wall.</summary>

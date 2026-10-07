@@ -158,7 +158,7 @@ segment, speed and health; in a level Kurt's position, yaw and state, the level,
 the objects. The key left of 1 (`` ` ``, `;` on a Slovak keyboard) opens the console: the game's
 output above a command line (Tab completes a command, Up/Down the history, PageUp/PageDown
 scroll, Esc closes). The screen runs on, without the keys. Outside a level `tp`, `pos`, `give`,
-`health`, `kill` and `save` answer "Not in a level"; `god` and `noclip` hold from the next level;
+`health`, `kill` and `save` answer "Not in a level"; `god`, `noclip` and `onehit` hold from the next level;
 `map` starts a level from the menus.
 
 | Command | |
@@ -167,6 +167,7 @@ scroll, Esc closes). The screen runs on, without the keys. Outside a level `tp`,
 | `teleport`, `tp <x y z \| arena [x y z]>` | move Kurt (`tp HMO_4`, `tp 1 2 3`, `tp HMO_4,1,2,3`) |
 | `pos` | where Kurt is, as `--level`, `--at`, `--teleport` and `--console` options |
 | `noclip`, `god` | fly through everything (Space up, Q down); no damage |
+| `onehit` | Kurt's hits (guns, sniper rounds, blasts, items, air strike) kill at once |
 | `give all`, `give <SW_...>` | pickups (`give SW_HBOMB`) |
 | `health <n>`, `kill` | Kurt's health; kill the enemies of his arena |
 | `save <slot>`, `load <slot>` | a full save (as F2), a saved game |

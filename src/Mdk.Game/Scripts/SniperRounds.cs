@@ -326,7 +326,7 @@ public sealed class SniperRounds(ScriptRuntime runtime)
         {
             // Taken back a unit off the wall; a reacting group gets one orange spark, a wall 3 grey ones.
             round.Position = stop.Point + Facing(stop.Normal, end - start);
-            var reacted = (runtime.HitGroupAt(stop, round.Type < Type.Grenade ? Damage : 0, ScriptRuntime.HitShot, (int)round.Type) & 1) != 0;
+            var reacted = (runtime.HitGroupAt(stop, round.Type < Type.Grenade ? runtime.KurtDamage(Damage, ScriptRuntime.Indestructible) : 0, ScriptRuntime.HitShot, (int)round.Type) & 1) != 0;
             runtime.SparkAt(round.Position, reacted ? 1 : 3, "", reacted ? ScriptRuntime.Spark.Group : ScriptRuntime.Spark.Hard);
             if (round.Type >= Type.Grenade)
             {
@@ -555,7 +555,7 @@ public sealed class SniperRounds(ScriptRuntime runtime)
 
         if (obj.Health < Unhurt)
         {
-            obj.Health -= Damage;
+            obj.Health -= runtime.KurtDamage(Damage, obj.Health);
         }
 
         if (obj.Health > 0)
