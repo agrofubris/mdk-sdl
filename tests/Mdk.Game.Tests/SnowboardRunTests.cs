@@ -23,6 +23,7 @@ public class SnowboardRunTests
     /// <summary>Kurt lands on group 1 of MEAT_1 (its hit script spawns the board and XS); XS's death
     /// makes the board rideable.</summary>
     private const int LandingGroup = 1;
+    private const string BoardType = "XSNOWB";
     private static readonly Vector3 Landing = new(0f, 0f, 80f);
     private static readonly Vector3 AboveBoard = new(0f, 0f, 3f);
     private const float Yaw = 90f;
@@ -36,6 +37,17 @@ public class SnowboardRunTests
     private const string SecondRun = "CMEAT_3";
     private static readonly Vector3 SecondBoard = new(420f, 4280f, -578f);
     private const int RideSeconds = 5;
+    private const string SecondEnd = "MEAT_5";
+    /// <summary>Without keys the ride reaches MEAT_5 after about 145 s.</summary>
+    private const int SecondRunSeconds = 180;
+    /// <summary>The third run, from MEAT_7 (its board at 0, 14803): its script lets Kurt off in MEAT_10, y ≥ 23970.</summary>
+    private const string ThirdRun = "MEAT_7";
+    private static readonly Vector3 ThirdStart = new(0f, 14700f, 40f);
+    private const int ThirdRunSeconds = 240;
+    private const string ThirdEnd = "MEAT_10";
+    private const float ThirdEndY = 23970f;
+    /// <summary>The scripts' random numbers: with some, MEAT_4 stops a rider without keys.</summary>
+    private const int Seed = 1;
 
     private static (ScriptRuntime Runtime, ArenaSpace Space) CreateRuntime() => CreateRuntime(out _);
 
@@ -53,7 +65,7 @@ public class SnowboardRunTests
         }
 
         var mixer = new SoundMixer(Device, _ => null);
-        var runtime = new ScriptRuntime(level, cmi, sprites, space, groups, mixer, new Kurt.Kurt(space, mixer, _ => 1));
+        var runtime = new ScriptRuntime(level, cmi, sprites, space, groups, mixer, new Kurt.Kurt(space, mixer, _ => 1), Seed);
         return (runtime, space);
     }
 
@@ -81,7 +93,7 @@ public class SnowboardRunTests
         Run(runtime, space, StepsPerSecond);
 
         // Onto the board.
-        var board = runtime.FindObjectNamed("XSNOWB")!;
+        var board = runtime.FindObjectNamed(BoardType)!;
         runtime.TeleportKurt(Start, board.Position + AboveBoard, Yaw);
         Run(runtime, space, StepsPerSecond, () => runtime.Rides.OnBoard());
         Assert.True(runtime.Rides.OnBoard());
@@ -103,7 +115,7 @@ public class SnowboardRunTests
         var (runtime, space) = CreateRuntime(out var groups);
         runtime.TeleportKurt(SecondRun, SecondBoard, Yaw);
         Run(runtime, space, StepsPerSecond);
-        var board = runtime.FindObjectNamed("XSNOWB")!;
+        var board = runtime.FindObjectNamed(BoardType)!;
         runtime.TeleportKurt(SecondRun, board.Position + AboveBoard, Yaw);
         Run(runtime, space, StepsPerSecond, () => runtime.Rides.OnBoard());
         Assert.True(runtime.Rides.OnBoard());
@@ -114,5 +126,47 @@ public class SnowboardRunTests
         Assert.NotEqual(0, floor);
         Assert.Equal(SecondRun, runtime.CurrentArena);
         Assert.False(groups.Get(SecondRun, floor)!.State.HasFlag(TriangleGroups.State.Hidden));
+    }
+
+    /// <summary>Found by playtest: the second run didn't end in MEAT_5. Its board's script lets Kurt off
+    /// in a box there, but the board stayed in CMEAT_4: MEAT_5's arena_show NONE dropped CMEAT_4
+    /// before the board's tick. The original runs the arenas' scripts after the objects.</summary>
+    [DataFact]
+    public void SecondRunEndsInMeat5()
+    {
+        var (runtime, space) = CreateRuntime();
+        runtime.TeleportKurt(SecondRun, SecondBoard, Yaw);
+        Run(runtime, space, StepsPerSecond);
+        var board = runtime.FindObjectNamed(BoardType)!;
+        runtime.TeleportKurt(SecondRun, board.Position + AboveBoard, Yaw);
+        Run(runtime, space, StepsPerSecond, () => runtime.Rides.OnBoard());
+        Assert.True(runtime.Rides.OnBoard());
+
+        // Down CMEAT_3, MEAT_4 and CMEAT_4, without keys: the script lets him off in MEAT_5.
+        Run(runtime, space, SecondRunSeconds * StepsPerSecond, () => !runtime.Rides.OnBoard());
+
+        Assert.False(runtime.Rides.OnBoard());
+        Assert.Equal(SecondEnd, runtime.CurrentArena);
+        Assert.Equal(SecondEnd, board.Arena);
+    }
+
+    [DataFact]
+    public void ThirdRunEnds()
+    {
+        var (runtime, space) = CreateRuntime();
+        runtime.TeleportKurt(ThirdRun, ThirdStart, Yaw);
+        Run(runtime, space, StepsPerSecond);
+        var board = runtime.Objects.First(o => !o.Dead && o.TypeName == BoardType && o.Arena == ThirdRun);
+        runtime.TeleportKurt(ThirdRun, board.Position + AboveBoard, Yaw);
+        Run(runtime, space, StepsPerSecond, () => runtime.Rides.OnBoard());
+        Assert.True(runtime.Rides.OnBoard());
+
+        // Down CMEAT_7, MEAT_8 and CMEAT_8 (god: its aliens shoot): the script lets him off at the end.
+        runtime.Kurt.Mortality = Kurt.Mortality.God;
+        Run(runtime, space, ThirdRunSeconds * StepsPerSecond, () => !runtime.Rides.OnBoard());
+
+        Assert.False(runtime.Rides.OnBoard());
+        Assert.Equal(ThirdEnd, runtime.CurrentArena);
+        Assert.InRange(runtime.Kurt.Feet.Y, ThirdEndY, float.MaxValue);
     }
 }

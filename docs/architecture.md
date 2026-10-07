@@ -236,7 +236,8 @@ None open. Answered (Ghidra): which objects Kurt walks into or stands on
    platform has carried him: `game_frame`'s order), and the XD2 and the XE are put with Kurt
    (`Rides.Follow`), so nothing is drawn a step apart (`tests/carry_test.sh`, `--trace`).
 7. 🟡 Script VM and objects (`Scripts/`: ports of `script_vm.gd`, `script_runtime.gd`,
-   `object_motion.gd`, `object_behaviors.gd`; 30 ticks per second, object moves are BSP box sweeps).
+   `object_motion.gd`, `object_behaviors.gd`; 30 ticks per second, object moves are BSP box sweeps;
+   the arenas' own scripts run after the objects, as in `game_frame`).
    Kurt's items and blasts are ported (`Items.cs`, `Twister.cs`; twisters drawn as ribbons, `Ribbon.cs`), so are the
    effects (`Effects.cs`: wounds, slime drops, bubbles, smoke trails), the flying pieces
    (`Debris.cs`: sparks, shattered groups, break-ups) and the fans (`Fans.cs`), drawn by

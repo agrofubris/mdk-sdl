@@ -868,16 +868,6 @@ public sealed partial class ScriptRuntime
             FireChainGun();
         }
 
-        if (CurrentArena.Length != 0)
-        {
-            Vm.Run(GetArenaState(CurrentArena).Controller);
-        }
-
-        if (SecondActive && SecondArena.Length != 0)
-        {
-            Vm.Run(GetArenaState(SecondArena).Controller);
-        }
-
         Items.UpdateTwisters();
         Effects.Update(1f);
         Fans.Update();
@@ -912,6 +902,23 @@ public sealed partial class ScriptRuntime
             {
                 Kurt.Carry(position, obj.Position, obj.Yaw - yaw);
             }
+        }
+
+        // Then the arenas' own scripts (game_frame: 0x43c7dc, then 0x440bc8). E.g. MEAT_5's
+        // arena_show NONE drops CMEAT_4 only after the ridden board there followed Kurt in.
+        RunControllers();
+    }
+
+    private void RunControllers()
+    {
+        if (CurrentArena.Length != 0)
+        {
+            Vm.Run(GetArenaState(CurrentArena).Controller);
+        }
+
+        if (SecondActive && SecondArena.Length != 0)
+        {
+            Vm.Run(GetArenaState(SecondArena).Controller);
         }
     }
 
