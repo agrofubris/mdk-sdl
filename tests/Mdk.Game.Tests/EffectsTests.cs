@@ -87,7 +87,7 @@ public class EffectsTests
     [Fact]
     public void PiecesBounceOffTheArena()
     {
-        // A floor at z 0: the piece keeps 40% of its speed into it, reversed, and loses 20 ticks.
+        // A floor at z 0: the piece stops on it, keeps 40% of its speed into it, reversed, and loses 20 ticks.
         var debris = NewDebris();
         debris.Ray = (_, from, to) => to.Z < 0f
             ? new ScriptRuntime.RayHit(new Vector3(to.X, to.Y, 0f), Vector3.UnitZ, Arena, 0)
@@ -101,7 +101,28 @@ public class EffectsTests
 
         Assert.Equal(0.4f, spark.Velocity.Z, 4);
         Assert.Equal(ticks - 21, spark.Ticks);
-        Assert.True(spark.Center.Z > 0f);
+        Assert.Equal(0f, spark.Center.Z);
+    }
+
+    [Fact]
+    public void FansLiftSparksThroughWhatTheyHit()
+    {
+        // A grate at z 1, hit from either side (as the arena's segment test), above a spark lifted
+        // at 1 unit per tick: it bounces off once, then passes from the contact (0x4061d8, 0x421470).
+        const float Grate = 1f;
+        var debris = NewDebris();
+        debris.Ray = (_, from, to) => (from.Z - Grate) * (to.Z - Grate) <= 0f
+            ? new ScriptRuntime.RayHit(new Vector3(to.X, to.Y, Grate), Vector3.UnitZ, Arena, 0)
+            : null;
+        debris.Updraft = (_, _, _, _) => 30f;
+        debris.Spark(Arena, new Vector3(0f, 0f, 0.75f), 1, 0.5f, FireBase, FireRange, 1f, Debris.Launch.Still);
+
+        for (var i = 0; i < 4; i++)
+        {
+            debris.Update(1f);
+        }
+
+        Assert.True(debris.Pieces[0].Center.Z > Grate + 1f, $"spark at {debris.Pieces[0].Center.Z}");
     }
 
     [Fact]

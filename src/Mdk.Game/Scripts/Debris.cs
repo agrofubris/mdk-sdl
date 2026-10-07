@@ -43,8 +43,9 @@ public sealed class Debris(Random rng)
     /// <summary>Pieces start 2 units above the exploding object.</summary>
     private const float BreakUpRise = 2f;
     private const float TicksPerSecond = 30f;
-    /// <summary>A piece stops this far before the surface it hits, so the next ray starts in front of it.</summary>
-    private const float ContactBackoff = 0.01f;
+    /// <summary>A hit this close to the start is the surface the piece rests on: a segment starting
+    /// on a plane crosses nothing (0x421470), so the piece goes on through it.</summary>
+    private const float OnSurface = 1e-3f;
 
     /// <summary>A spark's tetrahedron (0x404b00) and its 4 faces.</summary>
     private static readonly Vector3[] SparkCorners = [new(0f, 0f, 0.5f), new(0.5f, 0f, -0.5f), new(-0.5f, 0.5f, -0.5f), new(-0.5f, -0.5f, -0.5f)];
@@ -328,21 +329,23 @@ public sealed class Debris(Random rng)
         }
     }
 
-    /// <summary>Flies freely (falling, lifted by the fans) or bounces off what it hits.</summary>
+    /// <summary>Flies freely (falling) or bounces off what it hits, stopping at the contact; the fans
+    /// lift it either way (0x4061d8).</summary>
     private void Move(Piece piece, float ticks)
     {
         var motion = piece.Velocity * ticks;
         var hit = motion != Vector3.Zero ? Ray?.Invoke(piece.Arena, piece.Center, piece.Center + motion) : null;
-        if (hit is { } h)
+        if (hit is { } h && Vector3.DistanceSquared(h.Point, piece.Center) > OnSurface * OnSurface)
         {
-            piece.Center = h.Point - Vector3.Normalize(motion) * ContactBackoff;
+            piece.Center = h.Point;
             piece.Velocity -= h.Normal * Vector3.Dot(piece.Velocity, h.Normal) * Bounce;
             piece.Ticks -= BounceTicks;
-            return;
         }
-
-        piece.Center += motion;
-        piece.Velocity.Z -= Gravity * ticks;
+        else
+        {
+            piece.Center += motion;
+            piece.Velocity.Z -= Gravity * ticks;
+        }
 
         // Fans push sparks and pieces (mask 8); their speeds are in units per second.
         var vz = Updraft?.Invoke(piece.Arena, piece.Center, piece.Velocity.Z * TicksPerSecond, ticks / TicksPerSecond) ?? float.NaN;

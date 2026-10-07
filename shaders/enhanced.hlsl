@@ -1,4 +1,6 @@
-// The enhanced look's surfaces: filtered texels (palette_filtered.hlsli), lit, shadowed and hazy.
+// The enhanced look's surfaces: filtered texels, lit, shadowed and hazy. Surfaces and sprites
+// sample their colour texture (RGBA8 premultiplied, mipmapped, a layer per frame: Renderer.Colours.cs)
+// trilinear and anisotropic; the canvas filters its index texture (palette_filtered.hlsli).
 //
 //   mode 1 lit:    albedo x (ambient + sun x N.L x shadow), then the haze; edges cut at half cover
 //   mode 2 sprite: albedo, then the haze; edges cut at half cover; no light
@@ -50,6 +52,8 @@ COMBINED_SAMPLER(1) Texture2D<float4> palette_texture : register(t1, space2);
 COMBINED_SAMPLER(1) SamplerState palette_sampler : register(s1, space2);
 COMBINED_SAMPLER(2) Texture2D<float> shadow_map : register(t2, space2);
 COMBINED_SAMPLER(2) SamplerState shadow_sampler : register(s2, space2);
+COMBINED_SAMPLER(3) Texture2DArray<float4> colour_texture : register(t3, space2);
+COMBINED_SAMPLER(3) SamplerState colour_sampler : register(s3, space2);
 
 #include "palette_filtered.hlsli"
 
@@ -126,8 +130,13 @@ float4 ps_main(VertexOut input) : SV_Target
         normal = -normal;
     }
 
-    float4 texel = textured != 0 ? palette_filtered(input.uv, frame_count, frame, mode == MODE_CANVAS ? EDGE_CLEAR : EDGE_WRAP)
-        : float4(1.0, 1.0, 1.0, 1.0);
+    // Sampled before any discard (mips need the derivatives); the layer is the frame.
+    float4 texel = float4(1.0, 1.0, 1.0, 1.0);
+    float4 colours = colour_texture.Sample(colour_sampler, float3(input.uv, frame_count > 1 ? frame : 0));
+    if (textured != 0)
+    {
+        texel = mode == MODE_CANVAS ? palette_filtered(input.uv, frame_count, frame, EDGE_CLEAR) : colours;
+    }
 
     // The canvas blends its edges; the rest cut them where half covered (premultiplied -> straight).
     if (mode == MODE_CANVAS)

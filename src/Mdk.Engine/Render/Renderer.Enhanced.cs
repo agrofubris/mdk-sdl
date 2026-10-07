@@ -52,9 +52,10 @@ public sealed unsafe partial class Renderer
     private const float GlowMip = 3f;
     private const uint SceneMips = 6;
     private const float AllMips = 1000f;
-    private const int EnhancedSamplers = 3;
+    private const int EnhancedSamplers = 4;
     private const int DepthSamplers = 1;
     private const int DefaultSamplers = 2;
+    private const int PostSamplers = 3;
 
     /// <summary>The enhanced shader's modes (shaders/enhanced.hlsl).</summary>
     private enum Mode { Lit = 1, Sprite = 2, Canvas = 3 }
@@ -100,6 +101,8 @@ public sealed unsafe partial class Renderer
     private SDL_GPUTexture* _msaaDepth;
     private SDL_GPUTexture* _scene;
     private SDL_GPUTexture* _viewDepth;
+    /// <summary>The ambient occlusion before its blur (occlusion.hlsl).</summary>
+    private SDL_GPUTexture* _occlusion;
     private SDL_GPUTexture* _shadowMap;
     /// <summary>This frame's shadow map matrix, while there is one.</summary>
     private Matrix4x4? _sunMatrix;
@@ -116,6 +119,7 @@ public sealed unsafe partial class Renderer
     {
         "enhanced" => EnhancedSamplers,
         "depth" => DepthSamplers,
+        "post" => PostSamplers,
         _ => DefaultSamplers,
     };
 
@@ -153,7 +157,7 @@ public sealed unsafe partial class Renderer
     /// <summary>Frees the targets of the frame's size (multisampled, the enhanced look's).</summary>
     private void ReleaseSizedTargets()
     {
-        foreach (var texture in new[] { _msaaColour, _msaaDepth, _scene, _viewDepth })
+        foreach (var texture in new[] { _msaaColour, _msaaDepth, _scene, _viewDepth, _occlusion })
         {
             if (texture != null)
             {
@@ -161,7 +165,7 @@ public sealed unsafe partial class Renderer
             }
         }
 
-        _msaaColour = _msaaDepth = _scene = _viewDepth = null;
+        _msaaColour = _msaaDepth = _scene = _viewDepth = _occlusion = null;
     }
 
     private void ReleaseShadowMap()
@@ -251,6 +255,8 @@ public sealed unsafe partial class Renderer
         _scene = CreateTexture(ColourFormat, _targetWidth, _targetHeight,
             SDL_GPUTextureUsageFlags.SDL_GPU_TEXTUREUSAGE_COLOR_TARGET | SDL_GPUTextureUsageFlags.SDL_GPU_TEXTUREUSAGE_SAMPLER, mips);
         _viewDepth = CreateTexture(_sampledDepthFormat, _targetWidth, _targetHeight, SampledDepthUsage);
+        _occlusion = CreateTexture(ColourFormat, _targetWidth, _targetHeight,
+            SDL_GPUTextureUsageFlags.SDL_GPU_TEXTUREUSAGE_COLOR_TARGET | SDL_GPUTextureUsageFlags.SDL_GPU_TEXTUREUSAGE_SAMPLER);
     }
 
     private const SDL_GPUTextureUsageFlags SampledDepthUsage =
@@ -359,6 +365,7 @@ public sealed unsafe partial class Renderer
         samplers[0] = new SDL_GPUTextureSamplerBinding { texture = (SDL_GPUTexture*)_textures[textured ? material.Texture : 0], sampler = _clampSampler };
         samplers[1] = new SDL_GPUTextureSamplerBinding { texture = (SDL_GPUTexture*)_textures[textured ? material.Palette : 0], sampler = _clampSampler };
         samplers[2] = new SDL_GPUTextureSamplerBinding { texture = shadowed ? _shadowMap : (SDL_GPUTexture*)_textures[0], sampler = _clampSampler };
+        samplers[3] = new SDL_GPUTextureSamplerBinding { texture = textured && mode != Mode.Canvas ? ColoursOf(material) : _blankColours, sampler = _colourSampler };
         SDL_BindGPUFragmentSamplers(pass, 0, samplers, EnhancedSamplers);
 
         // Without lighting: unlit, no haze.
@@ -380,23 +387,10 @@ public sealed unsafe partial class Renderer
         DrawPrimitives(pass, command.Count, command.First, command.Primitive);
     }
 
-    /// <summary>Ambient occlusion and glow, from the scene into the frame.</summary>
+    /// <summary>Ambient occlusion (noisy, into its own target), then blurred with the glow from the
+    /// scene into the frame.</summary>
     private void RenderPost(SDL_GPUCommandBuffer* commands, View view, Lighting lighting)
     {
-        var colourTarget = new SDL_GPUColorTargetInfo
-        {
-            texture = _target,
-            load_op = SDL_GPULoadOp.SDL_GPU_LOADOP_DONT_CARE,
-            store_op = SDL_GPUStoreOp.SDL_GPU_STOREOP_STORE,
-        };
-        var pass = SDL_BeginGPURenderPass(commands, &colourTarget, 1, null);
-        SDL_BindGPUGraphicsPipeline(pass, Pipeline(new PipelineKey("post", Pass.DoubleSided, Primitive.Triangles, Geometry.Post, 1, Output.Colour)));
-
-        var samplers = stackalloc SDL_GPUTextureSamplerBinding[DefaultSamplers];
-        samplers[0] = new SDL_GPUTextureSamplerBinding { texture = _scene, sampler = _mipSampler };
-        samplers[1] = new SDL_GPUTextureSamplerBinding { texture = _viewDepth, sampler = _clampSampler };
-        SDL_BindGPUFragmentSamplers(pass, 0, samplers, DefaultSamplers);
-
         Matrix4x4.Invert(view.ClipToDirection, out var viewToClip);
         var uniforms = new PostUniforms
         {
@@ -406,6 +400,28 @@ public sealed unsafe partial class Renderer
             Occlusion = new Vector4(OcclusionRadius, OcclusionStrength, lighting.HazeDensity, 0f),
             Glow = new Vector4(lighting.Glow, GlowThreshold, GlowIntensity, GlowMip),
         };
+
+        var samplers = stackalloc SDL_GPUTextureSamplerBinding[PostSamplers];
+        samplers[0] = new SDL_GPUTextureSamplerBinding { texture = _scene, sampler = _mipSampler };
+        samplers[1] = new SDL_GPUTextureSamplerBinding { texture = _viewDepth, sampler = _clampSampler };
+        samplers[2] = new SDL_GPUTextureSamplerBinding { texture = _occlusion, sampler = _clampSampler };
+        ScreenPass(commands, _occlusion, "occlusion", samplers, DefaultSamplers, uniforms);
+        ScreenPass(commands, _target, "post", samplers, PostSamplers, uniforms);
+    }
+
+    /// <summary>A screen-filling triangle of <paramref name="program"/> into <paramref name="target"/>.</summary>
+    private void ScreenPass(SDL_GPUCommandBuffer* commands, SDL_GPUTexture* target, string program,
+        SDL_GPUTextureSamplerBinding* samplers, uint count, PostUniforms uniforms)
+    {
+        var colourTarget = new SDL_GPUColorTargetInfo
+        {
+            texture = target,
+            load_op = SDL_GPULoadOp.SDL_GPU_LOADOP_DONT_CARE,
+            store_op = SDL_GPUStoreOp.SDL_GPU_STOREOP_STORE,
+        };
+        var pass = SDL_BeginGPURenderPass(commands, &colourTarget, 1, null);
+        SDL_BindGPUGraphicsPipeline(pass, Pipeline(new PipelineKey(program, Pass.DoubleSided, Primitive.Triangles, Geometry.Post, 1, Output.Colour)));
+        SDL_BindGPUFragmentSamplers(pass, 0, samplers, count);
         SDL_PushGPUFragmentUniformData(commands, 0, (IntPtr)(&uniforms), (uint)sizeof(PostUniforms));
         DrawPrimitives(pass, ScreenTriangle, 0, Primitive.Triangles);
         SDL_EndGPURenderPass(pass);

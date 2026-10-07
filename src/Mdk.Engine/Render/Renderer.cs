@@ -201,6 +201,7 @@ public sealed unsafe partial class Renderer : IDisposable
         _mipSampler = CreateSampler(SDL_GPUSamplerAddressMode.SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE, Sampling.Linear);
 
         _canvasMesh = CreateDynamicMesh(CanvasQuads * QuadVertices);
+        CreateColourSampler();
 
         // Texture 0 is bound for flat colours, so it must outlive every scope (Release).
         CreateRgbaTexture(1, 1, new byte[BytesPerPixel]);
@@ -224,6 +225,7 @@ public sealed unsafe partial class Renderer : IDisposable
     public void Release(Scope scope)
     {
         SDL_WaitForGPUIdle(_device);
+        ReleaseColoursFrom(scope.Textures);
         for (var i = _textures.Count - 1; i >= scope.Textures; i--)
         {
             SDL_ReleaseGPUTexture(_device, (SDL_GPUTexture*)_textures[i]);
@@ -476,15 +478,24 @@ public sealed unsafe partial class Renderer : IDisposable
         var texture = CreateTexture(SDL_GPUTextureFormat.SDL_GPU_TEXTUREFORMAT_R8_UNORM, (uint)width, (uint)height, SDL_GPUTextureUsageFlags.SDL_GPU_TEXTUREUSAGE_SAMPLER);
         Upload(texture, (uint)width, (uint)height, indices);
         _textures.Add((IntPtr)texture);
+        KeepIndices(_textures.Count - 1, width, height, indices);
         return _textures.Count - 1;
     }
 
     /// <summary>New pixels for a texture of the same size (a video's frame, a fading palette).</summary>
-    public void UpdateTexture(int texture, int width, int height, byte[] pixels) =>
+    public void UpdateTexture(int texture, int width, int height, byte[] pixels)
+    {
         Upload((SDL_GPUTexture*)_textures[texture], (uint)width, (uint)height, pixels);
+        Changed(texture, width, height, pixels);
+    }
 
     /// <summary>A 256-colour palette, RGBA8.</summary>
-    public int CreatePalette(byte[] rgba) => CreateRgbaTexture(PaletteSize, 1, rgba);
+    public int CreatePalette(byte[] rgba)
+    {
+        var palette = CreateRgbaTexture(PaletteSize, 1, rgba);
+        KeepPalette(palette, rgba);
+        return palette;
+    }
 
     public int CreateRgbaTexture(int width, int height, byte[] rgba)
     {
@@ -617,6 +628,7 @@ public sealed unsafe partial class Renderer : IDisposable
         EnsureTargets(width, height);
         QueueCanvas();
         UploadDynamic(commands);
+        PrepareColours(commands);
         (_drawCalls, _triangles) = (0, 0);
         RenderScene(commands, view, clearColour);
         Stats = new RenderStats(_drawCalls, _triangles);
@@ -911,6 +923,7 @@ public sealed unsafe partial class Renderer : IDisposable
         SDL_ReleaseGPUSampler(_device, _repeatSampler);
         SDL_ReleaseGPUSampler(_device, _clampSampler);
         SDL_ReleaseGPUSampler(_device, _mipSampler);
+        DisposeColours();
         SDL_ReleaseWindowFromGPUDevice(_device, _window.Handle);
         SDL_DestroyGPUDevice(_device);
     }
