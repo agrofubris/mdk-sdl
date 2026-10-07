@@ -112,6 +112,7 @@ mdk.exe
 - Tests: `--screenshot=file.bmp` (after `--wait=seconds` of game time, then quit),
   `--walk=seconds`, `--delay=seconds` (held keys start later), `--jump`, `--fire`, `--give=SW_HBOMB,...` (pickups to start with), `--use`
   (uses the item after 1 second), `--profile` (prints the objects of Kurt's arena every second),
+  `--trace` (prints Kurt, the camera and what carries him every frame),
   `--sniper[=zoom[,pitch]]` (sniper mode once Kurt stands), `--zoom=seconds` (zooms in),
   `--sniper-fire` (one sniper round), `--strike[=dive]` (Bones' full-screen strike), `--die` (Kurt
   dies after 1 second), `--event=N` (a `special_event` after 1 second: 1 ends the level). After
@@ -224,6 +225,7 @@ sh tests/flow_test.sh
 sh tests/stream_test.sh
 sh tests/fall_test.sh
 sh tests/rides_test.sh
+sh tests/carry_test.sh
 sh tests/snapshot_test.sh
 sh tests/end_level_test.sh
 sh tests/visuals_test.sh

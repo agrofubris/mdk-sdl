@@ -64,6 +64,27 @@ public sealed class Rides(ScriptRuntime runtime)
         }
     }
 
+    /// <summary>Each step, after the ticks: the XD2 is where Kurt is, Kurt where the XE is. Kurt
+    /// moves each step, they each tick: else every other frame draws them apart (a ghost).</summary>
+    public void Follow()
+    {
+        if (Ridden == null || _board != null)
+        {
+            return;
+        }
+
+        var kurt = runtime.Kurt;
+        if (Bomber != null)
+        {
+            kurt.Feet = Ridden.Position;
+            kurt.Yaw = Ridden.Yaw;
+            return;
+        }
+
+        Ridden.Position = kurt.Feet;
+        Ridden.Yaw = ScriptMath.Wrap360(kurt.Yaw);
+    }
+
     /// <summary>Whether Kurt rides the snowboard.</summary>
     public bool OnBoard() => _board != null;
 

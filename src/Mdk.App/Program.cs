@@ -43,6 +43,7 @@ using Mdk.Game.Scripts;
 //   --die                   Kurt is hurt to death after 1 second (tests)
 //   --event=N               a special_event after 1 second: 1 ends the level (tests)
 //   --profile               print the scripted objects once per second of game time (tests)
+//   --trace                 print Kurt, the camera and what carries him every frame (tests)
 //   --sniper[=zoom[,pitch]] sniper mode once Kurt stands (zoom 1 to 0.25, pitch positive down; tests)
 //   --zoom=seconds          hold "zoom in" in sniper mode (tests)
 //   --sniper-fire           fire one sniper round once the clip is loaded (tests)
@@ -104,6 +105,7 @@ var viewer = new ViewerOptions(level, position, yaw, pitch, sound)
     Use = options.ContainsKey("use"),
     Fly = options.ContainsKey("fly"),
     Profile = options.ContainsKey("profile"),
+    Trace = options.ContainsKey("trace"),
     Sniper = options.TryGetValue("sniper", out var sniper) ? SniperTest.Setup(sniper) : null,
     Zoom = Seconds("zoom"),
     SniperFire = options.ContainsKey("sniper-fire"),

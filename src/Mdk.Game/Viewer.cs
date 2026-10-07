@@ -39,6 +39,8 @@ public sealed record ViewerOptions(int Level, Vector3? Position, float? Yaw, flo
     public bool Fly { get; init; }
     /// <summary>Print the scripted objects once per second of game time.</summary>
     public bool Profile { get; init; }
+    /// <summary>Print every frame where Kurt, the camera and the object carrying him are drawn.</summary>
+    public bool Trace { get; init; }
     /// <summary>Sniper mode once Kurt stands, at this zoom (X) and pitch (Y); see <see cref="SniperTest"/>.</summary>
     public Vector2? Sniper { get; init; }
     /// <summary>Hold "zoom in" this many seconds in sniper mode.</summary>
@@ -397,6 +399,11 @@ public sealed class Viewer : IScreen
         }
 
         var camera = DrawScene(elapsed);
+        if (_options.Trace)
+        {
+            Trace(camera.Position);
+        }
+
         var save = SavePath(_options, input, _time) ?? screenshot;
         _dev.Draw();
         using (_ui.Dev.Profiler.Measure(Section.Render))
@@ -443,11 +450,15 @@ public sealed class Viewer : IScreen
             _sniperTest.Step(_kurt, _scripts, input, _time);
             _rideTest.Step(_kurt, _scripts, input, _time);
             UpdateKurt(input);
-            input.ClearMouse();
             using (_ui.Dev.Profiler.Measure(Section.Scripts))
             {
                 _scripts.Update(Step);
             }
+
+            // The camera follows Kurt where his platform carried him (game_frame: objects, then
+            // camera); before, it lagged a step behind on each tick: a ghost.
+            UpdateCamera(input);
+            input.ClearMouse();
 
             // The music follows Kurt's arena, which the scripts set (BSPShow).
             using (_ui.Dev.Profiler.Measure(Section.Audio))
@@ -477,7 +488,7 @@ public sealed class Viewer : IScreen
         }
     }
 
-    /// <summary>A step of Kurt and his camera, or of the flying camera (timed as physics).</summary>
+    /// <summary>A step of Kurt, or of the flying camera (timed as physics).</summary>
     private void UpdateKurt(Input input)
     {
         using var measure = _ui.Dev.Profiler.Measure(Section.Physics);
@@ -488,6 +499,17 @@ public sealed class Viewer : IScreen
         }
 
         _kurt.Update(input, Step);
+    }
+
+    /// <summary>A step of Kurt's camera, unless the flying one is on (timed as physics).</summary>
+    private void UpdateCamera(Input input)
+    {
+        using var measure = _ui.Dev.Profiler.Measure(Section.Physics);
+        if (_flying)
+        {
+            return;
+        }
+
         _follow.Update(_kurt, PitchGoal(), input, Step);
     }
 
@@ -799,6 +821,18 @@ public sealed class Viewer : IScreen
         {
             Console.WriteLine($"  unimplemented opcodes: {string.Join(", ", scripts.Vm.Unimplemented.Select(u => $"{u.Key}x{u.Value}"))}");
         }
+    }
+
+    /// <summary>For tests: where this frame draws Kurt, the camera and the platform or ride carrying him.</summary>
+    private void Trace(Vector3 camera)
+    {
+        var carrier = _scripts.Rides.Ridden ?? _kurt.Platform as MdkObject;
+        var on = carrier is { } c
+            ? string.Create(CultureInfo.InvariantCulture, $" on {c.TypeName} {c.Position.X:0.00} {c.Position.Y:0.00} {c.Position.Z:0.00}")
+            : "";
+        var f = _kurt.Feet;
+        Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
+            $"trace {_time:0.000} kurt {f.X:0.00} {f.Y:0.00} {f.Z:0.00} camera {camera.X:0.00} {camera.Y:0.00} {camera.Z:0.00}{on}"));
     }
 
     /// <summary>A music volume (0-0x7FFF) in whole decibels, as the Godot port's profile prints it.</summary>
