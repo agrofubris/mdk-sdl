@@ -2,8 +2,9 @@ using System.Diagnostics;
 
 namespace Mdk.Engine.Diagnostics;
 
-/// <summary>The parts of a frame the profiler times.</summary>
-public enum Section { Render, Physics, Scripts, Audio }
+/// <summary>The parts of a frame the profiler times: the game's draws (scene), the renderer's
+/// frame (render), Kurt and the cameras (physics), the scripts, the sounds.</summary>
+public enum Section { Scene, Render, Physics, Scripts, Audio }
 
 /// <summary>Times the sections of each frame and the frames themselves, averaged over the last
 /// frames (the debug overlay shows them).
@@ -19,6 +20,7 @@ public sealed class Profiler
 
     private readonly long[] _ticks = new long[Enum.GetValues<Section>().Length];
     private readonly float[] _average = new float[Enum.GetValues<Section>().Length];
+    private readonly float[] _last = new float[Enum.GetValues<Section>().Length];
     private long _frameStart = Stopwatch.GetTimestamp();
     private float _frame;
     private bool _started;
@@ -45,15 +47,26 @@ public sealed class Profiler
         var weight = _started ? Smoothing : 1f;
         _started = true;
         _frame += (frame - _frame) * weight;
+        LastFrameMilliseconds = frame;
         for (var i = 0; i < _ticks.Length; i++)
         {
-            _average[i] += (Milliseconds(_ticks[i]) - _average[i]) * weight;
+            _last[i] = Milliseconds(_ticks[i]);
+            _average[i] += (_last[i] - _average[i]) * weight;
             _ticks[i] = 0;
         }
     }
 
     /// <summary>A section's average time per frame.</summary>
     public float Milliseconds(Section section) => _average[(int)section];
+
+    /// <summary>A section's time in the last ended frame.</summary>
+    public float LastMilliseconds(Section section) => _last[(int)section];
+
+    /// <summary>Copies each section's time in the last ended frame (by <see cref="Section"/>).</summary>
+    public void CopyLast(Span<float> sections) => _last.CopyTo(sections);
+
+    /// <summary>The last ended frame's time.</summary>
+    public float LastFrameMilliseconds { get; private set; }
 
     /// <summary>The average frame's time and the frames per second.</summary>
     public float FrameMilliseconds => _frame;

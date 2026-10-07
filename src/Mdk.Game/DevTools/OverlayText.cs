@@ -19,8 +19,8 @@ public readonly record struct OverlaySample(Profiler Profiler, RenderStats Rende
 /// <summary>The debug overlay's lines; the last are the screen's (a level's here).
 /// <code>
 ///   FPS 60 (16.7 ms)
-///   render 5.2  physics 0.4  scripts 1.1  audio 0.2 ms
-///   draw calls 120, triangles 4500
+///   scene 0.3  render 5.2  physics 0.4  scripts 1.1  audio 0.2 ms
+///   draw calls 120, triangles 4500, GPU wait 4.1 ms   (render includes the wait: vsync, the GPU)
 ///   GC heap 12.0 MB, working set 80.0 MB, collections 3/2/1
 ///   Kurt 1.00 -2.50 30.00 yaw 270 Run
 ///   level 6 arena ARENA_2, objects 42
@@ -38,7 +38,7 @@ public static class OverlayText
         [
             $"FPS {Format(profiler.FramesPerSecond, "0")} ({Format(profiler.FrameMilliseconds, "0.0")} ms)",
             $"{sections} ms",
-            $"draw calls {sample.Render.DrawCalls}, triangles {sample.Render.Triangles}",
+            $"draw calls {sample.Render.DrawCalls}, triangles {sample.Render.Triangles}, GPU wait {Format(sample.Render.GpuWait, "0.0")} ms",
             $"GC heap {Format(memory.GcHeap / Megabyte, "0.0")} MB, working set {Format(memory.WorkingSet / Megabyte, "0.0")} MB, collections {string.Join('/', memory.Collections)}",
             .. sample.Screen,
         ];

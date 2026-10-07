@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Drawing;
 using System.Numerics;
 using System.Runtime.InteropServices;
@@ -80,8 +81,13 @@ public enum Backdrop { Sky, Clear, Keep }
 /// to world directions, for the sky), and its position.</summary>
 public readonly record struct View(Matrix4x4 ViewProjection, Matrix4x4 ClipToDirection, Vector3 Position);
 
-/// <summary>What the last frame drew: its GPU draw calls and triangles (lines count none).</summary>
-public readonly record struct RenderStats(int DrawCalls, int Triangles);
+/// <summary>What the last frame drew: its GPU draw calls and triangles (lines count none), and the
+/// milliseconds it waited for the GPU (the swapchain: earlier frames, the display's refresh; with
+/// <see cref="GpuSync.Wait"/>, this frame's GPU work).</summary>
+public readonly record struct RenderStats(int DrawCalls, int Triangles, float GpuWait = 0f);
+
+/// <summary>Whether a frame returns once submitted, or waits until the GPU has drawn it (measures).</summary>
+public enum GpuSync { Async, Wait }
 
 /// <summary>Draws paletted triangle meshes with SDL_GPU.
 /// <code>
@@ -618,6 +624,7 @@ public sealed unsafe partial class Renderer : IDisposable
 
         // A hidden window has no swapchain to show: the frame stays in the offscreen target.
         var shown = _window.Visibility == Visibility.Shown;
+        var waitStart = Stopwatch.GetTimestamp();
         if (shown && (!SDL_WaitAndAcquireGPUSwapchainTexture(commands, _window.Handle, &swapchain, &width, &height) || swapchain == null))
         {
             SDL_SubmitGPUCommandBuffer(commands);
@@ -626,27 +633,73 @@ public sealed unsafe partial class Renderer : IDisposable
             return;
         }
 
+        var wait = Stopwatch.GetElapsedTime(waitStart);
         EnsureTargets(width, height);
         QueueCanvas();
         UploadDynamic(commands);
         PrepareColours(commands);
         (_drawCalls, _triangles) = (0, 0);
         RenderScene(commands, view, clearColour);
-        Stats = new RenderStats(_drawCalls, _triangles);
         if (swapchain != null)
         {
             Blit(commands, swapchain, width, height);
         }
+
         if (screenshot != null)
         {
             Save(commands, screenshot);
         }
         else
         {
-            SDL_SubmitGPUCommandBuffer(commands);
+            wait += Submit(commands, swapchain != null ? Pacing.Swapchain : Pacing.Fence);
         }
 
+        Stats = new RenderStats(_drawCalls, _triangles, (float)wait.TotalMilliseconds);
         _commands.Clear();
+    }
+
+    /// <summary>How <see cref="Present"/> meets the GPU.</summary>
+    public GpuSync Sync { get; set; }
+
+    /// <summary>What keeps the CPU at most a frame ahead of the GPU: the swapchain (a shown window),
+    /// or the last frame's fence (a hidden one: frames would pile up, and their memory).</summary>
+    private enum Pacing { Swapchain, Fence }
+
+    private SDL_GPUFence* _lastFrame;
+
+    /// <summary>Submits the frame; with <see cref="GpuSync.Wait"/>, returns once the GPU has drawn it,
+    /// hidden, once it has drawn the one before (the time waited).</summary>
+    private TimeSpan Submit(SDL_GPUCommandBuffer* commands, Pacing pacing)
+    {
+        if (Sync == GpuSync.Async && pacing == Pacing.Swapchain)
+        {
+            SDL_SubmitGPUCommandBuffer(commands);
+            return TimeSpan.Zero;
+        }
+
+        var fence = SDL_SubmitGPUCommandBufferAndAcquireFence(commands);
+        var start = Stopwatch.GetTimestamp();
+        if (Sync == GpuSync.Wait)
+        {
+            WaitFor(fence);
+            return Stopwatch.GetElapsedTime(start);
+        }
+
+        WaitFor(_lastFrame);
+        _lastFrame = fence;
+        return Stopwatch.GetElapsedTime(start);
+    }
+
+    /// <summary>Waits until the GPU passes a fence (none: at once) and releases it.</summary>
+    private void WaitFor(SDL_GPUFence* fence)
+    {
+        if (fence == null)
+        {
+            return;
+        }
+
+        SDL_WaitForGPUFences(_device, true, &fence, 1);
+        SDL_ReleaseGPUFence(_device, fence);
     }
 
     /// <summary>Draws on the canvas over every frame, whoever presents it, just before (the
@@ -896,6 +949,7 @@ public sealed unsafe partial class Renderer : IDisposable
 
     public void Dispose()
     {
+        WaitFor(_lastFrame);
         SDL_WaitForGPUIdle(_device);
         foreach (var texture in _textures)
         {

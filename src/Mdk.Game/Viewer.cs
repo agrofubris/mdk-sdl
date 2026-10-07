@@ -593,7 +593,7 @@ public sealed class Viewer : IScreen
         }
 
         _scripts.Eye = camera.Position;
-        using var render = _ui.Dev.Profiler.Measure(Section.Render);
+        using var render = _ui.Dev.Profiler.Measure(Section.Scene);
         _view.Draw(_scripts.DrawnArenas, _scripts.AnimatedTextures);
         _view.DrawEnd(_scripts.EndLevel);
         DrawObjects(_objects, _scripts, _level, _looks);
