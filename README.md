@@ -145,8 +145,10 @@ S the stream after LEVEL7, D the statistics with random counts).
 ### Console and debug overlay
 
 On every screen (menus, briefing, statistics, videos, loading, the fall, the stream, a level),
-F3 shows the debug overlay: frames per second and the frame's time (render, physics, scripts,
-audio), draw calls and triangles, memory (GC heap, working set, collections), then the screen's
+F3 shows the debug overlay (its text made 4 times a second): frames per second and the frame's
+time (scene, render, physics, scripts, audio), draw calls, triangles and the time the frame waited
+for the GPU (in a window, render includes waiting for the display's refresh: vsync), memory (GC
+heap, working set, collections), then the screen's
 own lines: a menu's name; the fall's time, Kurt's height, health and pickups; the stream's
 segment, speed and health; in a level Kurt's position, yaw and state, the level, his arena and
 the objects. The key left of 1 (`` ` ``, `;` on a Slovak keyboard) opens the console: the game's
@@ -237,6 +239,7 @@ sh tests/visuals_test.sh
 sh tests/enhanced_test.sh
 sh tests/beta_test.sh
 sh tests/console_test.sh
+sh tests/alloc_test.sh
 sh tests/soak_test.sh short
 ```
 
@@ -245,6 +248,9 @@ stream and menu with random keys and reports exceptions, hangs and `Soak problem
 `MDK_REFERENCE=<another build's mdk> sh tests/enhanced_test.sh` also checks that the original look
 is that build's, pixel for pixel.
 `tests/beta_test.sh` and the demo's unit test are skipped without the 1996 demo.
+`tests/alloc_test.sh` plays levels hidden with `--perf[=warmup seconds]` (each frame waits for the
+GPU; at the end the frames' average times by section, bytes allocated per frame and garbage
+collections are printed) and fails above 512 bytes a frame or on a gen 1-2 collection.
 
 ## Layout
 
