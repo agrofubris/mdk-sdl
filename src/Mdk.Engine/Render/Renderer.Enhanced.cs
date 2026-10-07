@@ -52,7 +52,7 @@ public sealed unsafe partial class Renderer
     private const float GlowMip = 3f;
     private const uint SceneMips = 6;
     private const float AllMips = 1000f;
-    private const int EnhancedSamplers = 3;
+    private const int EnhancedSamplers = 4;
     private const int DepthSamplers = 1;
     private const int DefaultSamplers = 2;
 
@@ -359,6 +359,7 @@ public sealed unsafe partial class Renderer
         samplers[0] = new SDL_GPUTextureSamplerBinding { texture = (SDL_GPUTexture*)_textures[textured ? material.Texture : 0], sampler = _clampSampler };
         samplers[1] = new SDL_GPUTextureSamplerBinding { texture = (SDL_GPUTexture*)_textures[textured ? material.Palette : 0], sampler = _clampSampler };
         samplers[2] = new SDL_GPUTextureSamplerBinding { texture = shadowed ? _shadowMap : (SDL_GPUTexture*)_textures[0], sampler = _clampSampler };
+        samplers[3] = new SDL_GPUTextureSamplerBinding { texture = textured && mode != Mode.Canvas ? ColoursOf(material) : _blankColours, sampler = _colourSampler };
         SDL_BindGPUFragmentSamplers(pass, 0, samplers, EnhancedSamplers);
 
         // Without lighting: unlit, no haze.

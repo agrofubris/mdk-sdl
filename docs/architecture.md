@@ -93,8 +93,13 @@ filtered too (`Renderer.CanvasSampling`).
                                                         └ ambient occlusion    (occlusion × colour, glow)
 ```
 
-- `palette_filtered.hlsli`: bilinear by hand, each of the four texels through the palette; index
-  0 transparent; animated textures keep to their frame.
+- Colour textures (`Renderer.Colours.cs`, `ColourMips`): surfaces and sprites sample each index
+  texture expanded through its palette to RGBA8 (premultiplied, index 0 clear), with box-filtered
+  mips and a 2D array layer per animated frame, trilinear and 16x anisotropic. Made before the
+  first frame that draws them, again when their indices or palette change (bullet holes); about
+  5.3 times the index textures' memory (20-41 MB a level).
+- `palette_filtered.hlsli` (the canvas): bilinear by hand, each of the four texels through the
+  palette; index 0 transparent; animated textures keep to their frame.
 - `enhanced.hlsl`: flat normals from the world position's screen derivatives (the triangle's
   plane, turned to the camera); light in linear colour: albedo × (ambient + sun × N·L × shadow),
   then the haze (1 − e^(−density × distance)). Sprites: filtered, unlit, edges cut at half cover.
@@ -245,6 +250,6 @@ so the game runs them unchanged:
     Approximations: the radar's colours, the smoke trails.
 11. ✅ Enhanced look (`Renderer.Enhanced.cs`, `shaders/enhanced.hlsl`, `post.hlsl`, `depth.hlsl`):
     filtered textures, sky, sprites and 2D screens, a sun with shadows, white ambient light,
-    ambient occlusion, glow, haze; anti-aliasing in both looks. Still to do: mipmaps for the
-    textures, a sun per level, lights for muzzle flashes and explosions, occlusion and haze in the
+    ambient occlusion, glow, haze; mipmapped, anisotropic textures; anti-aliasing in both looks.
+    Still to do: a sun per level, lights for muzzle flashes and explosions, occlusion and haze in the
     insets (sniper mode).
