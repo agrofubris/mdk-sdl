@@ -203,4 +203,57 @@ public class KurtTests
         kurt.Update(new Input(), Step);
         Assert.False(kurt.ChuteClosing);
     }
+
+    /// <summary>How Kurt leaves the open chute without closing it.</summary>
+    public enum ChuteExit { Teleport, Ride, LevelEnd }
+
+    /// <summary>Kurt under the open chute with CHUTEON flapping, above <paramref name="feet"/>.</summary>
+    private static (Kurt.Kurt Kurt, SoundMixer Mixer, Input Jump) UnderChute(ArenaSpace space, Vector3 feet)
+    {
+        var entry = new SoundMixer.Entry(new Sound(new float[1000], 1, 1, Looping.Once), SoundMixer.FullVolume);
+        var mixer = new SoundMixer(Device, _ => entry);
+        var kurt = new Kurt.Kurt(space, mixer, _ => Frames) { Feet = feet, VerticalSpeed = -20f };
+        var jump = new Input();
+        jump.Hold(Key.Jump, Input.State.Down);
+        Run(kurt, jump, 0.5f);
+        Assert.True(mixer.IsPlaying("CHUTEON"));
+        return (kurt, mixer, jump);
+    }
+
+    [DataFact]
+    public void ChuteLoopStopsWhenKurtDies()
+    {
+        // Bug: dead under the chute, CHUTEON played until the level ended.
+        var (kurt, mixer, jump) = UnderChute(Space, Pad + new Vector3(0f, 0f, 10f));
+        kurt.SetHealth(0);
+        Run(kurt, jump, 3f);
+
+        Assert.Equal(State.Dead, kurt.Current);
+        Assert.False(mixer.IsPlaying("CHUTEON"));
+    }
+
+    [DataTheory]
+    [InlineData(ChuteExit.Teleport)]
+    [InlineData(ChuteExit.Ride)]
+    [InlineData(ChuteExit.LevelEnd)]
+    public void ChuteLoopStopsSilentlyOnOtherExits(ChuteExit exit)
+    {
+        var (kurt, mixer, jump) = UnderChute(new ArenaSpace(), new Vector3(0f, 0f, 1000f));
+        switch (exit)
+        {
+            case ChuteExit.Teleport:
+                kurt.Teleport(new Vector3(0f, 0f, 500f), 0f);
+                break;
+            case ChuteExit.Ride:
+                kurt.Ride = (_, _) => { };
+                break;
+            case ChuteExit.LevelEnd:
+                kurt.Frozen = true;
+                break;
+        }
+
+        kurt.Update(new Input(), Step);
+        Assert.False(mixer.IsPlaying("CHUTEON"));
+        Assert.False(mixer.IsPlaying("CHUTEIN"));
+    }
 }

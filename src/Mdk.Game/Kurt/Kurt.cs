@@ -132,7 +132,8 @@ public sealed partial class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.S
         ChuteClosing = false;
         if (Frozen)
         {
-            // Cutscenes: he stands still.
+            // Cutscenes and the level's end: he stands still.
+            StopChuteSound();
             ForwardSpeed = 0f;
             StrafeSpeed = 0f;
             VerticalSpeed = 0f;
@@ -141,6 +142,7 @@ public sealed partial class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.S
 
         if (Current == State.Dead)
         {
+            StopChuteSound();
             UpdateDeath(delta);
             return;
         }
@@ -156,6 +158,7 @@ public sealed partial class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.S
         {
             // No knock-down, chute or ledges while riding.
             KnockDamage = 0f;
+            StopChuteSound();
             Ride(input, delta);
             return;
         }
@@ -233,6 +236,9 @@ public sealed partial class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.S
     /// <summary>Moves Kurt (a script's teleport): he stops.</summary>
     public void Teleport(Vector3 feet, float yaw)
     {
+        // The chute closes silently.
+        ChuteOpen = false;
+        StopChuteSound();
         Feet = feet;
         Yaw = yaw;
         ForwardSpeed = 0f;
@@ -423,6 +429,10 @@ public sealed partial class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.S
         mixer.Stop(ChuteOnSound);
         mixer.Play("CHUTEIN");
     }
+
+    /// <summary>CHUTEON stops without CHUTEIN when Kurt leaves the chute otherwise: death, a
+    /// teleport, a ride, a cutscene or the level's end (it played on until the level ended).</summary>
+    private void StopChuteSound() => mixer.Stop(ChuteOnSound);
 
     /// <summary>On a floor flatter than 75°, walking downhill keeps the feet on it.</summary>
     private void GlueDownhill(Vector3 move, float delta)
