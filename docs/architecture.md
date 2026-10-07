@@ -59,7 +59,7 @@ for its runtime next to it (`SDL3.dll`, `libSDL3.so`, `libSDL3.dylib`).
 ## Rendering (original look)
 
 ```
- Arena triangles ──Layers (coplanar lift)──► batches per surface ──► Renderer
+ Arena triangles ──Layers (depth layers)───► batches per surface ──► Renderer
                                                                      │
  surface = index texture (R8) + palette (256x1) │ flat colour        ▼
                                                                 offscreen colour + depth
@@ -68,6 +68,9 @@ for its runtime next to it (`SDL3.dll`, `libSDL3.so`, `libSDL3.dylib`).
 ```
 
 - Palette index 0 is transparent.
+- Coplanar details (`Level/Layers.cs`): a triangle overlapping bigger ones of its plane is a layer
+  above them; layers and outlines are drawn pulled towards the eye (`DepthPull`), the same place on
+  screen, nearer in depth: no flicker, no cracks. The original draws back to front, without depth.
 - Vertex colours (white unless given) multiply the surface, Gouraud-blended: the stream's tube.
 - Glass (`GLASS1-4`) blends after the opaque surfaces; mirrors show the panorama where the sky
   behind them would be (shifted by MIRRLOW...MIRRHIGH).
