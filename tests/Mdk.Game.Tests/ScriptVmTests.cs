@@ -27,6 +27,8 @@ public class ScriptVmTests
     // Operand values.
     private const int Global = 0;
     private const int Own = 2;
+    /// <summary>Flag word 5: the object's own door state (obj+0x312, 0x440a34).</summary>
+    private const int Door = 5;
     private const int LessThan = 1;
     private const int Literal = 3;
     private const byte ActionGoto = 0x0C;
@@ -193,6 +195,30 @@ public class ScriptVmTests
         Assert.Equal(1 << Bit, obj.ScriptFlags);
         Assert.Equal(4f, obj.Variables[2]);
         Assert.Equal(0, obj.Restart);
+    }
+
+    /// <summary>Found by playtest: LEVEL4's airlock door waits for flag word 5 bit 3, its own
+    /// "closed" bit; word 5 read the linked object's flags instead.</summary>
+    [DataFact]
+    public void FlagWordFiveIsTheDoorState()
+    {
+        const int ClosedBit = 3;
+        const int LockedBit = 6;
+        var code = new Code()
+            .U8(IfFlagSet).U8(Door).U8(ClosedBit).U8(ActionGoto).Target("closed")
+            .End()
+            .Label("closed")
+            .U8(SetFlag).U8(Door).U8(LockedBit)
+            .End();
+        var (vm, obj) = Load(code);
+        obj.Flags |= MdkObject.FlagDoor;
+        obj.DoorState = ObjectBehaviors.DoorClosed;
+        obj.Linked = new MdkObject();
+
+        vm.Run(obj);
+
+        Assert.Equal(ObjectBehaviors.DoorClosed | ObjectBehaviors.DoorLocked, obj.DoorState);
+        Assert.Equal(0, obj.Linked.ScriptFlags);
     }
 
     [DataFact]

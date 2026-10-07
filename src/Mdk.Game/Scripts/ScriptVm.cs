@@ -197,11 +197,17 @@ public sealed class ScriptVm(ScriptRuntime runtime, ScriptDecoder decoder)
 
     private readonly float[] _noVariables = new float[VariableCount];
 
+    /// <summary>Flag word 5: a door's own state (obj+0x312, 0x440a34); nothing on other objects.</summary>
+    private const int DoorFlags = 5;
+
+    private static bool IsDoor(MdkObject obj) => (obj.Flags & MdkObject.FlagDoor) != 0;
+
     private int GetFlags(MdkObject obj, int source) => source switch
     {
         0 => runtime.GlobalFlags,
         1 => runtime.GetArenaState(obj.Arena).Flags,
         2 => obj.ScriptFlags,
+        DoorFlags => IsDoor(obj) ? obj.DoorState : 0,
         _ => obj.Linked?.ScriptFlags ?? 0,
     };
 
@@ -217,6 +223,13 @@ public sealed class ScriptVm(ScriptRuntime runtime, ScriptDecoder decoder)
                 break;
             case 2:
                 obj.ScriptFlags = value;
+                break;
+            case DoorFlags:
+                if (IsDoor(obj))
+                {
+                    obj.DoorState = value;
+                }
+
                 break;
             default:
                 if (obj.Linked != null)
