@@ -2574,26 +2574,19 @@ public sealed partial class ScriptRuntime
     public MdkObject? GetKurtPlatform() => Kurt.OnFloor ? Kurt.Platform as MdkObject : null;
 
     /// <summary>What Kurt collides with (damp_collide_move): the visible parts of the objects of his
-    /// arena that are alive and solid (no flags 0x10, 0x800), but the one he rides and doors' LOCK
-    /// parts; platforms (0x100, 0x800000) are stood on, standable ones even when he passes through
-    /// them otherwise (so he lands on the snowboard).</summary>
+    /// arena that are alive, walls or floors (<see cref="MdkObject.Footing"/>), but the one he rides
+    /// and doors' LOCK parts.</summary>
     private IReadOnlyList<Solids.Solid> SolidsWithin(Box region)
     {
-        const int Passable = MdkObject.FlagNotSolid | MdkObject.FlagNotSolid2;
-        const int Platforms = 0x100 | MdkObject.FlagStandable;
         var solids = new List<Solids.Solid>();
         foreach (var obj in Objects)
         {
-            var passable = (obj.Flags & Passable) != 0;
-            var standable = (obj.Flags & MdkObject.FlagStandable) != 0;
-            if (obj.Dead || obj.Arena != CurrentArena || obj.Health == 0 || obj.Model == null || (passable && !standable)
+            if (obj.Dead || obj.Arena != CurrentArena || obj.Health == 0 || obj.Model == null || obj.Footing is not { } footing
                 || obj == Rides.Ridden || !GetWorldBounds(obj).Intersects(region))
             {
                 continue;
             }
 
-            var footing = passable ? Solids.Footing.Floor
-                : (obj.Flags & Platforms) != 0 ? Solids.Footing.Platform : Solids.Footing.Wall;
             var parts = obj.PartBounds();
             for (var i = 0; i < parts.Length; i++)
             {

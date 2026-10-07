@@ -5,7 +5,7 @@ namespace Mdk.Game.Collision;
 
 /// <summary>Kurt against the solid objects of his arena (damp_collide_move 0x465e34, object pass;
 /// damp_platform_floor 0x41d2c4). Each visible part of an object is a box; only the XY of a walk is
-/// changed. Platforms (0x100, 0x800000) are stood on: a ray from 3 above the feet to 3 below meets
+/// changed. Platforms (0x100, no 0x10) are stood on: a ray from 3 above the feet to 3 below meets
 /// the top of one of their boxes. See godot-mdk docs/bsp.md "Kurt's move".
 /// <code>
 ///      part box grown by Kurt's box     segment A ──► B (box centres, XY slabs, z only rejects)

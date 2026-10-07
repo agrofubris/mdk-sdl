@@ -194,18 +194,20 @@ so the game runs them unchanged:
 
 ## Open questions
 
-- Passable but standable objects. The original's `damp_collide_move` skips objects with flag 0x10
-  or 0x800 (godot-mdk `docs/engine.md` "Kurt and objects"); platforms (0x100, which `set_targetable`
-  sets with 0x800000) are found by `damp_platform_floor`'s ray, whose flag test isn't documented.
-  The ports differ, neither from the RE:
+None open. Answered (Ghidra): which objects Kurt walks into or stands on
+(`MdkObject.Footing`).
 
-  | flags                | Godot (`mdk_object.gd` `update_body`) | C# (`ScriptRuntime.SolidsWithin`) |
-  |----------------------|----------------------------------------|-----------------------------------|
-  | 0x10 + 0x800000      | passed through                         | floor only                        |
-  | 0x800 + 0x800000     | solid (walls and floor)                | floor only                        |
+- Wall: neither 0x10 nor 0x800 (`damp_collide_move` 0x465e34 skips `flags & 0x810`; XY only).
+- Floor: 0x100 and not 0x10 (`damp_platform_floor` 0x41d2c4).
+- 0x800000 decides neither: landed on such a platform, Kurt keeps it without the floor scan
+  (`damp_gravity` 0x469efc sets 0x573b8c).
 
-  The code is left as it is until `damp_platform_floor` (0x41d2c4) is read in Ghidra. The snowboard
-  isn't affected: mounting it adds 0x800 and clears 0x800000.
+  | flags             | walls | floor | e.g. (level)                               |
+  |-------------------|-------|-------|--------------------------------------------|
+  | none              | yes   | no    | grunts, doors, turrets                     |
+  | 0x100 (+0x800000) | yes   | yes   | XPGUN (3), XBGUN, XTR (6), XTANK (7)       |
+  | 0x800 + 0x100     | no    | yes   | XWINCH (3), XSNOWB 0x800900 (4)            |
+  | 0x10, or 0x800    | no    | no    | pickups, bolts, X4_TOWER (5), XFORK (8)    |
 
 ## Roadmap
 

@@ -1,6 +1,7 @@
 using System.Numerics;
 using Mdk.Formats;
 using Mdk.Game.Collision;
+using Mdk.Game.Objects;
 using static Mdk.Game.Collision.Solids;
 
 namespace Mdk.Game.Tests;
@@ -48,5 +49,33 @@ public class SolidsTests
         // Beside it, or a wall (no footing), there's none.
         Assert.Null(Platform(new Vector3(13f, 11f, 4.5f), 3.9f, [Crate]));
         Assert.Null(Platform(new Vector3(11f, 11f, 4.5f), 3.9f, [Crate with { Footing = Footing.Wall }]));
+    }
+
+    /// <summary>What Kurt does with an object: walls block his walk, floors carry him.</summary>
+    [Flags]
+    public enum Meets { PassesThrough = 0, Blocked = 1, StandsOn = 2, Solid = Blocked | StandsOn }
+
+    /// <summary>The original's rule: walls are objects without 0x10 and 0x800 (damp_collide_move
+    /// 0x465e34), floors those with 0x100 and without 0x10 (damp_platform_floor 0x41d2c4); 0x800000
+    /// plays no part. E.g. the ridden snowboard (0x800900) is a floor only.</summary>
+    [Theory]
+    [InlineData(0x0, Meets.Blocked)]
+    [InlineData(0x100, Meets.Solid)]
+    [InlineData(0x800100, Meets.Solid)]
+    [InlineData(0x10, Meets.PassesThrough)]
+    [InlineData(0x800110, Meets.PassesThrough)]
+    [InlineData(0x800, Meets.PassesThrough)]
+    [InlineData(0x900, Meets.StandsOn)]
+    [InlineData(0x800900, Meets.StandsOn)]
+    [InlineData(0x910, Meets.PassesThrough)]
+    public void FlagsDecideWallsAndFloors(int flags, Meets expected)
+    {
+        var obj = new MdkObject { Flags = flags };
+        var solids = obj.Footing is { } footing ? [Crate with { Owner = obj, Footing = footing }] : Array.Empty<Solid>();
+
+        var blocked = Walk(new Vector3(5f, 11f, 3f), new Vector3(15f, 11f, 3f), Half, solids) != null;
+        var standsOn = Platform(new Vector3(11f, 11f, 4.5f), 3.9f, solids) != null;
+        var meets = (blocked ? Meets.Blocked : Meets.PassesThrough) | (standsOn ? Meets.StandsOn : Meets.PassesThrough);
+        Assert.Equal(expected, meets);
     }
 }
