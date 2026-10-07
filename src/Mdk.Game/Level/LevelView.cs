@@ -33,10 +33,11 @@ public sealed class LevelView
     /// <summary>Where a triangle is drawn: its group, first vertex, surface and UV scale.</summary>
     private readonly record struct Placement(int Group, int First, Material Material, Vector2 Scale);
 
-    private sealed class ArenaView(Arena arena, Vector3[] positions, Palette palette, List<TextureArchive> archives, bool reachable)
+    private sealed class ArenaView(Arena arena, Palette palette, List<TextureArchive> archives, bool reachable)
     {
         public readonly Arena Arena = arena;
-        public readonly Vector3[] Positions = positions;
+        public readonly Vector3[] Positions = [.. arena.TriangleIndices.Select(i => arena.Vertices[i])];
+        public readonly int[] Layers = Level.Layers.Of(arena);
         public readonly Palette Palette = palette;
         public readonly List<TextureArchive> Archives = archives;
         public bool Reachable = reachable;
@@ -64,7 +65,7 @@ public sealed class LevelView
         foreach (var arena in level.Arenas)
         {
             groups.Add(arena);
-            var view = new ArenaView(arena, Layers.Positions(arena), level.PaletteOf(arena), level.ArchivesOf(arena), level.IsReachable(arena.Name));
+            var view = new ArenaView(arena, level.PaletteOf(arena), level.ArchivesOf(arena), level.IsReachable(arena.Name));
             _arenas[arena.Name] = view;
             foreach (var group in groups.Of(arena.Name))
             {
@@ -283,9 +284,11 @@ public sealed class LevelView
                 continue;
             }
 
-            if (!bySurface.TryGetValue(s.Material, out var entry))
+            // Details over the surfaces they lie on.
+            var material = s.Material with { DepthLayer = view.Layers[t] };
+            if (!bySurface.TryGetValue(material, out var entry))
             {
-                bySurface[s.Material] = entry = (s.Texture, []);
+                bySurface[material] = entry = (s.Texture, []);
             }
 
             entry.Triangles.Add(t);

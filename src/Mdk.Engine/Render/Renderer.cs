@@ -54,9 +54,10 @@ public enum Primitive { Triangles, Lines }
 
 /// <summary>A surface: an index texture through a palette, a flat colour, or a mirror showing the
 /// panorama <paramref name="RowShift"/> rows lower or higher; <paramref name="Shading"/> picks the
-/// original look or the enhanced one; <paramref name="Blend"/> applies to the blended passes.</summary>
+/// original look or the enhanced one; <paramref name="Blend"/> applies to the blended passes;
+/// <paramref name="DepthLayer"/> draws it that many steps nearer in depth (a poster over its wall).</summary>
 public readonly record struct Material(int Texture, int Palette, Vector4 Colour, int FrameCount, Pass Pass, float RowShift = 0f,
-    Shading Shading = Shading.Original, Blend Blend = Blend.Alpha)
+    Shading Shading = Shading.Original, Blend Blend = Blend.Alpha, int DepthLayer = 0)
 {
     public const int None = -1;
 
@@ -736,7 +737,9 @@ public sealed unsafe partial class Renderer : IDisposable
         SDL_BindGPUVertexBuffers(pass, 0, &binding, 1);
 
         // The canvas is already in clip space; the rest goes through the camera.
-        var transform = material.Pass == Pass.Overlay ? command.World : command.World * view.ViewProjection;
+        // Layers and lines are drawn nearer than the surfaces they lie on.
+        var nearer = command.World * DepthPull.Of(view.Position, command.Primitive, material.DepthLayer);
+        var transform = material.Pass == Pass.Overlay ? command.World : nearer * view.ViewProjection;
         if (mode is { } enhanced)
         {
             DrawEnhanced(commands, pass, command, transform, enhanced, view);

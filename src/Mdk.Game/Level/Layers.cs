@@ -3,95 +3,138 @@ using Mdk.Formats;
 
 namespace Mdk.Game.Level;
 
-/// <summary>The corners of an arena's triangles, three per triangle, with details lifted off the
-/// walls they lie on. The original draws without a depth buffer, back to front, so a poster in its
-/// wall's plane simply covers it; with a depth buffer it would flicker. A triangle is lifted towards
-/// its front by <see cref="Lift"/> for each bigger triangle of the same plane covering its centre.
+/// <summary>The depth layer of each arena triangle. The original draws without a depth buffer, back
+/// to front, so a poster in its wall's plane simply covers it; with a depth buffer the two flicker.
+/// A triangle overlapping bigger ones of its plane is one layer above the highest of them, and the
+/// renderer draws it that much nearer (<see cref="Mdk.Engine.Render.Material.DepthLayer"/>). Its
+/// corners stay put: moving it off the wall would open cracks to its neighbours.
 /// <code>
 ///   wall ──────────────  layer 0
-///   poster   ────        layer 1 (+0.03 towards the viewer)
+///   poster   ────        layer 1    (also when only partly on the wall)
+///   sticker   ──         layer 2
 /// </code></summary>
 public static class Layers
 {
-    private const float Lift = 0.03f;
+    /// <summary>The highest layer: the pull towards the eye stays small (DepthPull).</summary>
+    public const int Highest = 3;
+
     /// <summary>Planes are told apart to 1/64 of a unit.</summary>
     private const float PlaneSteps = 64f;
 
-    public static Vector3[] Positions(Arena arena)
+    /// <summary>Overlaps below this area (square units) are rounding: neighbours sharing an edge.</summary>
+    private const float MinOverlap = 1e-3f;
+
+    private const int Corners = 3;
+
+    public static int[] Of(Arena arena)
     {
-        var positions = arena.TriangleIndices.Select(i => arena.Vertices[i]).ToArray();
-        LiftLayers(positions);
-        return positions;
+        var count = arena.TriangleIndices.Length / Corners;
+        var layers = new int[count];
+        foreach (var plane in Planes(arena, count))
+        {
+            Stack(arena, plane, layers);
+        }
+
+        return layers;
     }
 
-    private static void LiftLayers(Vector3[] positions)
+    /// <summary>The triangles of each plane, biggest first; of equal ones, the earlier in the data.</summary>
+    private static IEnumerable<List<(int Triangle, float Area, Vector3 Normal)>> Planes(Arena arena, int count)
     {
-        var count = positions.Length / 3;
-        var normals = new Vector3[count];
-        var areas = new float[count];
-        var planes = new Dictionary<(int, int, int, int), List<int>>();
+        var planes = new Dictionary<(int, int, int, int), List<(int, float, Vector3)>>();
         for (var t = 0; t < count; t++)
         {
-            var cross = Vector3.Cross(positions[t * 3 + 2] - positions[t * 3], positions[t * 3 + 1] - positions[t * 3]);
-            areas[t] = cross.Length();
-            if (areas[t] == 0f)
+            var (a, b, c) = (Corner(arena, t, 0), Corner(arena, t, 1), Corner(arena, t, 2));
+            var cross = Vector3.Cross(c - a, b - a);
+            var area = cross.Length();
+            if (area == 0f)
             {
                 continue;
             }
 
-            normals[t] = cross / areas[t];
-            var key = (Step(normals[t].X), Step(normals[t].Y), Step(normals[t].Z), Step(Vector3.Dot(normals[t], positions[t * 3])));
+            var normal = cross / area;
+            var key = (Step(normal.X), Step(normal.Y), Step(normal.Z), Step(Vector3.Dot(normal, a)));
             if (!planes.TryGetValue(key, out var list))
             {
                 planes[key] = list = [];
             }
 
-            list.Add(t);
+            list.Add((t, area, normal));
         }
 
-        var lifts = new float[count];
-        foreach (var triangles in planes.Values)
+        return planes.Values.Select(p => p.OrderByDescending(e => e.Item2).ThenBy(e => e.Item1).ToList());
+    }
+
+    /// <summary>Each triangle goes one layer above the highest bigger one it overlaps.</summary>
+    private static void Stack(Arena arena, List<(int Triangle, float Area, Vector3 Normal)> plane, int[] layers)
+    {
+        for (var i = 1; i < plane.Count; i++)
         {
-            foreach (var a in triangles)
+            var t = plane[i].Triangle;
+            for (var j = 0; j < i; j++)
             {
-                foreach (var b in triangles)
+                var under = plane[j].Triangle;
+                if (layers[under] >= layers[t] && Overlap(arena, t, under, plane[i].Normal) > MinOverlap)
                 {
-                    // Equal ones: the later in the data goes on top.
-                    var bigger = areas[b] > areas[a] || (areas[b] == areas[a] && b < a);
-                    if (bigger && Covers(positions, b, a, normals[b]))
-                    {
-                        lifts[a] += Lift;
-                    }
+                    layers[t] = Math.Min(layers[under] + 1, Highest);
                 }
-            }
-        }
-
-        for (var t = 0; t < count; t++)
-        {
-            for (var k = 0; k < 3; k++)
-            {
-                positions[t * 3 + k] += normals[t] * lifts[t];
             }
         }
     }
 
     private static int Step(float value) => (int)MathF.Round(value * PlaneSteps);
 
-    /// <summary>Whether triangle <paramref name="cover"/> holds the centre of triangle <paramref name="t"/>.</summary>
-    private static bool Covers(Vector3[] positions, int cover, int t, Vector3 normal)
+    private static Vector3 Corner(Arena arena, int t, int k) => arena.Vertices[arena.TriangleIndices[t * Corners + k]];
+
+    /// <summary>The area two triangles of a plane share: one clipped by the other's edges
+    /// (Sutherland-Hodgman), in the plane's 2D coordinates around the first corner (small numbers).</summary>
+    private static float Overlap(Arena arena, int t, int other, Vector3 normal)
     {
-        var centre = (positions[t * 3] + positions[t * 3 + 1] + positions[t * 3 + 2]) / 3f;
-        for (var i = 0; i < 3; i++)
+        var origin = Corner(arena, t, 0);
+        var u = Vector3.Normalize(Vector3.Cross(normal, MathF.Abs(normal.X) < 0.9f ? Vector3.UnitX : Vector3.UnitY));
+        var v = Vector3.Cross(normal, u);
+        Vector2 Flat(Vector3 p) => new(Vector3.Dot(p - origin, u), Vector3.Dot(p - origin, v));
+
+        var polygon = new List<Vector2> { Flat(origin), Flat(Corner(arena, t, 1)), Flat(Corner(arena, t, 2)) };
+        var clip = new[] { Flat(Corner(arena, other, 0)), Flat(Corner(arena, other, 1)), Flat(Corner(arena, other, 2)) };
+        var winding = MathF.Sign(Cross(clip[1] - clip[0], clip[2] - clip[0]));
+        for (var e = 0; e < Corners && polygon.Count > 0; e++)
         {
-            var a = positions[cover * 3 + i];
-            var b = positions[cover * 3 + (i + 1) % 3];
-            var c = positions[cover * 3 + (i + 2) % 3];
-            if (Vector3.Dot(normal, Vector3.Cross(b - a, centre - a)) * Vector3.Dot(normal, Vector3.Cross(b - a, c - a)) < 0f)
+            polygon = ClipBy(polygon, clip[e], clip[(e + 1) % Corners], winding);
+        }
+
+        var twice = 0f;
+        for (var k = 0; k < polygon.Count; k++)
+        {
+            twice += Cross(polygon[k], polygon[(k + 1) % polygon.Count]);
+        }
+
+        return MathF.Abs(twice) / 2f;
+    }
+
+    /// <summary>The part of a polygon on the inner side of the edge from <paramref name="a"/> to <paramref name="b"/>.</summary>
+    private static List<Vector2> ClipBy(List<Vector2> polygon, Vector2 a, Vector2 b, float winding)
+    {
+        float Side(Vector2 p) => winding * Cross(b - a, p - a);
+
+        var kept = new List<Vector2>();
+        for (var k = 0; k < polygon.Count; k++)
+        {
+            var (p, q) = (polygon[k], polygon[(k + 1) % polygon.Count]);
+            var (sp, sq) = (Side(p), Side(q));
+            if (sp >= 0f)
             {
-                return false;
+                kept.Add(p);
+            }
+
+            if (sp >= 0f != sq >= 0f)
+            {
+                kept.Add(p + (q - p) * (sp / (sp - sq)));
             }
         }
 
-        return true;
+        return kept;
     }
+
+    private static float Cross(Vector2 a, Vector2 b) => a.X * b.Y - a.Y * b.X;
 }
