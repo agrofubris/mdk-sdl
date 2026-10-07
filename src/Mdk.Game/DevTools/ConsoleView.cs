@@ -42,14 +42,24 @@ public sealed class ConsoleView(DevTextView text)
 
         // The line typed, then the log upwards from the newest line not scrolled away.
         var baseline = bottom - Margin;
-        text.Text(DevConsole.Prompt + console.Line + Cursor, Margin, baseline);
+        if (!ReferenceEquals(_typed, console.Line))
+        {
+            (_typed, _prompt) = (console.Line, DevConsole.Prompt + console.Line + Cursor);
+        }
+
+        text.Text(_prompt, Margin, baseline);
         var rows = (int)((height - Margin) / DevTextView.LineHeight) - 1;
-        var lines = log.Lines(rows + console.Scroll);
-        var shown = lines.Take(Math.Max(lines.Count - console.Scroll, 0)).TakeLast(rows).Reverse();
-        foreach (var line in shown)
+        log.CopyLast(rows + console.Scroll, _lines);
+        var newest = Math.Max(_lines.Count - console.Scroll, 0);
+        for (var i = newest - 1; i >= Math.Max(newest - rows, 0); i--)
         {
             baseline -= DevTextView.LineHeight;
-            text.Text(line, Margin, baseline);
+            text.Text(_lines[i], Margin, baseline);
         }
     }
+
+    /// <summary>The log's lines shown (kept), the line typed and its prompt (made when it changes).</summary>
+    private readonly List<string> _lines = [];
+    private string? _typed;
+    private string _prompt = "";
 }

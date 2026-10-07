@@ -1,5 +1,7 @@
 using System.Numerics;
 using Mdk.Formats;
+using Mdk.Game.Audio;
+using Mdk.Game.Scripts;
 
 namespace Mdk.Game.Objects;
 
@@ -7,7 +9,7 @@ namespace Mdk.Game.Objects;
 /// follows the original object structure (godot-mdk docs/scripts/notes_part1.md): MDK coordinates
 /// (Z up), degrees, yaw 0 = +X, 90 = +Y. A port of godot-mdk's <c>mdk_object.gd</c> without the
 /// drawing (see <see cref="ObjectView"/>) and the physics bodies (collisions go through the BSP).</summary>
-public sealed class MdkObject
+public sealed class MdkObject : ISoundSource
 {
     public const float AnimationFps = 30f;
 
@@ -267,7 +269,7 @@ public sealed class MdkObject
 
     /// <summary>Shared by every object: an animation's poses per model, and part bounds per frame.</summary>
     private static readonly Dictionary<(Model, ModelAnimation), Vector3[][][]> Baked = [];
-    private static readonly Dictionary<(Model, ModelAnimation?, int), Box?[]> BoundsCache = [];
+    private static readonly Dictionary<(Model, ModelAnimation?), Box?[][]> BoundsCache = [];
 
     /// <summary>The orientation: yaw turns around Z, pitch raises the nose (+X towards +Z), roll
     /// turns around the forward axis.</summary>
@@ -398,6 +400,51 @@ public sealed class MdkObject
         }
     }
 
+    /// <summary>The vertices of each part in the current pose (model space), hidden parts included;
+    /// shared, made once per model and animation.</summary>
+    public Vector3[][] PoseParts()
+    {
+        if (Model == null)
+        {
+            return [];
+        }
+
+        return Animation == null ? Rest(Model) : Bake(Model, Animation)[AnimationFrame];
+    }
+
+    private static Vector3[][] Rest(Model model)
+    {
+        lock (Baked)
+        {
+            if (!RestPoses.TryGetValue(model, out var pose))
+            {
+                pose = RestPoses[model] = [.. model.PartList.Select(p => p.Vertices)];
+            }
+
+            return pose;
+        }
+    }
+
+    private static readonly Dictionary<Model, Vector3[][]> RestPoses = [];
+
+    /// <summary>A sound on the object, <paramref name="offset"/> turned with its yaw.</summary>
+    public Vector3 SoundPosition(Vector3 offset) => Position + ScriptMath.RotatedZ(offset, Yaw);
+
+    /// <summary>Forgets the poses and boxes kept for models (a new level: the last one's models go).</summary>
+    public static void ForgetPoses()
+    {
+        lock (Baked)
+        {
+            Baked.Clear();
+            RestPoses.Clear();
+        }
+
+        lock (BoundsCache)
+        {
+            BoundsCache.Clear();
+        }
+    }
+
     /// <summary>The vertices of each part in the current pose (model space), hidden parts empty.</summary>
     public Vector3[][] Pose()
     {
@@ -406,7 +453,7 @@ public sealed class MdkObject
             return [];
         }
 
-        var pose = Animation == null ? Model.PartList.Select(p => p.Vertices).ToArray() : Bake(Model, Animation)[AnimationFrame];
+        var pose = PoseParts();
         if (HiddenParts == 0)
         {
             return pose;
@@ -436,20 +483,28 @@ public sealed class MdkObject
             return [];
         }
 
-        // Shared like Baked: runtimes on other threads (parallel tests) use it too.
-        var key = (Model, Animation, AnimationFrame);
+        // Shared like Baked: runtimes on other threads (parallel tests) use it too. Every frame of
+        // an animation at once: no allocation while it plays.
+        var key = (Model, Animation);
         lock (BoundsCache)
         {
-            if (BoundsCache.TryGetValue(key, out var cached))
+            if (!BoundsCache.TryGetValue(key, out var frames))
             {
-                return cached;
+                var poses = Animation == null ? [Rest(Model)] : Bake(Model, Animation);
+                frames = BoundsCache[key] = [.. poses.Select(PoseBoxes)];
             }
 
-            var pose = Animation == null ? Model.PartList.Select(p => p.Vertices).ToArray() : Bake(Model, Animation)[AnimationFrame];
-            var bounds = pose.Select(v => v.Length == 0 ? (Box?)null : new Box(v.Aggregate(Vector3.Min), v.Aggregate(Vector3.Max))).ToArray();
-            return BoundsCache[key] = bounds;
+            return frames[Animation == null ? 0 : AnimationFrame];
         }
     }
+
+    /// <summary>Each part's box in a pose (null for an empty part).</summary>
+    private static Box?[] PoseBoxes(Vector3[][] pose) =>
+        [.. pose.Select(v => v.Length == 0 ? (Box?)null : new Box(v.Aggregate(Vector3.Min), v.Aggregate(Vector3.Max)))];
+
+    /// <summary>Makes an animation's poses and boxes for a model now (a level's load), not when it plays.</summary>
+    public static void Prepare(Model model, ModelAnimation? animation) =>
+        new MdkObject { Model = model, Animation = animation }.PartBounds();
 
     /// <summary>Bounds of the visible parts in the current pose (model space).</summary>
     public Box PoseBounds()

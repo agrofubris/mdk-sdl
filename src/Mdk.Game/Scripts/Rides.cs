@@ -125,9 +125,9 @@ public sealed class Rides(ScriptRuntime runtime)
             return;
         }
 
-        foreach (var obj in kurt.Touched.OfType<MdkObject>())
+        foreach (var owner in kurt.Touched)
         {
-            if (obj.Dead || (obj.Flags & FlagRideable) == 0)
+            if (owner is not MdkObject obj || obj.Dead || (obj.Flags & FlagRideable) == 0)
             {
                 continue;
             }

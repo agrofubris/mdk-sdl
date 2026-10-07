@@ -124,7 +124,25 @@ public sealed class SniperRounds(ScriptRuntime runtime)
     private Round? _lastMortar;
 
     /// <summary>The rounds' models in flight (drawn with the objects).</summary>
-    public IEnumerable<MdkObject> Visuals => _rounds.Where(r => r.State == State.Flying && r.Visual != null).Select(r => r.Visual!);
+    public List<MdkObject> Visuals
+    {
+        get
+        {
+            _visuals.Clear();
+            foreach (var round in _rounds)
+            {
+                if (round.State == State.Flying && round.Visual != null)
+                {
+                    _visuals.Add(round.Visual);
+                }
+            }
+
+            return _visuals;
+        }
+    }
+
+    /// <summary>The flying rounds' models (kept: no list per frame).</summary>
+    private readonly List<MdkObject> _visuals = [];
 
     /// <summary>Fires a round of <paramref name="type"/> from <paramref name="eye"/> along the view
     /// (0x461e88); homing rounds chase <paramref name="target"/>. Returns false when all the slots are busy.</summary>

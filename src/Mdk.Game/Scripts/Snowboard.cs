@@ -431,9 +431,9 @@ public sealed class Snowboard
     /// <summary>Whatever Kurt runs into dies, and he takes 5 damage.</summary>
     private void Ram()
     {
-        foreach (var obj in _kurt.Touched.OfType<MdkObject>())
+        foreach (var owner in _kurt.Touched)
         {
-            if (obj == Board || obj.Dead || (obj.Flags & RamSpared) != 0 || obj.Health <= 0 || obj.Health >= ScriptRuntime.Indestructible)
+            if (owner is not MdkObject obj || obj == Board || obj.Dead || (obj.Flags & RamSpared) != 0 || obj.Health <= 0 || obj.Health >= ScriptRuntime.Indestructible)
             {
                 continue;
             }

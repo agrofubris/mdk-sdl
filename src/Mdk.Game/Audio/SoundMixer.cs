@@ -14,8 +14,9 @@ namespace Mdk.Game.Audio;
 /// <code>
 ///   Play("LAND")                     2D, the sound's default volume
 ///   PlayAt("EXPLODE", point)         3D, fixed at a point
-///   PlayOn("DUMMY", () => position)  3D, following something
-/// </code></summary>
+///   PlayOn("DUMMY", source, offset)  3D, following something (an object)
+/// </code>
+/// Voices are made once and reused: a sound played makes nothing.</summary>
 public sealed class SoundMixer(AudioDevice device, Func<string, SoundMixer.Entry?> sounds)
 {
     /// <summary>A new voice starts even if the sound plays (<c>New</c>), stops its voices first
@@ -38,17 +39,33 @@ public sealed class SoundMixer(AudioDevice device, Func<string, SoundMixer.Entry
     private const float ScopeDepth = 300f;
     private const float ScopeEdge = 1.3f;
 
-    private sealed class Voice(int id, string name, int volume, Func<Vector3>? position)
+    /// <summary>Where a voice is heard from: nowhere (2D), a point, or something moving.</summary>
+    private enum Place { Flat, Point, Source, Follow }
+
+    private sealed class Voice
     {
-        public readonly int Id = id;
-        public readonly string Name = name;
-        public int Volume = volume;
-        public readonly Func<Vector3>? Position = position;
+        public int Id;
+        public string Name = "";
+        public int Volume;
+        public Place Place;
+        public Vector3 Point;
+        public ISoundSource? Source;
+        public Func<Vector3>? Follow;
         /// <summary>Distance at the last update, -1 before the first.</summary>
         public float Distance = -1f;
+
+        public bool Positioned => Place != Place.Flat;
+
+        public Vector3 Position => Place switch
+        {
+            Place.Point => Point,
+            Place.Source => Source!.SoundPosition(Point),
+            _ => Follow!(),
+        };
     }
 
     private readonly List<Voice> _voices = [];
+    private readonly Stack<Voice> _spare = new();
     /// <summary>Looping copies of sounds that don't loop by themselves.</summary>
     private readonly Dictionary<string, Sound> _looped = [];
 
@@ -62,51 +79,90 @@ public sealed class SoundMixer(AudioDevice device, Func<string, SoundMixer.Entry
     public float ScopeZoom;
 
     /// <summary>Plays a sound without position. Returns the voice, or 0.</summary>
-    public int Play(string name, Start start = Start.New) => Launch(name, start, null);
+    public int Play(string name, Start start = Start.New) => Launch(name, start, Place.Flat);
 
-    public int PlayAt(string name, Vector3 point, Start start = Start.New) => Launch(name, start, () => point);
+    public int PlayAt(string name, Vector3 point, Start start = Start.New) => Launch(name, start, Place.Point, point);
 
-    public int PlayOn(string name, Func<Vector3> position, Start start = Start.New) => Launch(name, start, position);
+    public int PlayOn(string name, Func<Vector3> position, Start start = Start.New) => Launch(name, start, Place.Follow, follow: position);
+
+    /// <summary>Plays a sound on <paramref name="source"/>, <paramref name="offset"/> from it (in its frame).</summary>
+    public int PlayOn(string name, ISoundSource source, Vector3 offset, Start start = Start.New) =>
+        Launch(name, start, Place.Source, offset, source);
 
     /// <summary>Plays the music (on the music bus, without position).</summary>
-    public int PlayMusic(string name) => Launch(name, Start.New, null, Repeat.AsStored, Bus.Music);
+    public int PlayMusic(string name) => Launch(name, Start.New, Place.Flat, repeat: Repeat.AsStored, bus: Bus.Music);
 
     /// <summary>Plays a sound without position, looping even if its SNI entry doesn't (Kurt's chain gun).</summary>
-    public int PlayLooped(string name) => Launch(name, Start.New, null, Repeat.Forever);
+    public int PlayLooped(string name) => Launch(name, Start.New, Place.Flat, repeat: Repeat.Forever);
 
     /// <summary>A sound loops as its SNI entry says, or always.</summary>
     private enum Repeat { AsStored, Forever }
 
-    public bool IsPlaying(string name) => _voices.Any(v => v.Name == name);
+    public bool IsPlaying(string name)
+    {
+        foreach (var voice in _voices)
+        {
+            if (voice.Name == name)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>Whether a voice (as returned by the Play methods) still plays.</summary>
-    public bool IsVoicePlaying(int id) => id != 0 && _voices.Any(v => v.Id == id);
+    public bool IsVoicePlaying(int id) => id != 0 && VoiceOf(id) != null;
+
+    /// <summary>A voice by id, or null (no lambda: called every frame).</summary>
+    private Voice? VoiceOf(int id)
+    {
+        foreach (var voice in _voices)
+        {
+            if (voice.Id == id)
+            {
+                return voice;
+            }
+        }
+
+        return null;
+    }
 
     public void Stop(string name)
     {
-        foreach (var voice in _voices.Where(v => v.Name == name).ToList())
+        for (var i = _voices.Count - 1; i >= 0; i--)
         {
-            StopVoice(voice.Id);
+            if (_voices[i].Name == name)
+            {
+                device.Stop(_voices[i].Id);
+                Forget(i);
+            }
         }
     }
 
     public void StopVoice(int id)
     {
         device.Stop(id);
-        _voices.RemoveAll(v => v.Id == id);
+        for (var i = _voices.Count - 1; i >= 0; i--)
+        {
+            if (_voices[i].Id == id)
+            {
+                Forget(i);
+            }
+        }
     }
 
     /// <summary>A voice's volume (0-0x7FFF), e.g. the XD2's quieter DUMMY (0x4032e8).</summary>
     public void SetVolume(int id, int volume)
     {
-        var voice = _voices.Find(v => v.Id == id);
+        var voice = VoiceOf(id);
         if (voice == null)
         {
             return;
         }
 
         voice.Volume = volume;
-        if (voice.Position == null)
+        if (!voice.Positioned)
         {
             device.Set(id, Gain(volume), 1f, 0f);
         }
@@ -115,8 +171,8 @@ public sealed class SoundMixer(AudioDevice device, Func<string, SoundMixer.Entry
     /// <summary>A 2D voice's pitch (1: the sound's rate), e.g. BUTSLIDE at 15000 Hz instead of 11025.</summary>
     public void SetPitch(int id, float pitch)
     {
-        var voice = _voices.Find(v => v.Id == id);
-        if (voice != null && voice.Position == null)
+        var voice = VoiceOf(id);
+        if (voice != null && !voice.Positioned)
         {
             device.Set(id, Gain(voice.Volume), pitch, 0f);
         }
@@ -132,14 +188,34 @@ public sealed class SoundMixer(AudioDevice device, Func<string, SoundMixer.Entry
     /// <summary>Once a frame: forgets ended voices and updates the 3D ones from the listener.</summary>
     public void Update(float delta)
     {
-        _voices.RemoveAll(v => !device.IsPlaying(v.Id));
-        foreach (var voice in _voices.Where(v => v.Position != null))
+        for (var i = _voices.Count - 1; i >= 0; i--)
         {
-            Update3D(voice, delta);
+            if (!device.IsPlaying(_voices[i].Id))
+            {
+                Forget(i);
+            }
+        }
+
+        foreach (var voice in _voices)
+        {
+            if (voice.Positioned)
+            {
+                Update3D(voice, delta);
+            }
         }
     }
 
-    private int Launch(string name, Start start, Func<Vector3>? position, Repeat repeat = Repeat.AsStored, Bus bus = Bus.Effects)
+    /// <summary>A voice ended or stopped: back to the spares.</summary>
+    private void Forget(int index)
+    {
+        var voice = _voices[index];
+        (voice.Source, voice.Follow) = (null, null);
+        _voices.RemoveAt(index);
+        _spare.Push(voice);
+    }
+
+    private int Launch(string name, Start start, Place place, Vector3 point = default, ISoundSource? source = null,
+        Func<Vector3>? follow = null, Repeat repeat = Repeat.AsStored, Bus bus = Bus.Effects)
     {
         var entry = sounds(name);
         if (entry == null || (start == Start.Once && IsPlaying(name)))
@@ -159,9 +235,11 @@ public sealed class SoundMixer(AudioDevice device, Func<string, SoundMixer.Entry
             return 0;
         }
 
-        var voice = new Voice(id, name, entry.Volume, position);
+        var voice = _spare.Count > 0 ? _spare.Pop() : new Voice();
+        (voice.Id, voice.Name, voice.Volume, voice.Distance) = (id, name, entry.Volume, -1f);
+        (voice.Place, voice.Point, voice.Source, voice.Follow) = (place, point, source, follow);
         _voices.Add(voice);
-        if (position != null)
+        if (voice.Positioned)
         {
             Update3D(voice, 0f);
         }
@@ -211,7 +289,7 @@ public sealed class SoundMixer(AudioDevice device, Func<string, SoundMixer.Entry
     /// <summary>Volume, pan and pitch of a 3D voice from its place relative to the listener (0x40347c).</summary>
     private void Update3D(Voice voice, float delta)
     {
-        var offset = voice.Position!() - ListenerPosition;
+        var offset = voice.Position - ListenerPosition;
         var distance = Math.Max(offset.Length(), 1f);
 
         // Doppler: coming closer raises the pitch.

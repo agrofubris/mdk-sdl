@@ -88,6 +88,29 @@ public sealed class KurtSprite
         _palette = renderer.CreatePalette(palette.Rgba);
         _mesh = renderer.CreateDynamicMesh(QuadVertices);
         _muzzleMesh = renderer.CreateDynamicMesh(QuadVertices);
+        foreach (var name in Animations.Values.Select(a => a.Name).Append(ChuteSway).Append(MuzzleFlash).Append(BackUp).Distinct())
+        {
+            if (sprites.Has(name))
+            {
+                Preload(sprites.GetAnimation(name));
+            }
+        }
+    }
+
+    /// <summary>Decodes an animation's frames and puts them on the GPU (a level's load).</summary>
+    private void Preload(SpriteAnimation animation)
+    {
+        for (var frame = 0; frame < animation.FrameCount; frame++)
+        {
+            MaterialOf(animation.Name, frame, animation.GetFrame(frame).Image);
+        }
+    }
+
+    private Material MaterialOf(string name, int frame, Texture image)
+    {
+        var material = new Material(Texture(name, frame, image), _palette, Vector4.One, 1, Pass.DoubleSided, Shading: _shading);
+        _renderer.Prepare(material);
+        return material;
     }
 
     public int FrameCount(Kurt.State state) => FrameCount(Animations[state].Name);
@@ -98,6 +121,7 @@ public sealed class KurtSprite
         if (animation != null)
         {
             _extra[animation.Name] = animation;
+            Preload(animation);
         }
     }
 
@@ -154,8 +178,7 @@ public sealed class KurtSprite
             new(Corner(0, 0), new Vector2(0, 0)), new(Corner(w, h), new Vector2(1, 1)), new(Corner(0, h), new Vector2(0, 1)),
         ];
         _renderer.UpdateMesh(mesh, quad);
-        var material = new Material(Texture(name, frame, image.Image), _palette, Vector4.One, 1, Pass.DoubleSided, Shading: _shading);
-        _renderer.Draw(mesh, 0, QuadVertices, material);
+        _renderer.Draw(mesh, 0, QuadVertices, MaterialOf(name, frame, image.Image));
     }
 
     /// <summary>The animation and frame of Kurt's state; the chute opens, then sways.</summary>

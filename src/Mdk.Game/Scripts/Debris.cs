@@ -13,7 +13,7 @@ namespace Mdk.Game.Scripts;
 ///   spark   ─┼─► piece ─► each tick ─┤
 ///   break up ┘                       └─► free: fall, updraft, trail puff
 /// </code></summary>
-public sealed class Debris(Random rng)
+public sealed class Debris
 {
     /// <summary>Gravity in units per tick² (about 64 units/s²).</summary>
     public const float Gravity = 0.284444f * 0.25f;
@@ -84,6 +84,46 @@ public sealed class Debris(Random rng)
         public int Ticks;
 
         public bool IsSpark => Names == null;
+
+        /// <summary>Back to a new piece's state (taken again from the pool).</summary>
+        public void Reset()
+        {
+            Arena = "";
+            Names = null;
+            Materials.Clear();
+            Corners.Clear();
+            Uvs.Clear();
+            (ColourBase, ColourRange, TrailEvery, TrailTicks, Ticks) = (0, 0, 0, 0, 0);
+            (Center, Velocity) = (Vector3.Zero, Vector3.Zero);
+            (Orientation, Spin) = (Quaternion.Identity, Quaternion.Identity);
+        }
+    }
+
+    private readonly Random rng;
+
+    /// <summary>All pieces are made with the level (<see cref="MaxPieces"/>), then reused.</summary>
+    public Debris(Random rng)
+    {
+        this.rng = rng;
+        for (var i = 0; i < MaxPieces; i++)
+        {
+            _free.Push(new Piece());
+        }
+    }
+
+    private readonly Stack<Piece> _free = new(MaxPieces);
+    /// <summary>A spark's corners before they go into its piece.</summary>
+    private readonly Vector3[] _sparkCorners = new Vector3[SparkCorners.Length];
+
+    private Piece Take()
+    {
+        if (!_free.TryPop(out var piece))
+        {
+            return new Piece();
+        }
+
+        piece.Reset();
+        return piece;
     }
 
     /// <summary>The arena's nearest hit along a segment: (arena, from, to).</summary>
@@ -154,7 +194,8 @@ public sealed class Debris(Random rng)
             return;
         }
 
-        var piece = new Piece { Arena = shot.Arena, Names = shot.Names, Center = (c[0] + c[1] + c[2]) / 3f };
+        var piece = Take();
+        (piece.Arena, piece.Names, piece.Center) = (shot.Arena, shot.Names, (c[0] + c[1] + c[2]) / 3f);
         piece.Materials.Add(material);
         foreach (var corner in c)
         {
@@ -206,11 +247,15 @@ public sealed class Debris(Random rng)
     {
         for (var i = 0; i < count && _pieces.Count < MaxPieces; i++)
         {
-            var piece = new Piece { ColourBase = colour, ColourRange = range };
+            var piece = Take();
+            (piece.ColourBase, piece.ColourRange) = (colour, range);
             var s = (1f + RandomHalf() * Rand15) * size;
-            var corners = SparkCorners
-                .Select(c => (c + new Vector3(RandomHalf(), RandomHalf(), RandomHalf()) * CornerJitter) * s)
-                .ToArray();
+            var corners = _sparkCorners;
+            for (var c = 0; c < SparkCorners.Length; c++)
+            {
+                corners[c] = (SparkCorners[c] + new Vector3(RandomHalf(), RandomHalf(), RandomHalf()) * CornerJitter) * s;
+            }
+
             foreach (var k in SparkFaces)
             {
                 piece.Corners.Add(corners[k]);
@@ -256,7 +301,8 @@ public sealed class Debris(Random rng)
                 continue;
             }
 
-            var piece = new Piece { Names = model.Materials };
+            var piece = Take();
+            piece.Names = model.Materials;
             piece.Materials.AddRange(part.TriangleMaterials);
             foreach (var i in part.TriangleIndices)
             {
@@ -295,7 +341,18 @@ public sealed class Debris(Random rng)
     private int RandomHalf() => rng.Next(RandRange) - RandHalf;
 
     /// <summary>Whether an arena has any piece or spark.</summary>
-    public bool HasPieces(string arena) => _pieces.Any(p => p.Arena == arena);
+    public bool HasPieces(string arena)
+    {
+        foreach (var piece in _pieces)
+        {
+            if (piece.Arena == arena)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     public int PieceCount() => _pieces.Count;
 
@@ -311,6 +368,7 @@ public sealed class Debris(Random rng)
             if (piece.Ticks <= 0)
             {
                 _pieces.RemoveAt(i);
+                _free.Push(piece);
                 continue;
             }
 

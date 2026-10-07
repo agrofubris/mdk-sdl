@@ -14,7 +14,7 @@ public enum StrikeAim { NotChecked, None, Target }
 public enum Blink { Shown, Hidden }
 
 /// <summary>What the sniper screen shows this frame.</summary>
-public sealed record SniperHud(
+public readonly record struct SniperHud(
     float Zoom,
     IReadOnlyList<int> Ammo,
     int SelectedAmmo,
@@ -153,15 +153,15 @@ public sealed class SniperOverlay
     public void Update(float delta, SniperHud? hud)
     {
         _shown = hud;
-        if (hud == null)
+        if (hud is not { } shown)
         {
             _iris = 1f;
             _pulse = 1f;
             return;
         }
 
-        UpdateIris(delta, hud);
-        var goal = (int)MathF.Round(GaugeHeight * ZoomFraction(hud.Zoom));
+        UpdateIris(delta, shown);
+        var goal = (int)MathF.Round(GaugeHeight * ZoomFraction(shown.Zoom));
         _gaugeShown = Math.Clamp(goal, _gaugeShown - GaugeSpeed, _gaugeShown + GaugeSpeed);
     }
 

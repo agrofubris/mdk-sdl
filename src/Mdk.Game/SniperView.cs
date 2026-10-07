@@ -42,6 +42,8 @@ public sealed class SniperView(Renderer renderer, ObjectView objects, LevelData 
 
     private readonly Dictionary<string, ObjectView.Look> _looks = [];
     private readonly MdkObject[] _clip = [new(), new(), new()];
+    /// <summary>The round cameras of the frame (kept: no list per frame).</summary>
+    private readonly List<SniperRounds.RoundCamera> _cameras = [];
 
     /// <summary>Each frame: the rounds in flight, then (in sniper mode) the sniper screen's insets
     /// and state.</summary>
@@ -58,7 +60,13 @@ public sealed class SniperView(Renderer renderer, ObjectView objects, LevelData 
             return;
         }
 
-        var cameras = Enumerable.Range(0, SniperRounds.Slots).Select(scripts.SniperRounds.Camera).ToList();
+        var cameras = _cameras;
+        cameras.Clear();
+        for (var i = 0; i < SniperRounds.Slots; i++)
+        {
+            cameras.Add(scripts.SniperRounds.Camera(i));
+        }
+
         hud.Sniper.Update(delta, new SniperHud(kurt.Scope.Zoom, kurt.Inventory.Ammo, kurt.Inventory.SelectedAmmo, cameras, Aim(kurt, scripts)));
         var (scale, left) = SniperOverlay.Placement(renderer.CanvasWidth);
         for (var i = 0; i < cameras.Count; i++)
@@ -191,7 +199,7 @@ public sealed class SniperView(Renderer renderer, ObjectView objects, LevelData 
             return look;
         }
 
-        var arena = level.Arenas.Find(a => a.Name == name);
+        var arena = level.ArenaNamed(name);
         return _looks[name] = arena != null
             ? new ObjectView.Look(level.PaletteOf(arena), level.ArchivesOf(arena))
             : new ObjectView.Look(level.Dti.Palette, [level.LevelTextures]);

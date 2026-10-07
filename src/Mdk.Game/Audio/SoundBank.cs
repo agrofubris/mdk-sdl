@@ -4,7 +4,7 @@ using Mdk.Formats;
 namespace Mdk.Game.Audio;
 
 /// <summary>A level's sounds by name, from its SNI archives (<c>TRAVERSE.SNI</c>, <c>LEVELnS.SNI</c>,
-/// <c>LEVELnO.SNI</c> with the music), converted once on first use. Later archives win.</summary>
+/// <c>LEVELnO.SNI</c> with the music), converted at the level's load (<see cref="Preload"/>). Later archives win.</summary>
 public sealed class SoundBank(IReadOnlyList<Sni> archives)
 {
     private readonly Dictionary<string, SoundMixer.Entry?> _cache = [];
@@ -30,6 +30,21 @@ public sealed class SoundBank(IReadOnlyList<Sni> archives)
         }
 
         return _cache[name] = Load(name);
+    }
+
+    /// <summary>Converts every sound of the archives now (a level's load: none while playing).</summary>
+    public void Preload()
+    {
+        foreach (var archive in archives)
+        {
+            foreach (var (name, entry) in archive.Entries)
+            {
+                if (archive.IsSound(entry))
+                {
+                    Get(name);
+                }
+            }
+        }
     }
 
     /// <summary>Kurt's sprite animations stored with the sounds (the board's <c>K_SURF</c>), or null.</summary>

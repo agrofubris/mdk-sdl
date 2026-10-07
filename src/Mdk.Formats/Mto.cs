@@ -37,7 +37,18 @@ public sealed class Mto
 
     public IEnumerable<string> ArenaNames => ArenaOffsets.Select(e => e.Key);
 
-    public bool Has(string name) => ArenaOffsets.Any(e => e.Key == name);
+    public bool Has(string name)
+    {
+        foreach (var entry in ArenaOffsets)
+        {
+            if (entry.Key == name)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     public Arena GetArena(string name)
     {

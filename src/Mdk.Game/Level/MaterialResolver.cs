@@ -40,19 +40,21 @@ public sealed class MaterialResolver(Renderer renderer, Dti dti, Shading shading
             return Colour(-value, palette, pass);
         }
 
+        // Index loops: a foreach over the interfaces would make an enumerator per call (every frame's pieces).
         var name = names[value];
-        foreach (var archive in archives)
+        for (var i = 0; i < archives.Count; i++)
         {
-            if (archive.Textures.TryGetValue(name, out var texture))
+            if (archives[i].Textures.TryGetValue(name, out var texture))
             {
                 var material = new Material(TextureId(texture), PaletteId(palette), Vector4.One, texture.FrameCount, pass, Shading: ShadingOf(pass));
+                renderer.Prepare(material);
                 return new Surface(material, texture);
             }
         }
 
-        foreach (var archive in archives)
+        for (var i = 0; i < archives.Count; i++)
         {
-            if (archive.Colors.TryGetValue(name, out var index))
+            if (archives[i].Colors.TryGetValue(name, out var index))
             {
                 return Colour(index, palette, pass);
             }
@@ -122,6 +124,21 @@ public sealed class MaterialResolver(Renderer renderer, Dti dti, Shading shading
     }
 
     private Shading ShadingOf(Pass pass) => pass is Pass.Solid or Pass.DoubleSided ? shading : Shading.Original;
+
+    /// <summary>Puts every texture of <paramref name="archives"/> and <paramref name="palette"/> on
+    /// the GPU (a level's load: no frame creates any). The enhanced look's colour textures are made as
+    /// surfaces resolve (every texture through every palette would take seconds).</summary>
+    public void Preload(Palette palette, IReadOnlyList<TextureArchive> archives)
+    {
+        PaletteId(palette);
+        foreach (var archive in archives)
+        {
+            foreach (var texture in archive.Textures.Values)
+            {
+                TextureId(texture);
+            }
+        }
+    }
 
     /// <summary>Uploads a texture's pixels again if it's on the GPU (a bullet hole changed them).</summary>
     public void Refresh(Texture texture)

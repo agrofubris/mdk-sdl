@@ -127,7 +127,9 @@ public sealed class Game : IDisposable
         ConsoleCommands.Register(registry, _commands);
         _dev = new DevUi(new DevConsole(registry, _ui.Dev.History, _ui.Dev.Log, Console.WriteLine), () => _ui.Dev.ToggleOverlay());
         var devView = new DevUiView(_renderer, new Fonts(_renderer, _ui.Fti).Small);
-        _renderer.Overlay = () => devView.Draw(_dev, _ui.Dev, () => _screen?.Status ?? [Loading]);
+        // Made once: a lambda made in the overlay's would be made every frame.
+        Func<IReadOnlyList<string>> status = () => _screen?.Status ?? [Loading];
+        _renderer.Overlay = () => devView.Draw(_dev, _ui.Dev, status);
         _scope = _renderer.Mark();
         _soak = options.Level.Soak is { } seed ? new SoakKeys(seed) : null;
         _soakMenus = options.Start is Start.Menu or Start.Statistics or Start.Briefing or Start.EndMovie;

@@ -29,6 +29,14 @@ public sealed class EffectsView(Renderer renderer, MaterialResolver resolver, Le
     private readonly Dictionary<string, ObjectView.Look> _looks = [];
     private readonly List<Vertex> _vertices = [];
     private readonly List<(int First, int Count, Material Material, int Frame)> _draws = [];
+    /// <summary>This frame's piece batches in the order their surfaces came, their vertices in
+    /// lists kept from frame to frame.</summary>
+    private readonly List<Material> _pieceOrder = [];
+    private readonly Dictionary<Material, int> _pieceBatch = [];
+    private readonly List<List<Vertex>> _pieceVertices = [];
+    private readonly Dictionary<(string Arena, string Texture), MaterialResolver.Surface?> _sprites = [];
+    private readonly string[] _spriteName = new string[1];
+    private readonly List<(Vector3 Position, Vector2 Uv)> _ribbon = [];
 
     /// <summary>Queues everything for <paramref name="camera"/>.</summary>
     public void Draw(ScriptRuntime scripts, View camera)
@@ -43,8 +51,10 @@ public sealed class EffectsView(Renderer renderer, MaterialResolver resolver, Le
         var billboardUp = Vector3.Cross(right, forward);
 
         AddPieces(scripts.Debris.Pieces, forward);
-        foreach (var effect in scripts.Effects.All)
+        var effects = scripts.Effects.All;
+        for (var i = 0; i < effects.Count; i++)
         {
+            var effect = effects[i];
             var sprite = Sprite(effect.Arena, effect.Texture);
             if (sprite is { } s)
             {
@@ -56,7 +66,7 @@ public sealed class EffectsView(Renderer renderer, MaterialResolver resolver, Le
         // spawn_box sprites: as wide as the box, playing at 30 frames per second.
         foreach (var box in scripts.Boxes)
         {
-            if (!box.Visible || box.Model == null || Sprite(box.Arena, box.Model.Name) is not { } s)
+            if (box.Dead || !box.Visible || box.Model == null || Sprite(box.Arena, box.Model.Name) is not { } s)
             {
                 continue;
             }
@@ -66,9 +76,10 @@ public sealed class EffectsView(Renderer renderer, MaterialResolver resolver, Le
             AddQuad(box.Position, right * texel, billboardUp * texel, s, scripts.TickCount % s.Material.FrameCount);
         }
 
-        foreach (var twister in scripts.Items.Twisters)
+        var twisters = scripts.Items.Twisters;
+        for (var i = 0; i < twisters.Count; i++)
         {
-            AddRibbon(twister);
+            AddRibbon(twisters[i]);
         }
 
         if (_vertices.Count == 0)
@@ -86,9 +97,11 @@ public sealed class EffectsView(Renderer renderer, MaterialResolver resolver, Le
     /// <summary>Pieces' triangles batched by surface; sparks' by palette colour.</summary>
     private void AddPieces(IReadOnlyList<Debris.Piece> pieces, Vector3 forward)
     {
-        var batches = new Dictionary<Material, List<Vertex>>();
-        foreach (var piece in pieces)
+        _pieceOrder.Clear();
+        _pieceBatch.Clear();
+        for (var p = 0; p < pieces.Count; p++)
         {
+            var piece = pieces[p];
             var look = LookOf(piece.Arena);
             for (var t = 0; t < piece.Corners.Count / 3; t++)
             {
@@ -101,10 +114,7 @@ public sealed class EffectsView(Renderer renderer, MaterialResolver resolver, Le
                     continue;
                 }
 
-                if (!batches.TryGetValue(s.Material, out var vertices))
-                {
-                    batches[s.Material] = vertices = [];
-                }
+                var vertices = PieceBatch(s.Material);
 
                 // UVs are in texels of the texture.
                 var scale = s.Texture == null ? Vector2.Zero : new Vector2(1f / s.Texture.Width, 1f / s.Texture.Height);
@@ -115,8 +125,9 @@ public sealed class EffectsView(Renderer renderer, MaterialResolver resolver, Le
             }
         }
 
-        foreach (var (material, vertices) in batches)
+        foreach (var material in _pieceOrder)
         {
+            var vertices = _pieceVertices[_pieceBatch[material]];
             var count = Math.Min(vertices.Count, MaxVertices - _vertices.Count) / 3 * 3;
             if (count == 0)
             {
@@ -124,8 +135,28 @@ public sealed class EffectsView(Renderer renderer, MaterialResolver resolver, Le
             }
 
             _draws.Add((_vertices.Count, count, material, 0));
-            _vertices.AddRange(vertices.Take(count));
+            _vertices.AddRange(CollectionsMarshal.AsSpan(vertices)[..count]);
         }
+    }
+
+    /// <summary>The vertex list of a surface's batch this frame (a kept list, emptied).</summary>
+    private List<Vertex> PieceBatch(Material material)
+    {
+        if (_pieceBatch.TryGetValue(material, out var index))
+        {
+            return _pieceVertices[index];
+        }
+
+        index = _pieceOrder.Count;
+        _pieceOrder.Add(material);
+        _pieceBatch[material] = index;
+        if (index == _pieceVertices.Count)
+        {
+            _pieceVertices.Add([]);
+        }
+
+        _pieceVertices[index].Clear();
+        return _pieceVertices[index];
     }
 
     private MaterialResolver.Surface? PieceSurface(Debris.Piece piece, int triangle, ObjectView.Look look) =>
@@ -147,9 +178,21 @@ public sealed class EffectsView(Renderer renderer, MaterialResolver resolver, Le
     /// <paramref name="sprites"/>), or null.</summary>
     private MaterialResolver.Surface? Sprite(string arena, string texture)
     {
+        if (_sprites.TryGetValue((arena, texture), out var known))
+        {
+            return known;
+        }
+
         var look = LookOf(arena);
-        var surface = resolver.Resolve(0, [texture], look.Palette, look.Archives, Pass.DoubleSided);
-        return surface is { Texture: not null } s ? s with { Material = s.Material with { Shading = sprites } } : null;
+        _spriteName[0] = texture;
+        var surface = resolver.Resolve(0, _spriteName, look.Palette, look.Archives, Pass.DoubleSided);
+        var sprite = surface is { Texture: not null } s ? s with { Material = s.Material with { Shading = sprites } } : (MaterialResolver.Surface?)null;
+        if (sprite is { } prepared)
+        {
+            renderer.Prepare(prepared.Material);
+        }
+
+        return _sprites[(arena, texture)] = sprite;
     }
 
     /// <summary>A sprite centred at <paramref name="center"/>, <paramref name="right"/> and
@@ -165,13 +208,19 @@ public sealed class EffectsView(Renderer renderer, MaterialResolver resolver, Le
         var halfHeight = up * (sprite.Texture.Height * 0.5f);
         Vertex Corner(float x, float y) => new(center + halfWidth * (x * 2f - 1f) + halfHeight * (1f - y * 2f), new Vector2(x, y));
         _draws.Add((_vertices.Count, QuadVertices, sprite.Material, frame));
-        _vertices.AddRange([Corner(0, 0), Corner(1, 0), Corner(1, 1), Corner(0, 0), Corner(1, 1), Corner(0, 1)]);
+        _vertices.Add(Corner(0, 0));
+        _vertices.Add(Corner(1, 0));
+        _vertices.Add(Corner(1, 1));
+        _vertices.Add(Corner(0, 0));
+        _vertices.Add(Corner(1, 1));
+        _vertices.Add(Corner(0, 1));
     }
 
     /// <summary>A twister's ribbon, textured with <c>WMIBTEX</c> (UVs in its texels).</summary>
     private void AddRibbon(Twister twister)
     {
-        var corners = twister.Ribbon.Triangles();
+        var corners = _ribbon;
+        twister.Ribbon.Triangles(corners);
         if (corners.Count == 0 || _vertices.Count + corners.Count > MaxVertices || Sprite(twister.Arena, Ribbon.Texture) is not { } s)
         {
             return;
@@ -179,7 +228,10 @@ public sealed class EffectsView(Renderer renderer, MaterialResolver resolver, Le
 
         var scale = new Vector2(1f / s.Texture!.Width, 1f / s.Texture.Height);
         _draws.Add((_vertices.Count, corners.Count, s.Material, 0));
-        _vertices.AddRange(corners.Select(c => new Vertex(c.Position, c.Uv * scale)));
+        foreach (var (position, uv) in corners)
+        {
+            _vertices.Add(new Vertex(position, uv * scale));
+        }
     }
 
     /// <summary>The palette and textures an arena's effects draw with.</summary>
@@ -190,7 +242,7 @@ public sealed class EffectsView(Renderer renderer, MaterialResolver resolver, Le
             return look;
         }
 
-        var arena = level.Arenas.Find(a => a.Name == name);
+        var arena = level.ArenaNamed(name);
         return _looks[name] = arena != null
             ? new ObjectView.Look(level.PaletteOf(arena), level.ArchivesOf(arena))
             : new ObjectView.Look(level.Dti.Palette, [level.LevelTextures]);

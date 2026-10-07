@@ -109,6 +109,21 @@ public sealed class ModelAnimation
     }
 
     /// <summary>Per frame, every part's vertices. Parts without a track keep their model vertices.</summary>
+    /// <summary>Whether this animation moves <paramref name="model"/>: one of its tracks names a part
+    /// of the model (a level's load bakes these pairs).</summary>
+    public bool Animates(Model model)
+    {
+        foreach (var part in model.PartList)
+        {
+            if (_tracks.ContainsKey(part.Name.ToLowerInvariant()))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public Vector3[][][] Bake(Model model)
     {
         var perPart = model.PartList

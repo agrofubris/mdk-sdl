@@ -76,9 +76,12 @@ public sealed class DevConsole
         {
             // The text of the frame's Grave (` or ; by the layout) isn't typed.
             Type(input.Typed);
-            foreach (var (_, key) in Keys.Where(k => input.WasPressed(k.Key)))
+            foreach (var (raw, key) in Keys)
             {
-                Press(key);
+                if (input.WasPressed(raw))
+                {
+                    Press(key);
+                }
             }
         }
 
@@ -90,6 +93,11 @@ public sealed class DevConsole
     /// <summary>Adds typed text: control characters dropped, those the font hasn't as '?'.</summary>
     public void Type(string text)
     {
+        if (text.Length == 0)
+        {
+            return;
+        }
+
         foreach (var c in text.Where(c => c >= FirstPrintable))
         {
             Line += c <= LastFontCharacter ? c : Unknown;

@@ -205,7 +205,8 @@ public sealed class Effects(Random rng)
     /// <summary>Updates the effects by <paramref name="ticks"/>.</summary>
     public void Update(float ticks)
     {
-        foreach (var effect in _effects.ToList())
+        using var copy = ListCopy<Effect>.Of(_effects);
+        foreach (var effect in copy)
         {
             switch (effect.Kind)
             {

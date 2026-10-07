@@ -38,6 +38,7 @@ public sealed partial class Kurt
     public bool Rising;
 
     private IReadOnlyList<object> _touched = [];
+    private readonly List<object> _touchedNow = [];
     private readonly List<(Arena Arena, int Triangle)> _contacts = [];
 
     /// <summary>The objects Kurt's box touches (damp_collide_move's 0x573c2c), and his platform.</summary>
@@ -110,10 +111,14 @@ public sealed partial class Kurt
     /// groups get a hit).</summary>
     public List<(Arena Arena, int Triangle)> TakeContacts()
     {
-        var contacts = _contacts.ToList();
+        _taken.Clear();
+        _taken.AddRange(_contacts);
         _contacts.Clear();
-        return contacts;
+        return _taken;
     }
+
+    /// <summary>The contacts last taken (kept: no list per step).</summary>
+    private readonly List<(Arena Arena, int Triangle)> _taken = [];
 
     private ArenaSpace.Result Contact(ArenaSpace.Result result)
     {
@@ -127,12 +132,13 @@ public sealed partial class Kurt
 
     private void UpdateTouched()
     {
-        var touched = ArenaSpace.Touching(Feet, Nearby(Feet)).ToList();
-        if (Platform != null && !touched.Contains(Platform))
+        _touchedNow.Clear();
+        ArenaSpace.Touching(Feet, Nearby(Feet), _touchedNow);
+        if (Platform != null && !_touchedNow.Contains(Platform))
         {
-            touched.Add(Platform);
+            _touchedNow.Add(Platform);
         }
 
-        _touched = touched;
+        _touched = _touchedNow;
     }
 }

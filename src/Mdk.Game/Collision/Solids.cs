@@ -90,11 +90,25 @@ public static class Solids
     /// the box centre <paramref name="a"/>: what a walk stopped against, or what Kurt is in.</summary>
     public static IEnumerable<object> Touching(Vector3 a, Vector3 half, IReadOnlyList<Solid> solids)
     {
+        var owners = new List<object>();
+        Touching(a, half, solids, owners);
+        return owners;
+    }
+
+    /// <summary><see cref="Touching(Vector3, Vector3, IReadOnlyList{Solid})"/> added to
+    /// <paramref name="owners"/>, each once.</summary>
+    public static void Touching(Vector3 a, Vector3 half, IReadOnlyList<Solid> solids, List<object> owners)
+    {
         var reach = half + new Vector3(Gap * 2f);
-        return solids.Where(s => new Box(s.Box.Min - reach, s.Box.Max + reach) is var box
-            && a.X >= box.Min.X && a.X <= box.Max.X && a.Y >= box.Min.Y && a.Y <= box.Max.Y && a.Z >= box.Min.Z && a.Z <= box.Max.Z)
-            .Select(s => s.Owner)
-            .Distinct();
+        foreach (var s in solids)
+        {
+            var box = new Box(s.Box.Min - reach, s.Box.Max + reach);
+            if (a.X >= box.Min.X && a.X <= box.Max.X && a.Y >= box.Min.Y && a.Y <= box.Max.Y && a.Z >= box.Min.Z && a.Z <= box.Max.Z
+                && !owners.Contains(s.Owner))
+            {
+                owners.Add(s.Owner);
+            }
+        }
     }
 
     private static bool Inside(Box box, Vector3 p) => p.X > box.Min.X && p.X < box.Max.X && p.Y > box.Min.Y && p.Y < box.Max.Y;
