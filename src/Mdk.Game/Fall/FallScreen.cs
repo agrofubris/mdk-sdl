@@ -42,6 +42,12 @@ public sealed class FallScreen : IScreen
         _ui = ui;
         _state = state;
         _test = test;
+        // No pointer over the fall (as in a level); a hidden test window keeps it free.
+        if (ui.Window.Visibility == Visibility.Shown)
+        {
+            ui.Window.CaptureMouse(Capture.On);
+        }
+
         var index = Math.Clamp(GameState.IndexOf(state.Level), 0, LastIndex);
         var n = index + 1;
         var data = ui.Data;
@@ -189,6 +195,7 @@ public sealed class FallScreen : IScreen
 
     public void Dispose()
     {
+        _ui.Window.CaptureMouse(Capture.Off);
         if (_test.Walk > 0f)
         {
             _ui.Input.Hold(Key.Forward, Input.State.Up);

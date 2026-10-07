@@ -48,6 +48,12 @@ public sealed class StreamScreen : IScreen
     {
         _ui = ui;
         _level = level;
+        // No pointer over the flight (as in a level); a hidden test window keeps it free.
+        if (ui.Window.Visibility == Visibility.Shown)
+        {
+            ui.Window.CaptureMouse(Capture.On);
+        }
+
         var index = Math.Clamp(GameState.IndexOf(level), 0, LastStatisticsIndex + 1);
         var kind = index > LastStatisticsIndex ? StreamTube.Kind.Gunter : StreamTube.Kind.Normal;
         var difficulty = ui.Settings.Difficulty;
@@ -174,5 +180,6 @@ public sealed class StreamScreen : IScreen
 
     public void Dispose()
     {
+        _ui.Window.CaptureMouse(Capture.Off);
     }
 }
