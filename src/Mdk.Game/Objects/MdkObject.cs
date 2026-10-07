@@ -15,13 +15,16 @@ public sealed class MdkObject
     public const int FlagGravity = 0x2;
     public const int FlagCollides = 0x4;
     public const int FlagLoop = 0x8;
-    /// <summary>Kurt goes through the object (with 0x800).</summary>
+    /// <summary>Kurt can stand on it (set_targetable), unless 0x10.</summary>
+    public const int FlagPlatform = 0x100;
+    /// <summary>Kurt goes through the object, and can't stand on it.</summary>
     public const int FlagNotSolid = 0x10;
     /// <summary>The chain gun doesn't aim at the object.</summary>
     public const int FlagNotTarget = 0x20;
     public const int FlagRolling = 0x40;
     public const int FlagNoBanking = 0x80;
     public const int FlagPathOnce = 0x400;
+    /// <summary>Kurt walks through the object, but stands on it if a platform.</summary>
     public const int FlagNotSolid2 = 0x800;
     /// <summary>Some parts take damage separately (set_weak_parts).</summary>
     public const int FlagWeakParts = 0x2000;
@@ -36,7 +39,7 @@ public sealed class MdkObject
     public const int FlagPickup = 0x200000;
     /// <summary>Swings on a rope (jump_to, opcode 226).</summary>
     public const int FlagSwinging = 0x400000;
-    /// <summary>Kurt can stand on it (set_targetable 2), and ride it if it's rideable.</summary>
+    /// <summary>Kurt landed on it stays on it (set_targetable 2; damp_gravity 0x469efc).</summary>
     public const int FlagStandable = 0x800000;
     public const int FlagPathPushes = 0x8000000;
     /// <summary>The path speed follows Kurt's distance ahead (opcode 164).</summary>
@@ -44,6 +47,24 @@ public sealed class MdkObject
     public const int FlagBounces = 0x20000000;
     /// <summary>The holy cow of SW_EWJ (0x440074).</summary>
     public const int FlagCow = 0x40000000;
+
+    /// <summary>How Kurt meets the object: null, he passes through it.</summary>
+    public Collision.Solids.Footing? Footing
+    {
+        get
+        {
+            // A wall: no 0x10, 0x800 (damp_collide_move 0x465e34); a floor: 0x100, no 0x10
+            // (damp_platform_floor 0x41d2c4). E.g. the ridden snowboard (0x800900): a floor only.
+            var wall = (Flags & (FlagNotSolid | FlagNotSolid2)) == 0;
+            var floor = (Flags & (FlagNotSolid | FlagPlatform)) == FlagPlatform;
+            if (wall)
+            {
+                return floor ? Collision.Solids.Footing.Platform : Collision.Solids.Footing.Wall;
+            }
+
+            return floor ? Collision.Solids.Footing.Floor : null;
+        }
+    }
 
     // Contact flags (obj+0x14c), set by the movement code each frame.
     public const int ContactCollided = 0x1;
