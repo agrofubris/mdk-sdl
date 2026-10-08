@@ -3,6 +3,7 @@ using System.Numerics;
 using Mdk.Formats;
 using Mdk.Game;
 using Mdk.Game.Flow;
+using Mdk.Game.HdTextures;
 using Mdk.Game.Menu;
 using Mdk.Game.Scripts;
 
@@ -61,6 +62,8 @@ using Mdk.Game.Scripts;
 //                           the frames' costs at the end: sections, allocations, collections (tests)
 //   --soak[=seed]           random seeded keys on every screen, 6 steps a frame, checks in a level
 //                           (tests; --tour: every arena in turn during --wait; tests/soak_test.sh)
+//   --upscale-textures[=3,7] make the enhanced look's HD textures (all levels, or these), then quit:
+//                           --hd-model=general|anime (Real-ESRGAN x4plus or animevideov3), --hd-scale=2|4
 
 const int DefaultLevel = 7;
 // --perf's game seconds before frames are measured.
@@ -75,6 +78,21 @@ if (data == null)
 {
     Console.Error.WriteLine("MDK data not found: install MDK (GOG/Steam), put this folder in it, set MDK_DATA_DIR, or name it as mdk in mdk_paths.cfg next to the program.");
     return 1;
+}
+
+if (options.TryGetValue("upscale-textures", out var upscale))
+{
+    var defaults = HdOptions.Default;
+    var levels = upscale.Length != 0 ? upscale.Split(',').Select(l => int.Parse(l, CultureInfo.InvariantCulture)).ToArray() : HdOptions.AllLevels;
+    var model = options.TryGetValue("hd-model", out var name) ? Enum.Parse<HdModel>(name, ignoreCase: true) : defaults.Model;
+    var scale = options.TryGetValue("hd-scale", out var factor) ? int.Parse(factor, CultureInfo.InvariantCulture) : defaults.Scale;
+    if (!HdOptions.Scales.Contains(scale))
+    {
+        Console.Error.WriteLine($"--hd-scale: {string.Join(" or ", HdOptions.Scales)}");
+        return 1;
+    }
+
+    return Game.UpscaleTextures(data, new HdOptions(levels, model, scale));
 }
 
 Vector3? position = null;

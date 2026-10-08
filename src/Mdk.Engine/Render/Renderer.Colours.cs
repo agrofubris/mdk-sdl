@@ -26,6 +26,9 @@ public sealed unsafe partial class Renderer
     private readonly Dictionary<int, Pixels> _indexPixels = [];
     private readonly Dictionary<int, byte[]> _palettePixels = [];
     private readonly Dictionary<ColourKey, IntPtr> _colours = [];
+    /// <summary>Colour textures given whole (HD textures) instead of expanded: premultiplied RGBA8,
+    /// frames stacked downwards.</summary>
+    private readonly Dictionary<ColourKey, Pixels> _replaced = [];
     /// <summary>This frame's missing colour textures (reused).</summary>
     private readonly HashSet<ColourKey> _missing = [];
     private readonly List<ColourKey> _stale = [];
@@ -67,6 +70,36 @@ public sealed unsafe partial class Renderer
         _missing.Add(KeyOf(material));
     }
 
+    /// <summary>Gives a material's colour texture instead of its index texture through its palette
+    /// (an HD texture: <paramref name="width"/> x <paramref name="height"/> a frame, any size,
+    /// premultiplied RGBA8, the material's frames stacked downwards). Kept until its index texture or
+    /// palette change (then expanded again) or its scope is released.</summary>
+    public void Replace(Material material, int width, int height, byte[] rgba)
+    {
+        var key = KeyOf(material);
+        _replaced[key] = new Pixels(width, height * key.Frames, rgba);
+        if (_colours.ContainsKey(key))
+        {
+            _stale.Add(key);
+            ReleaseStale();
+        }
+    }
+
+    /// <summary>Bytes of the colour textures made and asked for, with their mips (GPU memory).</summary>
+    public long ColourBytes
+    {
+        get
+        {
+            long bytes = 0;
+            foreach (var key in _colours.Keys.Concat(_missing))
+            {
+                bytes += CanExpand(key) ? ColourSize(key) : 0;
+            }
+
+            return bytes;
+        }
+    }
+
     /// <summary>Whether a material samples a colour texture (<see cref="ModeOf"/> Lit or Sprite).</summary>
     private static bool NeedsColours(Material material) =>
         material.Texture != Material.None && material.Shading != Shading.Original && material.Pass is not (Pass.Overlay or Pass.Mirror);
@@ -100,6 +133,15 @@ public sealed unsafe partial class Renderer
         else
         {
             return;
+        }
+
+        // An HD texture no longer shows the texture: expanded again from now on.
+        foreach (var key in _replaced.Keys)
+        {
+            if (key.Texture == texture || key.Palette == texture)
+            {
+                _replaced.Remove(key);
+            }
         }
 
         foreach (var (key, colours) in _colours)
@@ -138,6 +180,11 @@ public sealed unsafe partial class Renderer
 
     private (int Width, int Height) SizeOf(ColourKey key)
     {
+        if (_replaced.TryGetValue(key, out var replaced))
+        {
+            return (replaced.Width, replaced.Height / key.Frames);
+        }
+
         var indices = _indexPixels[key.Texture];
         return (indices.Width, indices.Height / key.Frames);
     }
@@ -170,6 +217,11 @@ public sealed unsafe partial class Renderer
         }
 
         ReleaseStale();
+        foreach (var key in _replaced.Keys.Where(k => k.Texture >= first || k.Palette >= first).ToList())
+        {
+            _replaced.Remove(key);
+        }
+
         foreach (var id in _indexPixels.Keys.Where(id => id >= first).ToList())
         {
             _indexPixels.Remove(id);
@@ -185,6 +237,7 @@ public sealed unsafe partial class Renderer
 
     /// <summary>Whether the pixels to expand are known: the palette, and indices of whole frames.</summary>
     private bool CanExpand(ColourKey key) =>
+        _replaced.ContainsKey(key) ||
         _palettePixels.ContainsKey(key.Palette) && _indexPixels.TryGetValue(key.Texture, out var indices) && indices.Height % key.Frames == 0;
 
     /// <summary>Makes the colour textures this frame's enhanced draws need and nobody prepared, in
@@ -298,6 +351,15 @@ public sealed unsafe partial class Renderer
         {
             SDL_ReleaseGPUTransferBuffer(_device, transfer);
         }
+
+        // Given textures are on the GPU: only their size is still needed (a change expands the original).
+        foreach (var (key, _) in _batch)
+        {
+            if (_replaced.TryGetValue(key, out var replaced) && replaced.Data.Length != 0)
+            {
+                _replaced[key] = replaced with { Data = [] };
+            }
+        }
     }
 
     /// <summary>The scratch's size for a chunk of textures (a larger texture gets a chunk of its own).</summary>
@@ -326,6 +388,12 @@ public sealed unsafe partial class Renderer
     /// <summary>A colour texture's frames through the palette, each with its mips.</summary>
     private void Expand(ColourKey key, Span<byte> target)
     {
+        if (_replaced.TryGetValue(key, out var replaced))
+        {
+            Copy(key, replaced, target);
+            return;
+        }
+
         var indices = _indexPixels[key.Texture];
         var palette = _palettePixels[key.Palette];
         var (width, height) = SizeOf(key);
@@ -335,6 +403,20 @@ public sealed unsafe partial class Renderer
         {
             var chain = target.Slice(f * chainSize, chainSize);
             ColourMips.Expand(indices.Data.AsSpan(f * frameSize, frameSize), palette, chain);
+            ColourMips.FillChain(chain, width, height);
+        }
+    }
+
+    /// <summary>A given colour texture's frames, each with its mips.</summary>
+    private void Copy(ColourKey key, Pixels replaced, Span<byte> target)
+    {
+        var (width, height) = SizeOf(key);
+        var frameSize = ColourMips.LevelSize(width, height);
+        var chainSize = ColourMips.ChainSize(width, height);
+        for (var f = 0; f < key.Frames; f++)
+        {
+            var chain = target.Slice(f * chainSize, chainSize);
+            replaced.Data.AsSpan(f * frameSize, frameSize).CopyTo(chain);
             ColourMips.FillChain(chain, width, height);
         }
     }

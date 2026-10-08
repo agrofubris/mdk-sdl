@@ -1,18 +1,20 @@
 using System.Numerics;
 using Mdk.Engine.Render;
 using Mdk.Formats;
+using Mdk.Game.HdTextures;
 
 namespace Mdk.Game.Level;
 
 /// <summary>Turns MDK material references (texture names, palette colours, special values) into
 /// renderer materials, creating each texture and palette on the GPU once. Opaque surfaces take
-/// <paramref name="shading"/> (the look); glass and mirrors keep the original's.
+/// <paramref name="shading"/> (the look); glass and mirrors keep the original's. Lit textures take
+/// their HD image when <paramref name="hd"/> has one (<see cref="HdCache"/>).
 /// <code>
 ///   value &lt; 0          palette colour -value
 ///   value &gt;= 0         material name: texture, archive colour, PEN_n, NONE
 ///   colour 256-1028    special: glass (GLASS1-4), mirrors, NONE, PEN_ENV, RIPPLE
 /// </code></summary>
-public sealed class MaterialResolver(Renderer renderer, Dti dti, Shading shading = Shading.Original)
+public sealed class MaterialResolver(Renderer renderer, Dti dti, Shading shading = Shading.Original, HdCache? hd = null)
 {
     private const int SpecialFirst = 256;
     private const int MirrorFirst = 990;
@@ -28,6 +30,12 @@ public sealed class MaterialResolver(Renderer renderer, Dti dti, Shading shading
 
     private readonly Dictionary<Texture, int> _textures = [];
     private readonly Dictionary<Palette, int> _palettes = [];
+    /// <summary>The textures and palettes looked up in <c>hd</c> (once each).</summary>
+    private readonly HashSet<(Texture, Palette)> _looked = [];
+
+    /// <summary>Textures through a palette looked up in the HD cache, and found.</summary>
+    public int HdLooked => _looked.Count;
+    public int HdFound { get; private set; }
 
     /// <summary>A resolved surface and the texture whose texels its UVs count (null when flat).</summary>
     public readonly record struct Surface(Material Material, Texture? Texture);
@@ -47,6 +55,7 @@ public sealed class MaterialResolver(Renderer renderer, Dti dti, Shading shading
             if (archives[i].Textures.TryGetValue(name, out var texture))
             {
                 var material = new Material(TextureId(texture), PaletteId(palette), Vector4.One, texture.FrameCount, pass, Shading: ShadingOf(pass));
+                Upscale(material, texture, palette);
                 renderer.Prepare(material);
                 return new Surface(material, texture);
             }
@@ -121,6 +130,23 @@ public sealed class MaterialResolver(Renderer renderer, Dti dti, Shading shading
 
         // NONE, PEN_ENV and RIPPLE aren't drawn (the Direct3D renderer skips RIPPLE).
         return null;
+    }
+
+    /// <summary>A lit texture's HD image, given to the renderer the first time it's seen.</summary>
+    private void Upscale(Material material, Texture texture, Palette palette)
+    {
+        if (hd == null || material.Shading != Shading.Lit || !_looked.Add((texture, palette)))
+        {
+            return;
+        }
+
+        if (hd.Find(texture, palette) is not { } image)
+        {
+            return;
+        }
+
+        renderer.Replace(material, image.Width, image.Height, image.Rgba);
+        HdFound++;
     }
 
     private Shading ShadingOf(Pass pass) => pass is Pass.Solid or Pass.DoubleSided ? shading : Shading.Original;
