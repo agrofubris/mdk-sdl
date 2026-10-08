@@ -396,7 +396,7 @@ public sealed unsafe partial class Renderer
             SunMatrix = _sunMatrix ?? Matrix4x4.Identity,
             Sun = lighting == null ? Vector4.UnitW : new Vector4(Vector3.Normalize(lighting.SunDirection), lighting.Exposure),
             SunColour = new Vector4(lighting?.Sun ?? Vector3.Zero, 0f),
-            Sky = new Vector4(sky, 0f),
+            Sky = new Vector4(sky, Tonemap.Knee),
             Ground = new Vector4(ground, 0f),
             Camera = new Vector4(view.Position, 0f),
             Haze = lighting == null ? Vector4.Zero : lighting.HazeColour with { W = lighting.HazeDensity },

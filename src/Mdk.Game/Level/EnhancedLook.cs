@@ -44,7 +44,7 @@ public static class EnhancedLook
     /// the exposure's mean light.</summary>
     public const float SunlitShare = 0.7f;
     /// <summary>The mean light the exposure gives an arena's faces (1: the original's textures).</summary>
-    public const float MeanLight = 1f;
+    public const float MeanLight = 1.15f;
 
     /// <summary>The way the sunlight goes (MDK coordinates, Z up).</summary>
     public static Vector3 SunDirection { get; } = Sun(SunPitch, SunYaw);
