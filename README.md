@@ -6,7 +6,7 @@
 ![.NET 10](https://img.shields.io/badge/.NET-10-512bd4?logo=dotnet&logoColor=white)
 ![SDL3](https://img.shields.io/badge/SDL-3-blue)
 
-![Level 3 in the enhanced look with HD textures](docs/media/gameplay.gif)
+![Level 3 in the enhanced look with the HD textures mod](docs/media/gameplay.gif)
 
 A port of [MDK](https://en.wikipedia.org/wiki/MDK_(video_game)) (Shiny Entertainment, 1997) to
 C# on [SDL3](https://libsdl.org/). It's the successor of the Godot port
@@ -26,10 +26,11 @@ original's box sweeps.
 - **The whole game**: every level, the fall before it and the stream after it, rides, menus,
   briefings, statistics, saves, the end movies. Plays like the original (its BSP collisions,
   scripts and sound laws, reverse engineered).
-- **HD textures (optional)**: Options, "Make HD textures" upscales the game's textures 2x with the
-  AI upscaler [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN), locally on your GPU, from your
-  copy of the game, as a mod. Nothing upscaled is distributed. [Details](#hd-textures).
-- **Mods (optional)**: replace textures, the HUD and menus' images, fonts and models (glTF) in the
+- **HD textures (optional)**: Options, "Make HD textures" upscales the game's textures and HUD 2x
+  with the AI upscaler [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN), locally on your GPU,
+  from your copy of the game, into a mod (Options, Mods switches it). Nothing upscaled is
+  distributed. [Details](#hd-textures).
+- **Modding**: replace textures, the HUD and menus' images, fonts and models (glTF) in the
   enhanced look; `--export-assets` writes the originals to start from. [docs/modding.md](docs/modding.md).
 - **Enhanced look (optional)**: filtered textures, each level lit from its sky (sun and shadows
   outdoors), dynamic lights of muzzle flashes, explosions and fires, ambient occlusion, glow, haze,
@@ -43,13 +44,14 @@ original's box sweeps.
 
 ## Screenshots
 
-Original | enhanced | enhanced with HD textures (click for full size).
+Original | enhanced | enhanced with the HD textures mod (click for full size).
 
 ![Level 3, the canyon](docs/media/level3-canyon.jpg)
 ![Level 4, the snow](docs/media/level4-snow.jpg)
 ![Level 7, outdoors](docs/media/level7-outdoor.jpg)
 ![Level 3, inside](docs/media/level3-interior.jpg)
 ![Level 6, a corridor](docs/media/level6-interior.jpg)
+![Sniper mode's screen at 1:1: the HD textures mod upscales the HUD too](docs/media/level7-sniper-hud.jpg)
 
 ## Status
 
@@ -102,8 +104,8 @@ through. The [Godot port](https://github.com/nemo22/mdk-godot) is no longer deve
 | Android: APK, data import, touch controls (runs on a phone; controls to tune) | ███████░░░ 75% |
 | **Overall** | **about 92%** |
 
-Recently added: mods (HD textures among them), the Android app, HD textures, per-level sky light
-and shadows, dynamic lights, the icon.
+Recently added: modding (textures, 2D images, fonts, glTF models), HD textures as a mod with the
+HUD upscaled too, the Android app, per-level sky light and shadows, dynamic lights.
 
 The plan is in [docs/architecture.md](docs/architecture.md#roadmap).
 
@@ -215,7 +217,7 @@ only; the original look is unchanged). Other mods override them.
   and `manifest.txt` next to the program. Each image is the texture as an arena's palette shows
   it, its key a hash of that (size, indices, colours): a changed or other game file never gets a
   stale image. Run again, it keeps what is still current and makes the rest. An older build's
-  `textures-hd/` is moved into the mod at start.
+  `textures-hd/` is moved into the mod at start or when they're made.
 - Upscaled: arenas, corridors, the objects' models (each texture once per distinct palette),
   Kurt's sprite in the levels (407 frames, shared by all levels: 50 s, 27 MB on disk), and the 2D
   images: the HUD, sniper mode's screen, the bomber's sight, the falls' HUD, the main menu's and
