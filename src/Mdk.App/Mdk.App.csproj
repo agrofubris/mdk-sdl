@@ -8,10 +8,6 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <!-- Size: 1.8 MB smaller, frame and load times unchanged (perf runs). -->
     <OptimizationPreference>Size</OptimizationPreference>
-    <!-- The upscaler's download needs neither HTTP/3, tracing nor metrics. -->
-    <Http3Support>false</Http3Support>
-    <HttpActivityPropagationSupport>false</HttpActivityPropagationSupport>
-    <MetricsSupport>false</MetricsSupport>
     <NativeDebugSymbols>false</NativeDebugSymbols>
     <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
     <!-- The executable's icon on Windows (tools/gen_icon.py); the window's is set at run time. -->

@@ -209,8 +209,8 @@ only; the original look is unchanged). Other mods override them.
 
 - Downloaded once into `tools/realesrgan/` next to the program: the portable
   [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) release v0.2.5.0
-  (`realesrgan-ncnn-vulkan-20220424-<windows|ubuntu|macos>.zip`, about 45 MB, from GitHub), its
-  SHA-256 checked. If the release moves, set its archive and checksum in `settings.cfg`:
+  (`realesrgan-ncnn-vulkan-20220424-<windows|ubuntu|macos>.zip`, about 45 MB, from GitHub;
+  through WinHTTP on Windows, libcurl on Linux and macOS), its SHA-256 checked. If the release moves, set its archive and checksum in `settings.cfg`:
   `upscaler_url=` (https, file URL or local path) and `upscaler_sha256=`; empty means the
   default. A new checksum installs it again. Real-ESRGAN and its models: BSD 3-Clause
   (Xintao Wang); the ncnn-Vulkan executable: MIT; ncnn: BSD 3-Clause (Tencent).
@@ -343,7 +343,7 @@ src/Mdk.App/bin/Debug/net10.0/mdk --level=3
 
 One native executable (Native AOT; also needs the Visual Studio C++ tools on Windows, clang and
 zlib on Linux, Xcode on macOS): `sh tools/publish.sh [win-x64|linux-x64|osx-arm64|osx-x64]` (this
-machine's by default; `publish.bat` on Windows) gives `publish/mdk` or `publish/mdk.exe` (about 8 MB) and SDL3's library next to
+machine's by default; `publish.bat` on Windows) gives `publish/mdk` or `publish/mdk.exe` (about 5.5 MB) and SDL3's library next to
 it (`SDL3.dll`, `libSDL3.so`, `libSDL3.dylib`).
 
 The icon (original artwork, not the game's) is drawn by `python tools/gen_icon.py` (Pillow, numpy):

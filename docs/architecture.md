@@ -24,7 +24,8 @@ Each layer talks only to the one below it.
  Mdk.Engine   Render (Renderer: meshes, index textures, palettes, panorama)
     │         Audio (AudioDevice: software mixer of voices, music and effects buses, streamed voices, master limiter)
     │         Platform (Window and its icon, Input: game keys (rebindable), menu keys, raw keys, pointer, text, cursor, SDL3;
-    │                   TouchControls: on-screen stick and buttons of a touch screen)
+    │                   TouchControls: on-screen stick and buttons of a touch screen;
+    │                   HttpDownload: the OS's HTTP library, WinHTTP or libcurl)
     │         Diagnostics (Profiler: frame sections; LogRing, LogWriter: the output's last lines)
     │         Upscale (RealEsrgan: the upscaler's download and process)
  SDL3         SDL_GPU (Direct3D 12 / Vulkan / Metal), events
@@ -162,7 +163,8 @@ light, exposure, shadows, glow, haze in the colour below the sky panorama) and t
 
 The enhanced look's textures and 2D images upscaled by Real-ESRGAN, made on the player's computer
 from the game's files (`HdTextures/`) into a mod (`mods/hd-textures/`, priority -100; see Mods),
-never distributed. The tool is the engine's (`Upscale/RealEsrgan.cs`: download, SHA-256, process);
+never distributed. The tool is the engine's (`Upscale/RealEsrgan.cs`: download, SHA-256, process;
+the download through `Platform/HttpDownload.cs`: WinHTTP on Windows, libcurl on Linux and macOS);
 the game decides what and how.
 
 ```

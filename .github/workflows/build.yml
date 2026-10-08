@@ -92,6 +92,17 @@ jobs:
           echo "$OUT"
           echo "$OUT" | grep -q "MDK data not found"
 
+      # The OS's HTTP library (WinHTTP, libcurl) fetches the upscaler's release: TLS, GitHub's
+      # redirect, the expected SHA-256.
+      - name: Download test
+        run: |
+          OUT=$(./publish/mdk --download-test="$UPSCALER_URL" 2>&1 || true)
+          echo "$OUT"
+          echo "$OUT" | grep -q "SHA-256 $UPSCALER_SHA256"
+        env:
+          UPSCALER_URL: https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-ubuntu.zip
+          UPSCALER_SHA256: e5aa6eb131234b87c0c51f82b89390f5e3e642b7b70f2b9bbe95b6a285a40c96
+
       - name: Archive
         run: |
           mkdir dist

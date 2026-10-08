@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Security.Cryptography;
 using Mdk.Engine.Audio;
 using Mdk.Engine.Diagnostics;
 using Mdk.Engine.Platform;
@@ -430,6 +431,29 @@ public sealed class Game : IDisposable
     {
         Console.WriteLine($"Exported to {folder}: {AssetExport.Run(data, folder)}");
         return 0;
+    }
+
+    /// <summary>--download-test: fetches a URL through the OS's HTTP library, prints its size and
+    /// SHA-256 (CI proves the native download works on each platform).</summary>
+    public static int DownloadTest(string url)
+    {
+        var path = Path.GetTempFileName();
+        try
+        {
+            HttpDownload.Save(url, path, null, CancellationToken.None);
+            using var file = File.OpenRead(path);
+            Console.WriteLine($"Downloaded {file.Length} bytes, SHA-256 {Convert.ToHexStringLower(SHA256.HashData(file))}");
+            return 0;
+        }
+        catch (IOException e)
+        {
+            Console.Error.WriteLine($"Download failed: {e.Message}");
+            return 1;
+        }
+        finally
+        {
+            File.Delete(path);
+        }
     }
 
     public static int UpscaleTextures(MdkData data, HdOptions options)

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO.Compression;
 using System.Security.Cryptography;
+using Mdk.Engine.Platform;
 
 namespace Mdk.Engine.Upscale;
 
@@ -89,11 +90,9 @@ public sealed class RealEsrgan
     {
         if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && !uri.IsFile)
         {
-            using var http = new HttpClient();
-            using var response = http.Send(new HttpRequestMessage(HttpMethod.Get, uri), HttpCompletionOption.ResponseHeadersRead, cancel);
-            response.EnsureSuccessStatusCode();
-            using var body = response.Content.ReadAsStream(cancel);
-            return Copy(body, response.Content.Headers.ContentLength ?? 0, path, progress, cancel);
+            HttpDownload.Save(url, path, progress, cancel);
+            using var saved = File.OpenRead(path);
+            return Convert.ToHexStringLower(SHA256.HashData(saved));
         }
 
         using var local = File.OpenRead(uri?.LocalPath ?? url);

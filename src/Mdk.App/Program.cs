@@ -68,6 +68,7 @@ using Mdk.Game.Scripts;
 //                           modding into dir, then quit (docs/modding.md)
 //   --upscale-textures[=3,7] make the enhanced look's HD textures (all levels, or these), then quit:
 //                           --hd-model=general|anime (Real-ESRGAN x4plus or animevideov3), --hd-scale=2|4
+//   --download-test=URL     download a URL through the OS's HTTP library, print its size and SHA-256 (CI)
 
 const int DefaultLevel = 7;
 // --perf's game seconds before frames are measured.
@@ -76,6 +77,12 @@ const float DefaultWarmup = 2f;
 var options = args.Where(a => a.StartsWith("--"))
     .Select(a => a[2..].Split('=', 2))
     .ToDictionary(p => p[0], p => p.Length > 1 ? p[1] : "");
+
+// Before the data: CI runs it without the game.
+if (options.TryGetValue("download-test", out var downloadUrl))
+{
+    return Game.DownloadTest(downloadUrl);
+}
 
 var data = MdkData.Find();
 if (data == null)
