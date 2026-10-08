@@ -9,6 +9,8 @@
     <OptimizationPreference>Speed</OptimizationPreference>
     <NativeDebugSymbols>false</NativeDebugSymbols>
     <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
+    <!-- The executable's icon on Windows (tools/gen_icon.py); the window's is set at run time. -->
+    <ApplicationIcon>..\..\assets\icon.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Mdk.Game\Mdk.Game.csproj" />

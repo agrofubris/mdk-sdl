@@ -28,6 +28,10 @@
     <PackageReference Include="ppy.SDL3-CS" Version="$(Sdl3Version)" />
   </ItemGroup>
   <ItemGroup>
+    <!-- The window's icon (tools/gen_icon.py). -->
+    <EmbeddedResource Include="..\..\assets\icon.png" LogicalName="icon.png" WithCulture="false" />
+  </ItemGroup>
+  <ItemGroup>
     <Shader Include="$(ShaderDir)*.hlsl" />
     <ShaderInclude Include="$(ShaderDir)*.hlsli" />
   </ItemGroup>

@@ -20,7 +20,7 @@ Each layer talks only to the one below it.
     │   └──────────────► Mdk.Formats  (parsers: DTI, MTO, MTI, SNI, FTI, BNI, models; the 1996 demo's)
  Mdk.Engine   Render (Renderer: meshes, index textures, palettes, panorama)
     │         Audio (AudioDevice: software mixer of voices, music and effects buses, streamed voices, master limiter)
-    │         Platform (Window, Input: game keys (rebindable), menu keys, raw keys, pointer, text, cursor, SDL3)
+    │         Platform (Window and its icon, Input: game keys (rebindable), menu keys, raw keys, pointer, text, cursor, SDL3)
     │         Diagnostics (Profiler: frame sections; LogRing, LogWriter: the output's last lines)
  SDL3         SDL_GPU (Direct3D 12 / Vulkan / Metal), events
 ```

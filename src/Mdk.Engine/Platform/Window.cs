@@ -34,8 +34,29 @@ public sealed unsafe class Window : IDisposable
             throw new InvalidOperationException($"SDL_CreateWindow: {SDL_GetError()}");
         }
 
+        SetIcon();
+
         // Typed text (names of saved games, cheats).
         SDL_StartTextInput(Handle);
+    }
+
+    /// <summary>The program's icon on the window (title bar, task bar, dock). A missing icon is
+    /// only reported: the game runs without it.</summary>
+    private void SetIcon()
+    {
+        var icon = AppIcon.Load();
+        if (icon == null)
+        {
+            Console.Error.WriteLine($"Window icon: {SDL_GetError()}");
+            return;
+        }
+
+        if (!SDL_SetWindowIcon(Handle, icon))
+        {
+            Console.Error.WriteLine($"Window icon: {SDL_GetError()}");
+        }
+
+        SDL_DestroySurface(icon);
     }
 
     /// <summary>The window fills the screen or not.</summary>

@@ -219,6 +219,10 @@ zlib on Linux, Xcode on macOS): `sh tools/publish.sh [win-x64|linux-x64|osx-arm6
 machine's by default; `publish.bat` on Windows) gives `publish/mdk` or `publish/mdk.exe` (about 5 MB) and SDL3's library next to
 it (`SDL3.dll`, `libSDL3.so`, `libSDL3.dylib`).
 
+The icon (original artwork, not the game's) is drawn by `python tools/gen_icon.py` (Pillow, numpy):
+`assets/icon.svg`, `assets/icon.ico` (the Windows executable's) and `assets/icon.png` (the
+window's, embedded in the engine).
+
 GitHub Actions (`.github/workflows/build.yml`) builds and tests every push on Windows, Linux and
 macOS and publishes the three executables as the run's artifacts; a `v*` tag makes a release of
 them.

@@ -96,9 +96,10 @@ jobs:
           if [ "$RUNNER_OS" = Windows ]; then
             7z a -tzip "dist/mdk-${{ matrix.rid }}.zip" ./publish/mdk.exe ./publish/SDL3.dll
           elif [ "$RUNNER_OS" = Linux ]; then
-            tar -czf "dist/mdk-${{ matrix.rid }}.tar.gz" -C publish mdk libSDL3.so
+            tar -czf "dist/mdk-${{ matrix.rid }}.tar.gz" -C publish mdk libSDL3.so -C ../assets icon.png
           else
             (cd publish && zip -q "../dist/mdk-${{ matrix.rid }}.zip" mdk libSDL3.dylib)
+            zip -qj "dist/mdk-${{ matrix.rid }}.zip" assets/icon.png
           fi
           ls -la dist
 
