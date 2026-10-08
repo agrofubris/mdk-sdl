@@ -22,6 +22,7 @@ public class ForkliftTests
     private const string Driver = "XFK_HEAD";
     private const int Glass = 1;
     private const int BulletRound = 0;
+    private const int BulletDamage = 8;
     /// <summary>West of the garage, south of the pad: the forklift drives at him.</summary>
     private static readonly Vector3 Stand = new(-440f, 548f, 8f);
     private static readonly Vector3 PadCenter = new(-424.5f, 557.5f, 8f);
@@ -132,6 +133,22 @@ public class ForkliftTests
         Assert.False(forklift.Dead);
         Assert.True(OnPad(forklift));
         Assert.Equal(TriangleGroups.State.Hidden, groups.Get(Arena, Glass)!.State & TriangleGroups.State.Hidden);
+    }
+
+    [DataFact]
+    public void OneHitHurtsTheForkliftAsUsual()
+    {
+        var (runtime, _) = CreateRuntime();
+        var forklift = DrivenForklift(runtime);
+        var health = forklift.Health;
+        runtime.Lethality = Lethality.OneHit;
+
+        // One bullet: its 8 hit points, far from the 110 that blow the driver off.
+        Shoot(runtime, runtime.KurtPosition + new Vector3(0f, 0f, AimHeight), forklift);
+        Run(runtime, ArriveTicks);
+
+        Assert.InRange(forklift.Health, health - BulletDamage, health - 1);
+        Assert.Equal(0, forklift.HiddenParts & (1 << forklift.FindPart(Driver)));
     }
 
     [DataFact]
