@@ -132,7 +132,8 @@ public sealed partial class Kurt(ArenaSpace space, SoundMixer mixer, Func<Kurt.S
         ChuteClosing = false;
         if (Frozen)
         {
-            // Cutscenes and the level's end: he stands still.
+            // Cutscenes and the level's end: he stands still; the flashes still fade (0x478704).
+            FadeFlashes(delta);
             StopChuteSound();
             ForwardSpeed = 0f;
             StrafeSpeed = 0f;
