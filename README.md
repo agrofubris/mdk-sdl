@@ -452,3 +452,18 @@ holders of MDK. MDK and its data are the property of their respective owners.
 This repository contains only original code, documentation and tools. It doesn't include or
 distribute any data from the game. To run the port you need a legally obtained copy of the
 original MDK, whose installed data files the port loads.
+
+## Licence
+
+Copyright © 2026 Marek Draškaba.
+
+This program is free software: you can redistribute it and/or modify it
+under the terms of the **GNU General Public License, version 3** as
+published by the Free Software Foundation. It is distributed in the hope
+that it will be useful, but WITHOUT ANY WARRANTY — without even the
+implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+See [LICENSE](LICENSE) for the full text.
+
+The licence covers **this port's own code**. It says nothing about the
+original game's data, which belongs to its rights holders and is not
+distributed here.
