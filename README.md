@@ -40,7 +40,8 @@ the original's fades, scripts animate textures, switch the sky and film cutscene
 leave bullet holes, and ropes, twisters' ribbons and the glass panes' outlines are drawn. An
 enhanced look (Options, Graphics) filters the textures, lights each arena from its level's sky
 (a sun and its shadows outdoors), lights muzzle flashes, explosions and fires, and adds ambient
-occlusion, a little glow and a haze; anti-aliasing smooths the edges. The three
+occlusion, a little glow and a haze, and can draw AI-upscaled textures made from your copy of the
+game ([HD textures](#hd-textures)); anti-aliasing smooths the edges. The three
 levels of the 1996 beta demo play as extras ([below](#the-1996-beta-demo)). The game can be played
 through; the [Godot port](https://github.com/nemo22/mdk-godot) gets the same fixes.
 
@@ -50,7 +51,7 @@ through; the [Godot port](https://github.com/nemo22/mdk-godot) gets the same fix
 | --- | --- |
 | Data formats: levels, textures, models, sprites, sounds, fonts, scripts, videos | █████████░ 95% |
 | Rendering: arenas, glass, sky, mirrors, Kurt's sprite, effects | █████████░ 95% |
-| Enhanced look: filtering, mipmaps, sky light and shadows, point lights, occlusion, glow, haze; anti-aliasing | █████████░ 85% |
+| Enhanced look: filtering, mipmaps, sky light and shadows, point lights, occlusion, glow, haze, HD textures; anti-aliasing | █████████░ 85% |
 | Collisions: the original's BSP | █████████░ 95% |
 | Kurt: walking, turning, jumping, chute, ledges, slides, camera, damage, death | █████████░ 95% |
 | Sound mixer (the original's laws) and music | █████████░ 90% |
@@ -110,6 +111,7 @@ mdk.exe
 - `--mute`: no sound.
 - `--enhanced`, `--original`: the enhanced or the original look instead of the settings' (not
   saved).
+- `--upscale-textures[=3,7]`: make the enhanced look's HD textures, then quit ([below](#hd-textures)).
 - `--bloodyes`, `--nobloodno`: gore on or off instead of the settings' (not saved; the original's
   `-bloodyes`, `-nobloodno`).
 - Tests: `--screenshot=file.bmp` (after `--wait=seconds` of game time, then quit),
@@ -131,8 +133,8 @@ mdk.exe
   `--press=QuickSave@1,Menu.Accept@1.5`: presses game keys, or menu keys after `Menu.`, once at
   those times.
 
-Settings (volumes, music filter, mouse, fullscreen, anti-aliasing, difficulty, graphics, gore, key
-bindings) and saved games
+Settings (volumes, music filter, mouse, fullscreen, anti-aliasing, difficulty, graphics, gore, HD
+textures, key bindings) and saved games
 are kept next to the executable (`settings.cfg`, `saves/*.sav`; `MDK_USER_DIR` overrides the
 folder). The first run copies them from where older builds kept them (`%LOCALAPPDATA%/mdk-sdl`). `LASTGAME` (written when Kurt dies) is deleted at start, as in the original.
 
@@ -149,6 +151,38 @@ can be changed in Options, Controls (to any key, mouse button or wheel direction
 back; the mouse cursor is the original's arrow. Typing `TOOSCARYFORME` in a level turns gore on or
 off for the session, `SEETHEWHOLEGAME` the main menu's debug keys (3-8 start that level, F the fall before LEVEL8,
 S the stream after LEVEL7, D the statistics with random counts).
+
+### HD textures
+
+The enhanced look can draw the textures upscaled 2x by an AI upscaler, made once on your computer
+from your copy of the game: Options, "Make HD textures" (a progress page; leaving it cancels), or
+`mdk --upscale-textures` (all levels; `=3,7` only those; `--hd-model=general|anime`,
+`--hd-scale=2|4`). Then Options, "HD textures: On" uses them from the next level on (enhanced look
+only; the original look is unchanged).
+
+- Downloaded once into `tools/realesrgan/` next to the program: the portable
+  [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) release v0.2.5.0
+  (`realesrgan-ncnn-vulkan-20220424-<windows|ubuntu|macos>.zip`, about 45 MB, from GitHub), its
+  SHA-256 checked against the one pinned in the code. Real-ESRGAN and its models: BSD 3-Clause
+  (Xintao Wang); the ncnn-Vulkan executable: MIT; ncnn: BSD 3-Clause (Tencent).
+- Needs a Vulkan GPU (integrated ones work, slower). There is no CPU fallback: it would take hours.
+- Made: `textures-hd/LEVELn/<NAME>_<key>.png` and `textures-hd/manifest.txt` next to the program.
+  Each image is the texture as an arena's palette shows it, its key a hash of that (size, indices,
+  colours): a changed or other game file never gets a stale image. Run again, it keeps what is
+  still current and makes the rest.
+- Upscaled: arenas, corridors, the objects' models (each texture once per distinct palette).
+  Kept original: the sky, Kurt, effects' sprites, the HUD, fonts and 2D screens; a texture a
+  sniper round marks with a bullet hole goes back to the original.
+- Cut-outs keep hard edges: the upscaler gets the colour only (clear texels filled with their
+  neighbours' colour, the frame wrapped around by 8 texels so tiling textures stay seamless); the
+  alpha is the original's, upscaled bilinear and cut at half cover.
+- Cost (default: x4plus, 2x): all six levels in about 4 minutes on an RTX 3060 (the anime
+  model: seconds), 243 MB on disk; a level's upscaled textures take 4 times the GPU memory
+  (LEVEL3: 40 MB to 160 MB; 195 MB with Kurt, sprites and effects); 4x would be 16 times (about
+  640 MB for LEVEL3), too much for smaller GPUs. Loading a level takes about a second longer.
+- x4plus sharpens edges, cracks and painted shapes, but smooths fine grain away (lava, noisy
+  floors); animevideov3 keeps more grain, with more ringing. Judge for yourself.
+- Nothing from the game is in this repository or its releases: the images stay on your computer.
 
 ### Console and debug overlay
 
@@ -257,7 +291,9 @@ sh tests/soak_test.sh short
 `tests/soak_test.sh` (about 3 minutes with `short`, 15 without) plays every level, arena, fall,
 stream and menu with random keys and reports exceptions, hangs and `Soak problem` lines.
 `MDK_REFERENCE=<another build's mdk> sh tests/enhanced_test.sh` also checks that the original look
-is that build's, pixel for pixel.
+is that build's, pixel for pixel; `MDK_HD_DIR=<a folder with textures-hd/>` that HD textures
+change the enhanced look and not the original. The upscaler itself isn't run by the tests (it
+needs the game's files and a GPU).
 `tests/beta_test.sh` and the demo's unit test are skipped without the 1996 demo.
 `tests/alloc_test.sh` plays levels hidden with `--perf[=warmup seconds]` (each frame waits for the
 GPU; at the end the frames' average times by section, bytes allocated per frame and garbage

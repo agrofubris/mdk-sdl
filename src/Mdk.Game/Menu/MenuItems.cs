@@ -7,6 +7,7 @@ using Mdk.Engine.Platform;
 using Mdk.Engine.Render;
 using Mdk.Formats;
 using Mdk.Game.Flow;
+using Mdk.Game.HdTextures;
 using Mdk.Game.Kurt;
 
 namespace Mdk.Game.Menu;
@@ -73,6 +74,10 @@ public sealed class MenuItems
     private Key? _waiting;
     private Entry? _waitingEntry;
     private bool _armed;
+    /// <summary>The HD textures being made, and the page's lines that follow it.</summary>
+    private HdJob? _job;
+    private Entry? _jobLine;
+    private Entry? _jobBack;
 
     public Align Alignment = Align.Centre;
     /// <summary>The row the first item stands in.</summary>
@@ -108,6 +113,9 @@ public sealed class MenuItems
 
     public void Clear()
     {
+        // Leaving the progress page stops the HD textures.
+        _job?.Cancel();
+        _job = null;
         _ui.Audio.Stop(_songVoice);
         _songVoice = 0;
         Alignment = Align.Centre;
@@ -167,6 +175,7 @@ public sealed class MenuItems
     /// <summary>A frame: keys, the mouse and the items' growth.</summary>
     public void Update(float delta)
     {
+        ShowJob();
         Layout();
         if (Visible)
         {
@@ -337,10 +346,40 @@ public sealed class MenuItems
             step => s.AntiAliasing = (AntiAliasing)Wrap((int)s.AntiAliasing + step, AntiAliasingNames.Length));
         AddOption(() => $"Difficulty: {DifficultyNames[(int)s.Difficulty]}", step => s.Difficulty = (Difficulty)Wrap((int)s.Difficulty + step, DifficultyNames.Length));
         AddOption(() => $"Graphics: {s.Graphics}", step => s.Graphics = (Graphics)Wrap((int)s.Graphics + step, GraphicsCount));
+        AddOption(() => $"HD textures: {OnOff(s.Textures == TextureSet.Hd)}",
+            _ => s.Textures = s.Textures == TextureSet.Hd ? TextureSet.Original : TextureSet.Hd);
+        AddItem("Make HD textures", () => ShowHdTextures(() => ShowOptions(back)));
         AddOption(() => $"Gore: {OnOff(s.Gore)}", _ => s.Gore = !s.Gore);
         AddItem("Controls", () => ShowControls(() => ShowOptions(back)));
         AddItem("Back", back);
         _songVoice = _ui.Play(_song, Bus.Music);
+    }
+
+    /// <summary>Makes the HD textures (<see cref="HdGenerator"/>, minutes on a GPU) while showing
+    /// its progress; leaving the page cancels it.</summary>
+    private void ShowHdTextures(Action back)
+    {
+        Clear();
+        AddTitle("HD textures");
+        AddTitle("Real-ESRGAN, on the GPU");
+        _jobLine = new Entry("", Kind.Title, null, null) { Grow = 1f };
+        Add(_jobLine);
+        _jobBack = new Entry("Cancel", Kind.Item, back, null);
+        Add(_jobBack);
+        _job = HdJob.Start(_ui.Data, _ui.UserFolder, HdOptions.Default);
+        ShowJob();
+    }
+
+    /// <summary>The progress line, and "Back" once the job is over.</summary>
+    private void ShowJob()
+    {
+        if (_job == null)
+        {
+            return;
+        }
+
+        _jobLine!.Text = _job.Progress.Describe();
+        _jobBack!.Text = _job.Progress.Finished ? "Back" : "Cancel";
     }
 
     /// <summary>The key bindings: choosing an item waits for a key or a mouse button (Esc cancels).</summary>

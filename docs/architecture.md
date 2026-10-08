@@ -9,7 +9,7 @@ opcodes). Requires the original game data.
 Each layer talks only to the one below it.
 
 ```
- Mdk.App      command line ──► Game.Run
+ Mdk.App      command line ──► Game.Run, Game.UpscaleTextures
     │
  Mdk.Game     Flow: Game (screens), GameState, Settings, SaveGames, LevelFlow
     │         Menu: main menu, pause menu, options, loading, statistics, save prompt, videos
@@ -17,16 +17,19 @@ Each layer talks only to the one below it.
     │         Fall: the fall before a level (FallSim, FallView, FallHud)
     │         Viewer (a level): level, camera, collision (BSP), sound mixer, scripts and objects, Kurt
     │         DevTools: the console, its commands, the debug overlay
-    │   └──────────────► Mdk.Formats  (parsers: DTI, MTO, MTI, SNI, FTI, BNI, models; the 1996 demo's)
+    │         HdTextures: the enhanced look's upscaled textures (export, cache, generator)
+    │   └──────────────► Mdk.Formats  (parsers: DTI, MTO, MTI, SNI, FTI, BNI, models, PNG; the 1996 demo's)
  Mdk.Engine   Render (Renderer: meshes, index textures, palettes, panorama)
     │         Audio (AudioDevice: software mixer of voices, music and effects buses, streamed voices, master limiter)
     │         Platform (Window, Input: game keys (rebindable), menu keys, raw keys, pointer, text, cursor, SDL3)
     │         Diagnostics (Profiler: frame sections; LogRing, LogWriter: the output's last lines)
+    │         Upscale (RealEsrgan: the upscaler's download and process)
  SDL3         SDL_GPU (Direct3D 12 / Vulkan / Metal), events
 ```
 
 - `Mdk.Formats` has no dependencies: bytes in, data out.
-- `Mdk.Engine` hides SDL: the game sees meshes, materials, keys.
+- `Mdk.Engine` hides SDL: the game sees meshes, materials, keys. It also drives the HD textures'
+  upscaler (`Upscale/`: download, checksum, process).
 - Shaders (`shaders/*.hlsl`) are compiled at build time to each format whose tool is found, and
   embedded; the renderer creates its device with the first embedded format a GPU driver takes.
 - `Mdk.Formats` finds the game: `MDK_DATA_DIR`, `mdk` in `mdk_paths.cfg` next to the program
@@ -128,6 +131,33 @@ light, exposure, shadows, glow, haze in the colour below the sky panorama) and t
   samples turned in a 4 x 4 ordered pattern, into its own target (`screen.hlsli` shared).
 - `post.hlsl`: the occlusion blurred over 4 x 4 pixels of the same plane (no grain, no shade
   across edges); glow from the scene's blurred mips, screen-blended; dithered.
+
+## HD textures
+
+The enhanced look's textures upscaled by Real-ESRGAN, made on the player's computer from the game's
+files (`HdTextures/`), never distributed. The tool is the engine's (`Upscale/RealEsrgan.cs`:
+download, SHA-256, process); the game decides what and how.
+
+```
+ make (HdGenerator: --upscale-textures, Options "Make HD textures" via HdJob)
+ ───────────────────────────────────────────────────────────────────────────
+ LevelData, CMI ─► TextureExport (arenas, corridors, models × arena palettes) ─► HdSource (key = HdKey)
+   ─► UpscaleImages.Input (bleed, wrap 8) ─► PNG ─► realesrgan-ncnn-vulkan (x4plus 4x | animevideov3 2x)
+   ─► UpscaleImages.Output (crop, box to 2x, the source's alpha hard) ─► textures-hd/LEVELn/*.png + manifest.txt
+
+ use (Viewer, enhanced look, settings textures=Hd)
+ ─────────────────────────────────────────────────
+ HdCache.Open (the level's images decoded on every core) ─► MaterialResolver (Lit textures, once per
+   texture × palette) ─► HdCache.Find (key, size) ─► Renderer.Replace ─► colour texture + mips from it
+```
+
+- The key hashes the size, frames, indices and the colours of the used indices: arenas whose
+  palettes differ elsewhere share an image; changed game files find none (the original is used).
+- `Renderer.Replace` keeps the image until it's on the GPU, then only its size; a texture or
+  palette change (a bullet hole) drops it and expands the original again. UVs are unchanged (same
+  aspect).
+- The manifest records the format, the model and the scale; another format is ignored, another
+  model or scale makes everything again.
 
 ## Loading and frames
 
@@ -316,5 +346,5 @@ None open. Answered (Ghidra): which objects Kurt walks into or stands on
     filtered textures, sky, sprites and 2D screens, each arena lit from its level's sky (sun with
     shadows outdoors, hemisphere light, exposure, tone curve), point lights (muzzle flashes,
     explosions, fires), ambient occlusion, glow, haze, dithering; mipmapped, anisotropic textures;
-    anti-aliasing in both looks. Still to do: level lamps, upscaled textures, occlusion and haze in
-    the insets (sniper mode).
+    anti-aliasing in both looks, HD textures (Real-ESRGAN, made locally). Still to do: level lamps,
+    occlusion and haze in the insets (sniper mode).

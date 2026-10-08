@@ -60,6 +60,7 @@ public class FlowTests
             Gore = false,
             Graphics = Graphics.Enhanced,
             AntiAliasing = AntiAliasing.X4,
+            Textures = TextureSet.Hd,
         };
         settings.Bindings[Key.Fire] = "Left mouse";
         settings.Bindings[Key.Jump] = "Right Ctrl";
@@ -70,15 +71,17 @@ public class FlowTests
         Assert.Equal(Difficulty.Hard, read.Difficulty);
         Assert.Equal(Graphics.Enhanced, read.Graphics);
         Assert.Equal(AntiAliasing.X4, read.AntiAliasing);
+        Assert.Equal(TextureSet.Hd, read.Textures);
         Assert.Equal("Right Ctrl", read.Bindings[Key.Jump]);
     }
 
     [Fact]
     public void BadSettingsKeepDefaults()
     {
-        var read = Settings.Parse("master_volume=loud\nmusic_volume=500\nunknown=1\nbind.Nothing=W\ngraphics=7\nantialiasing=X16\n");
+        var read = Settings.Parse("master_volume=loud\nmusic_volume=500\nunknown=1\nbind.Nothing=W\ngraphics=7\nantialiasing=X16\ntextures=8K\n");
 
         Assert.Equal(new Settings().MasterVolume, read.MasterVolume);
+        Assert.Equal(TextureSet.Original, read.Textures);
         Assert.Equal(Graphics.Original, read.Graphics);
         Assert.Equal(AntiAliasing.Off, read.AntiAliasing);
         Assert.Equal(Settings.MaxVolume, read.MusicVolume);

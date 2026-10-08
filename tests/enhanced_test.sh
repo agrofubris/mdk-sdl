@@ -46,6 +46,19 @@ for LEVEL in 3 6 7; do
 	fi
 done
 
+# With MDK_HD_DIR=<a user folder with textures-hd/ (mdk --upscale-textures=3)>, HD textures change
+# the enhanced look.
+if [ -n "$MDK_HD_DIR" ]; then
+	echo "HD textures"
+	mkdir -p "$OUT/hd"
+	cp -r "$MDK_HD_DIR/textures-hd" "$OUT/hd/"
+	echo "textures=Hd" > "$OUT/hd/settings.cfg"
+	shot "$MDK" "$OUT/hd" "$OUT/hd_3.bmp" --level=3 --enhanced; check "HD screenshot" $?
+	! cmp -s "$OUT/hd_3.bmp" "$OUT/enhanced_3.bmp"; check "HD textures differ" $?
+	shot "$MDK" "$OUT/hd" "$OUT/hd_original_3.bmp" --level=3 --original; check "original screenshot" $?
+	cmp -s "$OUT/hd_original_3.bmp" "$OUT/original_3.bmp"; check "the original look ignores them" $?
+fi
+
 echo "anti-aliasing 4x"
 shot "$MDK" "$OUT/msaa" "$OUT/msaa_original.bmp" --level=3 --original; check "original screenshot" $?
 shot "$MDK" "$OUT/msaa" "$OUT/msaa_enhanced.bmp" --level=3 --enhanced; check "enhanced screenshot" $?

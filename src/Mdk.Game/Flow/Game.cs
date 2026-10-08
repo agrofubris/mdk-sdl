@@ -5,6 +5,7 @@ using Mdk.Engine.Platform;
 using Mdk.Engine.Render;
 using Mdk.Formats;
 using Mdk.Game.DevTools;
+using Mdk.Game.HdTextures;
 using Mdk.Game.Menu;
 
 namespace Mdk.Game.Flow;
@@ -71,6 +72,8 @@ public sealed class Game : IDisposable
     private const int SoakSteps = 6;
     /// <summary>The overlay's line between screens (the loading screen).</summary>
     private const string Loading = "loading";
+    /// <summary>How often --upscale-textures prints its progress (ms).</summary>
+    private const int UpscalePoll = 1000;
 
     private readonly GameOptions _options;
     private readonly Window _window;
@@ -394,6 +397,34 @@ public sealed class Game : IDisposable
         _audio.StopAll();
         _renderer.Release(_scope);
         _screen = create();
+    }
+
+    /// <summary>Makes the HD textures in the user folder without a window (--upscale-textures),
+    /// printing the progress; returns the exit code.</summary>
+    public static int UpscaleTextures(MdkData data, HdOptions options)
+    {
+        var folder = Environment.GetEnvironmentVariable(UserFolderVariable) ?? UserFolder();
+        var progress = new HdProgress();
+        var run = Task.Run(() => HdGenerator.Run(data, folder, options, progress, CancellationToken.None));
+        var last = "";
+        while (!run.Wait(UpscalePoll))
+        {
+            var line = progress.Describe();
+            if (line != last)
+            {
+                Console.WriteLine(line);
+                last = line;
+            }
+        }
+
+        if (run.IsFaulted)
+        {
+            Console.Error.WriteLine($"HD textures failed: {run.Exception!.GetBaseException().Message}");
+            return 1;
+        }
+
+        Console.WriteLine($"HD textures: {run.Result}");
+        return 0;
     }
 
     /// <summary>Settings and saves live next to the executable (a portable install). The first run

@@ -12,6 +12,7 @@ using Mdk.Game.Menu;
 using Mdk.Game.Audio;
 using Mdk.Game.Collision;
 using Mdk.Game.DevTools;
+using Mdk.Game.HdTextures;
 using Mdk.Game.Hud;
 using Mdk.Game.Kurt;
 using Mdk.Game.Level;
@@ -168,7 +169,9 @@ public sealed class Viewer : IScreen
         var groups = new TriangleGroups();
         var graphics = ui.Settings.Graphics;
         MdkObject.ForgetPoses();
-        var surfaces = new MaterialResolver(renderer, level.Dti, EnhancedLook.Surfaces(graphics));
+        // The enhanced look's HD textures, when chosen.
+        var hd = graphics == Graphics.Enhanced && ui.Settings.Textures == TextureSet.Hd ? HdCache.Open(HdCache.FolderIn(ui.UserFolder), level.Number) : null;
+        var surfaces = new MaterialResolver(renderer, level.Dti, EnhancedLook.Surfaces(graphics), hd);
         Preload(surfaces, level);
         _view = new LevelView(renderer, level, groups, EnhancedLook.Surfaces(graphics), surfaces);
         var bank = _beta != null ? SoundBank.ForBeta(_beta, options.Level) : SoundBank.ForLevel(data, options.Level);
@@ -250,6 +253,10 @@ public sealed class Viewer : IScreen
         _flying = options.Fly;
         _pause = new PauseMenu(ui);
         Console.WriteLine($"Level {options.Level}: {level.Arenas.Count} arenas, {_view.TriangleCount} triangles, {_view.OutlineCount} outlines, loaded in {loading.ElapsedMilliseconds} ms");
+        if (hd != null)
+        {
+            Console.WriteLine($"HD textures: {surfaces.HdFound} of {surfaces.HdLooked} (cache {hd.Count}), colour textures {renderer.ColourBytes >> 20} MB");
+        }
 
         _test = options.Screenshot != null;
         ui.Window.CaptureMouse(_test ? Capture.Off : Capture.On);
