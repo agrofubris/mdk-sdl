@@ -28,10 +28,22 @@ public class RootMotionTests
     private static readonly MdkData Data = MdkData.Find() ?? throw new InvalidOperationException("MDK data not found");
     private static readonly AudioDevice Device = new(Output.Muted);
 
-    private static ScriptRuntime CreateRuntime()
+    /// <summary>Found by playtest: LEVEL5 MUSE_4's Gunter (XGUNTAM, flag 0x80000000) sank into his
+    /// pillar a little with each XGU_BLDM loop, out of reach. Flag 0x80000000 (obj+0x14b bit 7) skips
+    /// root motion; his death script clears it so that his fall moves him.</summary>
+    private const int GunterLevel = 5;
+    private const string GunterArena = "MUSE_4";
+    private const string Gunter = "XGUNTAM";
+    private const string Taunt = "XGU_BLDM";
+    private static readonly Vector3 OnThePillar = new(387f, 121f, -1563f);
+    private const float GunterYaw = 90f;
+    /// <summary>A minute: about six taunts, each sank him about 1.5.</summary>
+    private const int GunterTicks = 1800;
+
+    private static ScriptRuntime CreateRuntime(int levelNumber = Level)
     {
-        var level = new LevelData(Data, Level);
-        var cmi = Cmi.Load(Data.PathOf($"TRAVERSE/LEVEL{Level}/LEVEL{Level}.CMI"));
+        var level = new LevelData(Data, levelNumber);
+        var cmi = Cmi.Load(Data.PathOf($"TRAVERSE/LEVEL{levelNumber}/LEVEL{levelNumber}.CMI"));
         var sprites = Bni.Load(Data.PathOf("TRAVERSE/TRAVSPRT.BNI"));
         var space = new ArenaSpace();
         var mixer = new SoundMixer(Device, _ => null);
@@ -53,5 +65,28 @@ public class RootMotionTests
         }
 
         Assert.InRange(obj.Position.Z, OnTheIce.Z - Tolerance, OnTheIce.Z + Tolerance);
+    }
+
+    [DataFact]
+    public void NoRootMotionKeepsGunterUp()
+    {
+        var runtime = CreateRuntime(GunterLevel);
+        var obj = runtime.Spawn(runtime.GetArenaState(GunterArena).Controller, Gunter, OnThePillar, GunterYaw, -1, 0, ScriptRuntime.Spawning.Plain);
+        Assert.NotNull(obj);
+        obj.Flags = MdkObject.FlagNoRootMotion;
+        var taunt = runtime.FindArenaAnimation(GunterArena, Taunt);
+
+        // His script restarts the taunt once it's done (anim_once, if_anim_done).
+        for (var i = 0; i < GunterTicks; i++)
+        {
+            if (obj.IsAnimationDone)
+            {
+                obj.RestartAnimation(taunt, MdkObject.Looping.Once);
+            }
+
+            runtime.Motion.Update(obj);
+        }
+
+        Assert.Equal(OnThePillar, obj.Position);
     }
 }
