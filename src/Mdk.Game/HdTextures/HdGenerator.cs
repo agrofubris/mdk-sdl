@@ -111,6 +111,8 @@ public static class HdGenerator
             throw new ArgumentException($"HD textures are made {string.Join(" or ", HdOptions.Scales)} times larger");
         }
 
+        // An older build's cache first: its current images aren't made again.
+        Migrate(userFolder);
         var clock = Stopwatch.StartNew();
         progress.Set(HdProgress.Stage.Download, 0, 0);
         var tool = RealEsrgan.Install(ToolIn(userFolder), (done, total) => progress.Set(HdProgress.Stage.Download, done, total), cancel);
@@ -209,6 +211,8 @@ public static class HdGenerator
             moved.Entries[entry.Key] = entry with { File = file };
         }
 
+        // An old cache without images still becomes the (empty) mod.
+        Directory.CreateDirectory(folder);
         moved.Save(folder);
         File.WriteAllText(Path.Combine(folder, ModInfo.FileName), Info(manifest.Model, manifest.Scale).Format());
         Directory.Delete(old, recursive: true);

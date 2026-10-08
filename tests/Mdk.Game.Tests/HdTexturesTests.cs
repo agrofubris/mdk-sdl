@@ -190,6 +190,25 @@ public class HdTexturesTests : IDisposable
         Assert.Equal(0, HdGenerator.Migrate(_folder));
     }
 
+    /// <summary>Making the HD textures (menu or --upscale-textures) first moves an older build's
+    /// cache into the mod, so its images aren't made again.</summary>
+    [Fact]
+    public void RunMovesTheOldCacheFirst()
+    {
+        var old = Path.Combine(_folder, HdGenerator.OldFolder);
+        Directory.CreateDirectory(old);
+        new HdManifest("model", Scale).Save(old);
+        using var cancel = new CancellationTokenSource();
+        cancel.Cancel();
+
+        // Cancelled at the upscaler's download, before any game data is read.
+        Assert.ThrowsAny<OperationCanceledException>(() =>
+            HdGenerator.Run(null!, _folder, HdOptions.Default, new HdProgress(), cancel.Token));
+
+        Assert.False(Directory.Exists(old));
+        Assert.NotNull(HdManifest.Load(HdGenerator.FolderIn(_folder)));
+    }
+
     // --- The game's textures --------------------------------------------------------------------
 
     /// <summary>Level 3's arenas and models: each texture once per distinct look, all in palettes of
