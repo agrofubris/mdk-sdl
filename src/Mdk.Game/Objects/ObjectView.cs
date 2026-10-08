@@ -58,6 +58,7 @@ public sealed class ObjectView(Renderer renderer, MaterialResolver resolver)
         var transform = obj.Transform;
         var frame = obj.TextureFrame >= 0 ? obj.TextureFrame : 0;
         var count = Arrange(layout, hidden);
+        var glows = obj.EffectFrames > 0 ? Glow.Shines : Glow.Lit;
         for (var i = 0; i < count; i++)
         {
             var batch = layout.Batches[layout.Order[i]];
@@ -80,9 +81,17 @@ public sealed class ObjectView(Renderer renderer, MaterialResolver resolver)
                 vertices[at++] = new Vertex(pose[part][batch.Indices[c]], batch.Uvs[c]);
             }
 
-            renderer.Draw(mesh, first, corners, batch.Material, frame, transform);
+            renderer.Draw(mesh, first, corners, Shine(batch.Material, glows), frame, transform);
         }
     }
+
+    /// <summary>Whether an object shines by itself (an explosion) or is lit.</summary>
+    private enum Glow { Lit, Shines }
+
+    /// <summary>An explosion's surfaces in the enhanced look shine unlit (their own point light
+    /// would wash them out) and cast no shadow.</summary>
+    private static Material Shine(Material material, Glow glow) =>
+        glow == Glow.Shines && material.Shading == Shading.Lit ? material with { Shading = Shading.Sprite } : material;
 
     private static bool IsHidden(int hidden, int part) => (hidden & (1 << part)) != 0;
 

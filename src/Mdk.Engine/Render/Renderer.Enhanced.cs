@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using SDL;
 using static SDL.SDL3;
@@ -61,6 +62,12 @@ public sealed unsafe partial class Renderer
     private const int DepthSamplers = 1;
     private const int DefaultSamplers = 2;
     private const int PostSamplers = 3;
+    /// <summary>The enhanced fragment shader's uniform buffers: the draw's, then the frame's point
+    /// lights (pushed once per frame, kept by the command buffer for every pass).</summary>
+    private const uint EnhancedUniformBuffers = 2;
+    private const uint LightSlot = 1;
+    /// <summary>Per point light: its position and radius, then its colour.</summary>
+    private const int LightVectors = 2;
 
     /// <summary>The enhanced shader's modes (shaders/enhanced.hlsl).</summary>
     private enum Mode { Lit = 1, Sprite = 2, Canvas = 3 }
@@ -88,6 +95,20 @@ public sealed unsafe partial class Renderer
         public Vector4 Camera;
         public Vector4 Haze;
         public Vector4 Shadow;
+    }
+
+    [InlineArray(PointLights.Shown * LightVectors)]
+    private struct LightArray
+    {
+        private Vector4 _first;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct LightUniforms
+    {
+        /// <summary>x: how many lights.</summary>
+        public Vector4 Count;
+        public LightArray Lights;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -118,6 +139,9 @@ public sealed unsafe partial class Renderer
     /// <summary>The enhanced look's light for the scene; null: the original look.</summary>
     public Lighting? Lighting { get; set; }
 
+    /// <summary>The frame's point lights (the enhanced look's): the game fills them each frame.</summary>
+    public PointLights Lights { get; } = new();
+
     /// <summary>How the canvas samples its images.</summary>
     public Sampling CanvasSampling { get; set; }
 
@@ -130,6 +154,26 @@ public sealed unsafe partial class Renderer
         "post" => PostSamplers,
         _ => DefaultSamplers,
     };
+
+    /// <summary>A shader's uniform buffers (its name: program.vs or program.ps).</summary>
+    private static uint UniformBuffers(string shader) => shader == "enhanced.ps" ? EnhancedUniformBuffers : 1u;
+
+    /// <summary>The point lights nearest the camera into the enhanced shader's light buffer (none
+    /// in the original look).</summary>
+    private void PushLights(SDL_GPUCommandBuffer* commands, View view)
+    {
+        Span<PointLight> packed = stackalloc PointLight[PointLights.Shown];
+        var count = Lighting == null ? 0 : Lights.Pack(view.Position, packed);
+        var uniforms = new LightUniforms { Count = new Vector4(count, 0f, 0f, 0f) };
+        for (var i = 0; i < count; i++)
+        {
+            var light = packed[i];
+            uniforms.Lights[i * LightVectors] = new Vector4(light.Position, light.Radius);
+            uniforms.Lights[i * LightVectors + 1] = new Vector4(light.Colour, 0f);
+        }
+
+        SDL_PushGPUFragmentUniformData(commands, LightSlot, (IntPtr)(&uniforms), (uint)sizeof(LightUniforms));
+    }
 
     private static SDL_GPUSampleCount SampleCount(uint samples) => samples switch
     {

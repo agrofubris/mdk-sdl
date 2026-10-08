@@ -608,7 +608,7 @@ public sealed class Viewer : IScreen
         }
 
         _scripts.Eye = camera.Position;
-        _light?.Update(_scripts.CurrentArena);
+        _light?.Update(_scripts, _kurt);
         using var render = _ui.Dev.Profiler.Measure(Section.Scene);
         _view.Draw(_scripts.DrawnArenas, _scripts.AnimatedTextures);
         _view.DrawEnd(_scripts.EndLevel);

@@ -2,13 +2,14 @@
 // sample their colour texture (RGBA8 premultiplied, mipmapped, a layer per frame: Renderer.Colours.cs)
 // trilinear and anisotropic; the canvas filters its index texture (palette_filtered.hlsli).
 //
-//   mode 1 lit:    albedo x exposure x (hemisphere + sun x N.L x shadow), tone mapped, then the
+//   mode 1 lit:    albedo x exposure x (hemisphere + sun x N.L x shadow + point lights), tone mapped, then the
 //                  haze; edges cut at half cover. The hemisphere: the sky's light from above, the
 //                  ground's from below. The tone curve (Tonemap.cs) keeps light up to its knee and
 //                  rolls brighter light off towards white.
 //   mode 2 sprite: albedo, then the haze; edges cut at half cover; no light
 //   mode 3 canvas: the 2D canvas: albedo, its edges blended by their cover
 //
+// Point lights (muzzle flashes, explosions, fires; PointLights.cs) fade with (1 - d^2 / r^2)^2.
 // Light is added in linear colour (the palette is sRGB). Normals are flat: the triangle's plane,
 // from the world position's screen derivatives, turned to the camera.
 // SDL_GPU register spaces: vertex uniforms space1, fragment resources space2, fragment uniforms space3.
@@ -85,6 +86,17 @@ cbuffer FragmentUniforms : register(b0, space3)
     float4 shadow;
 };
 
+#define MAX_LIGHTS 16
+
+// The frame's point lights, pushed once per frame (Renderer.PushLights).
+cbuffer PointLights : register(b1, space3)
+{
+    // x: how many.
+    float4 light_count;
+    // Per light: xyz its position, w its radius; then rgb its colour (linear).
+    float4 lights[MAX_LIGHTS * 2];
+};
+
 float3 to_linear(float3 c)
 {
     return pow(max(c, 0.0), GAMMA);
@@ -101,6 +113,30 @@ float3 tonemap(float3 c, float knee)
     float room = 1.0 - knee;
     float3 shoulder = 1.0 - room * exp(-(c - knee) / room);
     return lerp(c, shoulder, step(knee, c));
+}
+
+// The point lights' light on a face.
+float3 point_lights(float3 position, float3 normal)
+{
+    float3 sum = float3(0.0, 0.0, 0.0);
+    int count = int(light_count.x);
+    [loop] for (int i = 0; i < count; i++)
+    {
+        float4 at = lights[i * 2];
+        float3 to = at.xyz - position;
+        float d2 = dot(to, to);
+        float r2 = at.w * at.w;
+        if (d2 >= r2)
+        {
+            continue;
+        }
+
+        float fade = 1.0 - d2 / r2;
+        float facing = saturate(dot(normal, to * rsqrt(max(d2, 1e-4))));
+        sum += lights[i * 2 + 1].rgb * facing * fade * fade;
+    }
+
+    return sum;
 }
 
 // How much sunlight reaches a point: 2 x 2 shadow map texels compared, then blended; fades out
@@ -172,7 +208,8 @@ float4 ps_main(VertexOut input) : SV_Target
     {
         float facing = max(dot(normal, -sun.xyz), 0.0);
         float3 hemisphere = lerp(ground.rgb, sky.rgb, normal.z * 0.5 + 0.5);
-        lit = tonemap(albedo * sun.w * (hemisphere + sun_colour.rgb * facing * sunlight(position, normal)), sky.w);
+        float3 light = hemisphere + sun_colour.rgb * facing * sunlight(position, normal) + point_lights(position, normal);
+        lit = tonemap(albedo * sun.w * light, sky.w);
     }
 
     float fog = 1.0 - exp(-haze.a * length(position - camera.xyz));

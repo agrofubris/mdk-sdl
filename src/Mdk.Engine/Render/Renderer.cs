@@ -265,6 +265,7 @@ public sealed unsafe partial class Renderer : IDisposable
         Panorama = null;
         Backdrop = Backdrop.Sky;
         Lighting = null;
+        Lights.Clear();
     }
 
     /// <summary>The canvas's width for the window's aspect.</summary>
@@ -397,7 +398,7 @@ public sealed unsafe partial class Renderer : IDisposable
                 format = _shaderFormat.Format,
                 stage = stage,
                 num_samplers = samplers,
-                num_uniform_buffers = 1,
+                num_uniform_buffers = UniformBuffers(name),
             };
             var shader = SDL_CreateGPUShader(_device, &info);
             Check(shader != null, $"SDL_CreateGPUShader {name}");
@@ -688,6 +689,7 @@ public sealed unsafe partial class Renderer : IDisposable
         UploadDynamic(commands);
         PrepareColours(commands);
         (_drawCalls, _triangles) = (0, 0);
+        PushLights(commands, view);
         RenderScene(commands, view, clearColour);
         if (swapchain != null)
         {
