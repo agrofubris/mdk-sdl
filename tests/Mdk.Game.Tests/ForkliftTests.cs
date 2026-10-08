@@ -15,6 +15,8 @@ namespace Mdk.Game.Tests;
 /// pad (-435..-414, 547..568) it hides the glass (group 1) over the way down.</summary>
 public class ForkliftTests
 {
+    /// <summary>The scripts' random draws (the forklift's path, hits) repeat from run to run.</summary>
+    private const int Seed = 1;
     private const int Level = 8;
     private const float Tick = 1f / 30f;
     private const string Arena = "GUNT_2";
@@ -54,7 +56,7 @@ public class ForkliftTests
         }
 
         var mixer = new SoundMixer(Device, _ => null);
-        return (new ScriptRuntime(level, cmi, sprites, space, groups, mixer, new Kurt.Kurt(space, mixer, _ => 1)), groups);
+        return (new ScriptRuntime(level, cmi, sprites, space, groups, mixer, new Kurt.Kurt(space, mixer, _ => 1), Seed), groups);
     }
 
     /// <summary>Kurt by the pad, the garage killed: the forklift with the driver.</summary>
