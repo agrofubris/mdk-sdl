@@ -2882,6 +2882,18 @@ public sealed partial class ScriptRuntime
         return best;
     }
 
+    /// <summary>Whether a segment crosses an up-facing face (|nz| ≥ 0.5) of one arena (0x421708):
+    /// the scripts' floor probe, which other objects (platforms) don't stop.</summary>
+    public bool CrossesFloor(string arena, Vector3 from, Vector3 to)
+    {
+        if (!_bsps.TryGetValue(arena, out var bsp))
+        {
+            return false;
+        }
+
+        return bsp.Segment(from, to, Bsp.SegmentMode.Floor, out _, Bsp.Clip.PassesThrough) != Bsp.None;
+    }
+
     /// <summary>A box of half extents <paramref name="half"/> swept without sliding against Kurt's
     /// arena, then the second one (bsp_sweep_box, the mortar round in 0x462708). Faces stop it only
     /// from their front: a wall seen from its back is passed (LEVEL6 OLYM_3's opening). The point is

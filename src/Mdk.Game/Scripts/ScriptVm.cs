@@ -1242,13 +1242,17 @@ public sealed class ScriptVm(ScriptRuntime runtime, ScriptDecoder decoder)
                 return Branch(obj, ins, Compare(_opcodeCount, L(o[0])));
             case 231: // if_move_idle_flag: the movement gave up (stuck, ObjectMotion.HandleStuck)
                 return Branch(obj, ins, obj.MoveCommand == 0 && obj.StuckCount != 0);
-            case 236: // if_no_floor_at: no floor below a point in front of the object
+            case 236: // if_no_floor_at: no up-facing face of its arena below a point (0x46046c)
             {
-                const float DefaultDepth = 10f;
-                var offset = Rotated(new Vector2(F(o[0]), F(o[1])), obj.Yaw);
-                var depth = F(o[2]) != 0f ? F(o[2]) : DefaultDepth;
-                var point = obj.Position + new Vector3(offset.X, offset.Y, 1f);
-                return Branch(obj, ins, runtime.Raycast(point, point - new Vector3(0f, 0f, depth + 1f)) == null);
+                // From 3 above the point down to 3 below it (or to z + depth). The offset turns like
+                // add_vel_local's: −dx is ahead (the XG's −20 checks 20 units in front).
+                const float ProbeTop = 3f;
+                const float DefaultDrop = 6f;
+                var (dx, dy, depth) = (F(o[0]), F(o[1]), F(o[2]));
+                var (s, c) = MathF.SinCos(float.DegreesToRadians(obj.Yaw));
+                var top = obj.Position + new Vector3(-dx * c - dy * s, -dy * c - dx * s, ProbeTop);
+                var bottom = depth != 0f ? obj.Position.Z + depth : top.Z - DefaultDrop;
+                return Branch(obj, ins, !runtime.CrossesFloor(obj.Arena, top, top with { Z = bottom }));
             }
             case 189: // lob_to_kurt: throw itself so that it lands on Kurt (or at a height)
                 LobToKurt(obj, L(o[0]));
