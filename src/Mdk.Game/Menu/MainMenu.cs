@@ -321,7 +321,6 @@ public sealed class MainMenu : IScreen
             _songVoice = _ui.Play(_song, Bus.Music);
             ShowMain();
         });
-        Print();
     }
 
     /// <summary>The 1996 demo's levels (godot-mdk docs/beta96.md), a page of the port's own.</summary>

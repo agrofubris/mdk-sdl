@@ -46,7 +46,8 @@ public sealed class PauseMenu
     public Event Update(float delta)
     {
         _ui.View.Layout(ScreenView.Fit.Inside);
-        if (_ui.Input.WasPressed(MenuKey.Back))
+        // Esc resumes; on the options' pages it goes up a page.
+        if (_ui.Input.WasPressed(MenuKey.Back) && !_items.HandlesBack)
         {
             Resume();
             return _next;

@@ -13,7 +13,7 @@ Each layer talks only to the one below it.
  Mdk.Android  SDLActivity, first start: folder picker ──► MdkData.Import ──► Game.Run
     │
  Mdk.Game     Flow: Game (screens), GameState, Settings, SaveGames, LevelFlow
-    │         Menu: main menu, pause menu, options, loading, statistics, save prompt, videos
+    │         Menu: main menu, pause menu, options (Display, Graphics, Audio, Controls, Game, Mods), loading, statistics, save prompt, videos
     │         Stream: the tube between levels (generator, Kurt's flight, drawing)
     │         Fall: the fall before a level (FallSim, FallView, FallHud)
     │         Viewer (a level): level, camera, collision (BSP), sound mixer, scripts and objects, Kurt
@@ -21,9 +21,9 @@ Each layer talks only to the one below it.
     │         HdTextures: the enhanced look's upscaled textures (export, generator: a mod)
     │         Mods: mods/ (catalogue, images, models from glTF, the exports)
     │   └──────────────► Mdk.Formats  (parsers: DTI, MTO, MTI, SNI, FTI, BNI, models, PNG, glTF binary; the 1996 demo's)
- Mdk.Engine   Render (Renderer: meshes, index textures, palettes, panorama)
+ Mdk.Engine   Render (Renderer: meshes, index textures, palettes, panorama; GPU backends, VSync)
     │         Audio (AudioDevice: software mixer of voices, music and effects buses, streamed voices, master limiter)
-    │         Platform (Window and its icon, Input: game keys (rebindable), menu keys, raw keys, pointer, text, cursor, SDL3;
+    │         Platform (Window and its icon, display modes, frame limiter, Input: game keys (rebindable), menu keys, raw keys, pointer, text, cursor, SDL3;
     │                   TouchControls: on-screen stick and buttons of a touch screen;
     │                   HttpDownload: the OS's HTTP library, WinHTTP or libcurl)
     │         Diagnostics (Profiler: frame sections; LogRing, LogWriter: the output's last lines)
@@ -35,7 +35,15 @@ Each layer talks only to the one below it.
 - `Mdk.Engine` hides SDL: the game sees meshes, materials, keys. It also drives the HD textures'
   upscaler (`Upscale/`: download, checksum, process).
 - Shaders (`shaders/*.hlsl`) are compiled at build time to each format whose tool is found, and
-  embedded; the renderer creates its device with the first embedded format a GPU driver takes.
+  embedded; the renderer creates its device for the backend asked for (Options, Display;
+  `--gpu`: `SDL_CreateGPUDeviceWithProperties` with its driver name and shader format), else
+  (failing, not on the OS, or Auto) with the first embedded format a GPU driver takes.
+- Display (`Platform/Display.cs`, `Window.Apply`): windowed at a size, fullscreen on the desktop,
+  or exclusive (`SDL_SetWindowFullscreenMode` with the display's mode of that size at its highest
+  refresh); applied on a change only, never to a hidden window (tests: always 1280 x 960).
+  The renderer draws at the render scale of the swapchain's size and blits (linear when scaled);
+  VSync is the swapchain's present mode (VSYNC, IMMEDIATE, MAILBOX; falls back to one the window
+  supports); the frame limiter sleeps with `SDL_DelayPrecise`.
 - `Mdk.Formats` finds the game: `MDK_DATA_DIR`, `mdk` in `mdk_paths.cfg` next to the program
   (`LocalPaths`, the Godot port's file), the folders above the program, GOG and Steam folders.
 - `Mdk.Formats` finds data files whatever their case (`CaseInsensitivePath`: the GOG installation
@@ -49,7 +57,7 @@ for its runtime next to it (`SDL3.dll`, `libSDL3.so`, `libSDL3.dylib`).
 ```
  shaders/*.hlsl ──dxc──────────► DXIL ───► Direct3D 12 (Windows)
         │
-        └──────dxc -spirv──────► SPIR-V ─► Vulkan (Linux; Windows with SDL_GPU_DRIVER=vulkan)
+        └──────dxc -spirv──────► SPIR-V ─► Vulkan (Linux, Android; Windows with --gpu=vulkan)
                                    │
                                    └──spirv-cross──► MSL ─► Metal (macOS)
 ```
@@ -168,8 +176,8 @@ the download through `Platform/HttpDownload.cs`: WinHTTP on Windows, libcurl on 
 the game decides what and how.
 
 ```
- make (HdGenerator: --upscale-textures, Options "Make HD textures" via HdJob)
- ───────────────────────────────────────────────────────────────────────────
+ make (HdGenerator: --upscale-textures, Options, Mods "Make HD textures" via HdJob)
+ ─────────────────────────────────────────────────────────────────────────────────
  LevelData, CMI ─► TextureExport (arenas, corridors, models × arena palettes) ─► HdSource (key = HdKey)
  TRAVSPRT.BNI, level SNI ─► TextureExport.Kurt (Kurt's frames × the level's palette, soft alpha) ─┤
  CanvasExport (the HUD × level palette; menus, loading screens, falls' HUD; no fonts) ────────────┘
@@ -276,8 +284,12 @@ The console (Grave, the key left of 1 by its scancode) and the debug overlay (F3
                                                                 map, load, quit) ──► ILevelTarget?: the
                                                                 Viewer's LevelCommands (Kurt, scripts)
  Profiler (scene, render, physics, scripts, audio), Renderer.Stats (GPU wait), GC,
- IScreen.Status (the screen's lines) ──► OverlayText ──► OverlayView
+ TechInfo.Overlay (GPU, window, frame), IScreen.Status (the screen's lines) ──► OverlayText ──► OverlayView
 ```
+
+- `TechInfo` formats the start's log lines (build, GPU and backend, look) and the display's
+  (desktop mode, window, render target, swapchain and depth formats, MSAA, present mode), logged
+  again by `Game.WatchScreen` when they change (compared each frame without allocating).
 
 - One hook for every screen: `Game.Run` updates `DevUi` before each screen's frame, and
   `Renderer.Overlay` draws the overlay and the console on the canvas inside any `Present` (the

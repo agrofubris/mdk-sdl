@@ -40,13 +40,23 @@ LIT=$(tail -c +55 "$SHOT" | head -c $TOP_BAND | od -An -v -tx4 | tr -s ' ' '\n' 
 [ "$LIT" = 0 ]; check "page drawn laid out on its first frame" $?
 
 OUT=$(run --menu --options --wait=1)
-echo "$OUT" | grep -q "^Menu: Master volume: 80 | .* | Gore: On | Controls | Back$"; check "options page" $?
+echo "$OUT" | grep -q "^Menu: Display | Graphics | Audio | Controls | Game | Mods | Back$"; check "options page" $?
 
-# -nobloodno / -bloodyes (not saved) set gore.
-OUT=$(run --menu --options --nobloodno --wait=1)
-echo "$OUT" | grep -q "| Gore: Off | Controls | Back$"; check "--nobloodno" $?
-OUT=$(run --menu --options --bloodyes --wait=1)
-echo "$OUT" | grep -q "| Gore: On | Controls | Back$"; check "--bloodyes" $?
+# The options' pages; Esc goes up a page (Audio, Options, the main menu).
+OUT=$(run --menu --options --press=Menu.Down@0.3,Menu.Down@0.4,Menu.Accept@0.5,Menu.Back@1,Menu.Back@1.5 --wait=2)
+echo "$OUT" | grep -q "^Menu: Master volume: 80 | Music volume: 50 | Effects volume: 70 | Music filter: On | Back$"; check "audio page" $?
+[ "$(echo "$OUT" | grep "^Menu" | tail -n 2 | head -n 1)" = "Menu: Display | Graphics | Audio | Controls | Game | Mods | Back" ]; check "Esc: up to the options" $?
+echo "$OUT" | grep "^Menu" | tail -n 1 | grep -q "^Menu: New Game"; check "Esc: up to the main menu" $?
+OUT=$(run --menu --options --press=Menu.Down@0.3,Menu.Down@0.4,Menu.Down@0.5,Menu.Down@0.6,Menu.Accept@0.7 --wait=1)
+echo "$OUT" | grep -q "^Menu: Difficulty: Normal | Back$"; check "game page" $?
+OUT=$(run --menu --controls --wait=1)
+echo "$OUT" | grep -q "^Menu: Mouse sensitivity: 1.00 | Invert mouse: Off | Forward: W | .* | Quick load: F9 | Default keys | Back$"; check "controls page" $?
+
+# -nobloodno / -bloodyes (not saved) set gore (Options, Graphics).
+OUT=$(run --menu --options --nobloodno --press=Menu.Down@0.3,Menu.Accept@0.5 --wait=1)
+echo "$OUT" | grep -q "^Menu: Graphics: Original | Anti-aliasing: Off | Gore: Off | Back$"; check "--nobloodno" $?
+OUT=$(run --menu --options --bloodyes --press=Menu.Down@0.3,Menu.Accept@0.5 --wait=1)
+echo "$OUT" | grep -q "| Gore: On | Back$"; check "--bloodyes" $?
 
 OUT=$(run --stats=7 --counts=120,60,10,5,8,20,3 --phase=1 --wait=2)
 echo "$OUT" | grep "^Score"

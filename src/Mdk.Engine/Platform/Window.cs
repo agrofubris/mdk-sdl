@@ -76,8 +76,128 @@ public sealed unsafe class Window : IDisposable
         SDL_DestroySurface(icon);
     }
 
-    /// <summary>The window fills the screen or not; always on a touch screen (a phone).</summary>
-    public void SetFullscreen(Fullscreen mode) => SDL_SetWindowFullscreen(Handle, mode == Fullscreen.On || _touch != null);
+    /// <summary>The setup last applied (null: none yet).</summary>
+    private DisplaySetup? _setup;
+
+    /// <summary>Windowed at a size, fullscreen on the desktop, or in a mode of the display of its
+    /// own; always fullscreen on a touch screen (a phone). Acts only on a change (a window resized
+    /// by hand keeps its size), never on a hidden window.</summary>
+    public void Apply(DisplaySetup setup)
+    {
+        if (setup == _setup || Visibility == Visibility.Hidden)
+        {
+            return;
+        }
+
+        _setup = setup;
+        if (_touch != null)
+        {
+            SDL_SetWindowFullscreen(Handle, true);
+            return;
+        }
+
+        switch (setup.Fullscreen)
+        {
+            case Fullscreen.Off:
+                SDL_SetWindowFullscreen(Handle, false);
+                SDL_SetWindowSize(Handle, setup.Window.Width, setup.Window.Height);
+                break;
+            case Fullscreen.Desktop:
+                SDL_SetWindowFullscreenMode(Handle, null);
+                SDL_SetWindowFullscreen(Handle, true);
+                break;
+            case Fullscreen.Exclusive:
+                SetExclusive(setup.Exclusive);
+                break;
+        }
+    }
+
+    public Fullscreen Fullscreen => _setup?.Fullscreen ?? Fullscreen.Off;
+
+    /// <summary>Exclusive fullscreen in the display's mode of that size at its highest refresh rate
+    /// (none, or none of that size: the desktop's).</summary>
+    private void SetExclusive(Resolution? size)
+    {
+        var display = SDL_GetDisplayForWindow(Handle);
+        var mode = SDL_GetDesktopDisplayMode(display);
+        int count;
+        var modes = SDL_GetFullscreenDisplayModes(display, &count);
+        for (var i = 0; modes != null && size is { } wanted && i < count; i++)
+        {
+            var candidate = modes[i];
+            if (candidate->w != wanted.Width || candidate->h != wanted.Height)
+            {
+                continue;
+            }
+
+            if (mode->w != wanted.Width || mode->h != wanted.Height || candidate->refresh_rate > mode->refresh_rate)
+            {
+                mode = candidate;
+            }
+        }
+
+        if (!SDL_SetWindowFullscreenMode(Handle, mode) || !SDL_SetWindowFullscreen(Handle, true))
+        {
+            Console.Error.WriteLine($"Exclusive fullscreen: {SDL_GetError()}");
+        }
+
+        SDL_free(modes);
+    }
+
+    /// <summary>The window's display's desktop mode.</summary>
+    public ScreenMode Desktop
+    {
+        get
+        {
+            var mode = SDL_GetDesktopDisplayMode(SDL_GetDisplayForWindow(Handle));
+            return mode == null ? default : new ScreenMode(mode->w, mode->h, mode->refresh_rate);
+        }
+    }
+
+    /// <summary>Window sizes that fit the display (<see cref="Resolutions.Windowed"/>).</summary>
+    public IReadOnlyList<Resolution> WindowedSizes()
+    {
+        SDL_Rect usable;
+        var current = Size;
+        if (!SDL_GetDisplayUsableBounds(SDL_GetDisplayForWindow(Handle), &usable))
+        {
+            return [new Resolution(current.Width, current.Height)];
+        }
+
+        return Resolutions.Windowed(new Resolution(usable.w, usable.h), new Resolution(current.Width, current.Height));
+    }
+
+    /// <summary>The display's modes, one per size (<see cref="Resolutions.Exclusive"/>).</summary>
+    public IReadOnlyList<ScreenMode> ExclusiveModes()
+    {
+        int count;
+        var modes = SDL_GetFullscreenDisplayModes(SDL_GetDisplayForWindow(Handle), &count);
+        if (modes == null)
+        {
+            return [];
+        }
+
+        var list = new List<ScreenMode>(count);
+        for (var i = 0; i < count; i++)
+        {
+            list.Add(new ScreenMode(modes[i]->w, modes[i]->h, modes[i]->refresh_rate));
+        }
+
+        SDL_free(modes);
+        return Resolutions.Exclusive(list);
+    }
+
+    /// <summary>SDL's version, e.g. "3.4.0".</summary>
+    public static string SdlVersion
+    {
+        get
+        {
+            const int Major = 1000000;
+            const int Minor = 1000;
+            var version = SDL_GetVersion();
+            return $"{version / Major}.{version / Minor % Minor}.{version % Minor}";
+        }
+    }
 
     /// <summary>The window's size in pixels.</summary>
     public (int Width, int Height) Size
@@ -232,4 +352,5 @@ public enum Capture { Off, On }
 
 public enum Visibility { Shown, Hidden }
 
-public enum Fullscreen { Off, On }
+/// <summary>Windowed, fullscreen on the desktop (borderless), or exclusive (a mode of the display's own).</summary>
+public enum Fullscreen { Off, Desktop, Exclusive }

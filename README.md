@@ -26,7 +26,7 @@ original's box sweeps.
 - **The whole game**: every level, the fall before it and the stream after it, rides, menus,
   briefings, statistics, saves, the end movies. Plays like the original (its BSP collisions,
   scripts and sound laws, reverse engineered).
-- **HD textures (optional)**: Options, "Make HD textures" upscales the game's textures and HUD 2x
+- **HD textures (optional)**: Options, Mods, "Make HD textures" upscales the game's textures and HUD 2x
   with the AI upscaler [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN), locally on your GPU,
   from your copy of the game, into a mod (Options, Mods switches it). Nothing upscaled is
   distributed. [Details](#hd-textures).
@@ -159,6 +159,7 @@ mdk.exe
 - `--mod=a,b`: only these mods (folders of `mods/`) for this run (not saved).
 - `--bloodyes`, `--nobloodno`: gore on or off instead of the settings' (not saved; the original's
   `-bloodyes`, `-nobloodno`).
+- `--gpu=d3d12|vulkan|metal|auto`: the GPU backend instead of the settings' (not saved).
 - Tests: `--screenshot=file.bmp` (after `--wait=seconds` of game time, then quit),
   `--walk=seconds`, `--delay=seconds` (held keys start later), `--jump`, `--fire`, `--give=SW_HBOMB,...` (pickups to start with), `--use`
   (uses the item after 1 second), `--profile` (prints the objects of Kurt's arena every second),
@@ -179,10 +180,38 @@ mdk.exe
   those times. `--frames=dir,count[,every]`: after `--wait`, saves every Nth frame of a level (4:
   15 a second) as `frame000.bmp`..., then quits (the animation above).
 
-Settings (volumes, music filter, mouse, fullscreen, anti-aliasing, difficulty, graphics, gore, HD
-textures, key bindings) and saved games
+Settings (the options below, the mods' switches) and saved games
 are kept next to the executable (`settings.cfg`, `saves/*.sav`; `MDK_USER_DIR` overrides the
 folder). The first run copies them from where older builds kept them (`%LOCALAPPDATA%/mdk-sdl`). `LASTGAME` (written when Kurt dies) is deleted at start, as in the original.
+
+### Options
+
+From the main menu or the pause menu; a page per kind, each change applied and saved at once
+(`settings.cfg`), Esc goes up a page.
+
+- **Display**: display mode (windowed, fullscreen on the desktop, exclusive fullscreen in a mode of
+  the display's own), resolution (window sizes that fit the display; the display's modes, each
+  at its highest refresh rate), render scale (50-200 % of the window's size: faster or
+  supersampled; the HUD too), VSync (on; off: may tear; adaptive: SDL_GPU's mailbox, no tearing,
+  the newest frame shown; falls back to what the display supports), frame limit (60, 120, 144 a
+  second with VSync off or adaptive) and GPU backend (Auto, Direct3D 12 or Vulkan on Windows,
+  Vulkan on Linux, Metal on macOS; after a restart; a backend that fails falls back to Auto).
+  Android has render scale, VSync and frame limit (always fullscreen, Vulkan).
+- **Graphics**: the original or the enhanced look, anti-aliasing, gore.
+- **Audio**: master, music and effects volumes, the music filter.
+- **Controls**: mouse sensitivity and inversion, key bindings.
+- **Game**: difficulty.
+- **Mods**: each mod on or off, "Make HD textures" (desktop), "Import from folder" (Android).
+
+At start the log (and the console) names the build, the GPU and its backend, the display and the
+frame (sizes, formats, MSAA, present mode; again when they change) and the look; F3 shows them too:
+
+```
+MDK SDL 1.0.0-beta.1 | .NET 10.0.12 Native AOT | SDL 3.5.0
+GPU: NVIDIA GeForce RTX 3060 (Vulkan via SDL_GPU), driver 616.56.0.0
+Look: Enhanced, mods: hd-textures
+Display: 3440x1440 @ 144 Hz, window 1280x960 (windowed), render target 1280x960, swapchain B8G8R8A8_UNORM (8 bits per channel, SDR), depth D32_FLOAT, MSAA 4x, present mode VSYNC
+```
 
 Controls: W/S or Up/Down to run, A/D to strafe, the mouse or Left/Right to turn, Space to jump
 (hold it while falling to open the chute; running into a ledge while falling grabs it), Shift for turbo, Ctrl or the left mouse button to fire,
@@ -201,7 +230,7 @@ S the stream after LEVEL7, D the statistics with random counts).
 ### HD textures
 
 The enhanced look can draw the textures upscaled 2x by an AI upscaler, made once on your computer
-from your copy of the game: Options, "Make HD textures" (a progress page; leaving it cancels), or
+from your copy of the game: Options, Mods, "Make HD textures" (a progress page; leaving it cancels), or
 `mdk --upscale-textures` (all levels; `=3,7` only those; `--hd-model=general|anime`,
 `--hd-scale=2|4`). They are a mod, `mods/hd-textures/` ([docs/modding.md](docs/modding.md)):
 Options, Mods, "HD textures (Real-ESRGAN)" switches them, from the next level on (enhanced look
@@ -296,7 +325,7 @@ picker; `Download` itself can't be picked, a folder in it can) and copies its ga
 saves live next to it, in `files`.
 
 Mods and HD textures: make them on a PC ([above](#hd-textures)), copy the `mods` folder (next to
-`mdk.exe`) into the phone's MDK folder, then Options, "Import from folder" and pick it again: new
+`mdk.exe`) into the phone's MDK folder, then Options, Mods, "Import from folder" and pick it again: new
 or changed files are copied, `mods` too (an older `textures-hd` becomes the HD textures mod).
 Options, Mods then switches them (enhanced look).
 

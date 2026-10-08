@@ -36,4 +36,14 @@ public class OverlayTests
         Assert.StartsWith("FPS", lines[0]);
         Assert.Equal("main menu", lines[^1]);
     }
+
+    /// <summary>The GPU's and the display's lines come before the screen's.</summary>
+    [Fact]
+    public void SystemLinesBeforeTheScreens()
+    {
+        var sample = new OverlaySample(new Profiler(), default, new MemorySample(0, 0, [0]), ["main menu"]) { System = ["GPU X, Vulkan"] };
+        var lines = OverlayText.Lines(sample);
+        Assert.Equal("GPU X, Vulkan", lines[^2]);
+        Assert.Equal("main menu", lines[^1]);
+    }
 }

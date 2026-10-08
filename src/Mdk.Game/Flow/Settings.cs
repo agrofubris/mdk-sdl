@@ -12,7 +12,8 @@ namespace Mdk.Game.Flow;
 /// <summary>The look of the levels: the original's, or enhanced (lit, filtered, shadows, haze).</summary>
 public enum Graphics { Original, Enhanced }
 
-/// <summary>The player's settings (settings.gd): volumes, the music filter, the mouse, the window,
+/// <summary>The player's settings (settings.gd): volumes, the music filter, the mouse, the window
+/// and the frame (display mode, size, render scale, VSync, frame limit, GPU backend),
 /// anti-aliasing, the difficulty, gore, the graphics, the mods switched off and the key bindings (one key or mouse button per action, by name). Saved as
 /// <c>name=value</c> lines in the user's folder; applied at start and whenever they change.
 /// <code>
@@ -26,6 +27,8 @@ public sealed class Settings
     private const string FileName = "settings.cfg";
     private const string BindPrefix = "bind.";
     private const string ModPrefix = "mod.";
+    /// <summary>The window's size until another is chosen (the original's 640 x 480, doubled).</summary>
+    public static readonly Resolution DefaultWindow = new(1280, 960);
 
     /// <summary>The game's actions in the order the controls screen lists them, with their names.</summary>
     public static readonly IReadOnlyList<(Key Key, string Name)> Actions =
@@ -45,7 +48,18 @@ public sealed class Settings
     /// <summary>Mouse sensitivity multiplier (0.25-3) and inverted vertical look.</summary>
     public float MouseSensitivity = 1f;
     public bool InvertMouse;
-    public bool Fullscreen;
+    /// <summary>The window (Options, Display): windowed at <see cref="WindowSize"/>, fullscreen on
+    /// the desktop, or exclusive at <see cref="ExclusiveSize"/> (null: the desktop's mode).</summary>
+    public Fullscreen Fullscreen = Fullscreen.Off;
+    public Resolution WindowSize = DefaultWindow;
+    public Resolution? ExclusiveSize;
+    /// <summary>The frame's size, % of the window's (<see cref="Renderer.Scales"/>).</summary>
+    public int RenderScale = Renderer.FullScale;
+    public VSync VSync = VSync.On;
+    /// <summary>Frames a second at most with VSync off or adaptive (<see cref="FrameLimiter.Limits"/>).</summary>
+    public int FrameLimit = FrameLimiter.Off;
+    /// <summary>SDL_GPU's driver, from the next start.</summary>
+    public GpuBackend Backend = GpuBackend.Auto;
     public Difficulty Difficulty = Difficulty.Normal;
     /// <summary>Gore (0x5742dc, on by default): green sparks, slime, blown off parts, the head shots row.</summary>
     public bool Gore = true;
@@ -111,6 +125,12 @@ public sealed class Settings
             $"mouse_sensitivity={MouseSensitivity.ToString(CultureInfo.InvariantCulture)}",
             $"invert_mouse={InvertMouse}",
             $"fullscreen={Fullscreen}",
+            $"window_size={WindowSize}",
+            $"exclusive_size={ExclusiveSize}",
+            $"render_scale={RenderScale}",
+            $"vsync={VSync}",
+            $"frame_limit={FrameLimit}",
+            $"gpu_backend={Backend}",
             $"difficulty={Difficulty}",
             $"gore={Gore}",
             $"graphics={Graphics}",
@@ -165,8 +185,30 @@ public sealed class Settings
             case "invert_mouse":
                 InvertMouse = bool.TryParse(value, out var invert) ? invert : InvertMouse;
                 break;
+            // Older settings: True or False.
+            case "fullscreen" when bool.TryParse(value, out var on):
+                Fullscreen = on ? Fullscreen.Desktop : Fullscreen.Off;
+                break;
             case "fullscreen":
-                Fullscreen = bool.TryParse(value, out var fullscreen) ? fullscreen : Fullscreen;
+                Fullscreen = Enum.TryParse<Fullscreen>(value, out var fullscreen) && Enum.IsDefined(fullscreen) ? fullscreen : Fullscreen;
+                break;
+            case "window_size":
+                WindowSize = Resolution.TryParse(value, out var size) ? size : WindowSize;
+                break;
+            case "exclusive_size":
+                ExclusiveSize = Resolution.TryParse(value, out var exclusive) ? exclusive : ExclusiveSize;
+                break;
+            case "render_scale":
+                RenderScale = int.TryParse(value, out var scale) && Renderer.Scales.Contains(scale) ? scale : RenderScale;
+                break;
+            case "vsync":
+                VSync = Enum.TryParse<VSync>(value, out var vsync) && Enum.IsDefined(vsync) ? vsync : VSync;
+                break;
+            case "frame_limit":
+                FrameLimit = int.TryParse(value, out var limit) && FrameLimiter.Limits.Contains(limit) ? limit : FrameLimit;
+                break;
+            case "gpu_backend":
+                Backend = Enum.TryParse<GpuBackend>(value, out var backend) && Enum.IsDefined(backend) ? backend : Backend;
                 break;
             case "difficulty":
                 Difficulty = Enum.TryParse<Difficulty>(value, out var difficulty) ? difficulty : Difficulty;
@@ -205,7 +247,9 @@ public sealed class Settings
         audio.SetBusGain(Bus.Music, Gain(MusicVolume));
         audio.SetBusGain(Bus.Effects, Gain(EffectsVolume));
         audio.MusicFilter = MusicFilter ? Filter.On : Filter.Off;
-        window.SetFullscreen(Fullscreen ? Engine.Platform.Fullscreen.On : Engine.Platform.Fullscreen.Off);
+        window.Apply(new DisplaySetup(Fullscreen, WindowSize, ExclusiveSize));
+        renderer.RenderScale = RenderScale;
+        renderer.VSync = VSync;
         input.MouseScale = MouseSensitivity;
         input.InvertMouse = InvertMouse;
         Bind(input);

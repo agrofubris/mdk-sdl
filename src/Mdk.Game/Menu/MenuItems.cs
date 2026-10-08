@@ -37,6 +37,8 @@ public sealed class MenuItems
         /// <summary>An option: changed by a step (+1 or -1).</summary>
         public readonly Action<int>? Change = change;
         public bool Disabled;
+        /// <summary>An option's label, made again when an option changes.</summary>
+        public Func<string>? Label;
         public float Grow = Small;
         public RectangleF Area;
 
@@ -116,11 +118,18 @@ public sealed class MenuItems
 
     public void Clear()
     {
+        _ui.Audio.Stop(_songVoice);
+        _songVoice = 0;
+        ClearPage();
+    }
+
+    /// <summary>A new page; the options' song plays on across their pages.</summary>
+    private void ClearPage()
+    {
         // Leaving the progress page stops the HD textures.
         _job?.Cancel();
         _job = null;
-        _ui.Audio.Stop(_songVoice);
-        _songVoice = 0;
+        _back = null;
         Alignment = Align.Centre;
         FirstRow = 0;
         _entries.Clear();
@@ -144,14 +153,26 @@ public sealed class MenuItems
         entry = new Entry(text(), Kind.Item, () => Step(1), Step);
         Add(entry);
 
+        entry.Label = text;
+
+        // Options may depend on each other (the resolution on the display mode): all are relabelled.
         void Step(int step)
         {
             change(step);
             _ui.ApplySettings();
-            entry!.Text = text();
+            foreach (var option in _entries)
+            {
+                option.Text = option.Label?.Invoke() ?? option.Text;
+            }
+
             _ui.Play(_change);
         }
     }
+
+    /// <summary>Esc's page: the one above (the options' pages), or null when the screen handles Esc.</summary>
+    private Action? _back;
+
+    public bool HandlesBack => _back != null;
 
     private void Add(Entry entry)
     {
@@ -202,6 +223,13 @@ public sealed class MenuItems
         if (_waiting != null)
         {
             WaitForControl(input);
+            return;
+        }
+
+        if (_back != null && input.WasPressed(MenuKey.Back))
+        {
+            Click();
+            _back();
             return;
         }
 
@@ -332,50 +360,186 @@ public sealed class MenuItems
 
     // --- Options --------------------------------------------------------------------------------
 
-    /// <summary>The options (see <see cref="Settings"/>), applied and saved on each change.</summary>
+    /// <summary>The options (see <see cref="Settings"/>), a page per kind; each change is applied
+    /// and saved at once. Esc goes up a page.
+    /// <code>
+    ///   Options ─┬─ Display   mode, resolution, render scale, VSync, frame limit, GPU backend
+    ///            ├─ Graphics  look, anti-aliasing, gore
+    ///            ├─ Audio     volumes, music filter
+    ///            ├─ Controls  mouse, key bindings
+    ///            ├─ Game      difficulty
+    ///            └─ Mods      mods on/off, Make HD textures (desktop), Import from folder (Android)
+    /// </code></summary>
     public void ShowOptions(Action back)
     {
-        Clear();
+        ClearPage();
+        _back = back;
+        var pages = new (string Name, Action<Action> Show)[]
+        {
+            ("Display", ShowDisplay), ("Graphics", ShowGraphics), ("Audio", ShowAudio),
+            ("Controls", ShowControls), ("Game", ShowGame), ("Mods", ShowMods),
+        };
+        for (var i = 0; i < pages.Length; i++)
+        {
+            var (name, show) = pages[i];
+            var row = i;
+            AddItem(name, () => show(() =>
+            {
+                ShowOptions(back);
+                Select(row);
+            }));
+        }
+
+        AddItem("Back", back);
+        if (_songVoice == 0)
+        {
+            _songVoice = _ui.Play(_song, Bus.Music);
+        }
+
+        Print();
+    }
+
+    /// <summary>A sub-page of the options: Esc and its last item go back.</summary>
+    private void EndPage(Action back)
+    {
+        _back = back;
+        AddItem("Back", back);
+        Print();
+    }
+
+    /// <summary>The page's items, for tests.</summary>
+    private void Print() => Console.WriteLine($"Menu: {Describe()}");
+
+    /// <summary>The window and the frame (<see cref="DisplayMenu"/>: a phone shows fewer).</summary>
+    private void ShowDisplay(Action back)
+    {
+        ClearPage();
+        var s = _ui.Settings;
+        foreach (var item in DisplayMenu.Items(HdMenu.Current))
+        {
+            switch (item)
+            {
+                case DisplayItem.Mode:
+                    AddOption(() => $"Display mode: {FullscreenNames[(int)s.Fullscreen]}",
+                        step => s.Fullscreen = (Fullscreen)Wrap((int)s.Fullscreen + step, FullscreenNames.Length));
+                    break;
+                case DisplayItem.Resolution:
+                    AddOption(ResolutionText, ResolutionStep);
+                    break;
+                case DisplayItem.Scale:
+                    AddOption(() => $"Render scale: {s.RenderScale}%",
+                        step => s.RenderScale = Renderer.Scales[Wrap(Array.IndexOf(Renderer.Scales, s.RenderScale) + step, Renderer.Scales.Length)]);
+                    break;
+                case DisplayItem.VSync:
+                    AddOption(VSyncText, step => s.VSync = (VSync)Wrap((int)s.VSync + step, VSyncCount));
+                    break;
+                case DisplayItem.FrameLimit:
+                    AddOption(() => $"Frame limit: {(s.FrameLimit == FrameLimiter.Off ? "Off" : s.FrameLimit)}",
+                        step => s.FrameLimit = FrameLimiter.Limits[Wrap(Array.IndexOf(FrameLimiter.Limits, s.FrameLimit) + step, FrameLimiter.Limits.Length)]);
+                    break;
+                case DisplayItem.Backend:
+                    AddOption(BackendText, BackendStep);
+                    break;
+            }
+        }
+
+        EndPage(back);
+    }
+
+    private static readonly string[] FullscreenNames = ["Windowed", "Fullscreen", "Exclusive"];
+    private static readonly int VSyncCount = Enum.GetValues<VSync>().Length;
+
+    /// <summary>The window's size, the exclusive mode's, or the desktop's (borderless fullscreen).</summary>
+    private string ResolutionText()
+    {
+        var s = _ui.Settings;
+        var desktop = _ui.Window.Desktop.Size;
+        return s.Fullscreen switch
+        {
+            Fullscreen.Off => $"Resolution: {s.WindowSize}",
+            Fullscreen.Exclusive => $"Resolution: {s.ExclusiveSize ?? desktop}",
+            _ => $"Resolution: {desktop} (desktop)",
+        };
+    }
+
+    private void ResolutionStep(int step)
+    {
+        var s = _ui.Settings;
+        var window = _ui.Window;
+        if (s.Fullscreen == Fullscreen.Off)
+        {
+            s.WindowSize = Resolutions.Step(window.WindowedSizes(), s.WindowSize, step);
+            return;
+        }
+
+        if (s.Fullscreen == Fullscreen.Exclusive)
+        {
+            var sizes = window.ExclusiveModes().Select(m => m.Size).ToList();
+            s.ExclusiveSize = Resolutions.Step(sizes, s.ExclusiveSize ?? window.Desktop.Size, step);
+        }
+    }
+
+    /// <summary>VSync as chosen, and the mode used when the display falls back to another.</summary>
+    private string VSyncText()
+    {
+        var chosen = _ui.Settings.VSync;
+        var used = _ui.Renderer.VSync;
+        return used == chosen ? $"VSync: {chosen}" : $"VSync: {chosen} ({used})";
+    }
+
+    /// <summary>The backend chosen (Auto names SDL's choice); a change waits for the next start.</summary>
+    private string BackendText()
+    {
+        var renderer = _ui.Renderer;
+        var chosen = _ui.Settings.Backend;
+        var name = chosen == GpuBackend.Auto ? $"Auto ({GpuBackends.Name(renderer.Gpu.Backend)})" : GpuBackends.Name(chosen);
+        return chosen == renderer.Requested ? $"GPU: {name}" : $"GPU: {name} (restart)";
+    }
+
+    private void BackendStep(int step)
+    {
+        var s = _ui.Settings;
+        var backends = Renderer.Backends();
+        s.Backend = backends[Wrap(backends.ToList().IndexOf(s.Backend) + step, backends.Count)];
+    }
+
+    /// <summary>The levels' look, its anti-aliasing, and gore.</summary>
+    private void ShowGraphics(Action back)
+    {
+        ClearPage();
+        var s = _ui.Settings;
+        AddOption(() => $"Graphics: {s.Graphics}", step => s.Graphics = (Graphics)Wrap((int)s.Graphics + step, GraphicsCount));
+        AddOption(() => $"Anti-aliasing: {AntiAliasingNames[(int)s.AntiAliasing]}",
+            step => s.AntiAliasing = (AntiAliasing)Wrap((int)s.AntiAliasing + step, AntiAliasingNames.Length));
+        AddOption(() => $"Gore: {OnOff(s.Gore)}", _ => s.Gore = !s.Gore);
+        EndPage(back);
+    }
+
+    private void ShowAudio(Action back)
+    {
+        ClearPage();
         var s = _ui.Settings;
         AddOption(() => $"Master volume: {s.MasterVolume}", step => s.MasterVolume = VolumeStep(s.MasterVolume, step));
         AddOption(() => $"Music volume: {s.MusicVolume}", step => s.MusicVolume = VolumeStep(s.MusicVolume, step));
         AddOption(() => $"Effects volume: {s.EffectsVolume}", step => s.EffectsVolume = VolumeStep(s.EffectsVolume, step));
         AddOption(() => $"Music filter: {OnOff(s.MusicFilter)}", _ => s.MusicFilter = !s.MusicFilter);
-        AddOption(() => string.Create(CultureInfo.InvariantCulture, $"Mouse sensitivity: {s.MouseSensitivity:0.00}"),
-            step => s.MouseSensitivity = SensitivityStep(s.MouseSensitivity, step));
-        AddOption(() => $"Invert mouse: {OnOff(s.InvertMouse)}", _ => s.InvertMouse = !s.InvertMouse);
-        AddOption(() => $"Fullscreen: {OnOff(s.Fullscreen)}", _ => s.Fullscreen = !s.Fullscreen);
-        AddOption(() => $"Anti-aliasing: {AntiAliasingNames[(int)s.AntiAliasing]}",
-            step => s.AntiAliasing = (AntiAliasing)Wrap((int)s.AntiAliasing + step, AntiAliasingNames.Length));
-        AddOption(() => $"Difficulty: {DifficultyNames[(int)s.Difficulty]}", step => s.Difficulty = (Difficulty)Wrap((int)s.Difficulty + step, DifficultyNames.Length));
-        AddOption(() => $"Graphics: {s.Graphics}", step => s.Graphics = (Graphics)Wrap((int)s.Graphics + step, GraphicsCount));
-        // HD textures are a mod (switched on the Mods page); Android never makes them.
-        AddItem("Mods", () => ShowMods(() => ShowOptions(back)));
-        if (HdMenu.Items(HdMenu.Current).Contains(HdItem.Make))
-        {
-            AddItem("Make HD textures", () => ShowHdTextures(() => ShowOptions(back)));
-        }
+        EndPage(back);
+    }
 
-        // Android: pick the MDK folder again (new or changed files, HD textures made on a PC).
-        if (_ui.Import is { } import)
-        {
-            AddItem("Import from folder", () =>
-            {
-                import();
-                ShowOptions(back);
-            });
-        }
-        AddOption(() => $"Gore: {OnOff(s.Gore)}", _ => s.Gore = !s.Gore);
-        AddItem("Controls", () => ShowControls(() => ShowOptions(back)));
-        AddItem("Back", back);
-        _songVoice = _ui.Play(_song, Bus.Music);
+    private void ShowGame(Action back)
+    {
+        ClearPage();
+        var s = _ui.Settings;
+        AddOption(() => $"Difficulty: {DifficultyNames[(int)s.Difficulty]}", step => s.Difficulty = (Difficulty)Wrap((int)s.Difficulty + step, DifficultyNames.Length));
+        EndPage(back);
     }
 
     /// <summary>The mods found (<see cref="ModCatalog"/>), each switched on or off; the enhanced look
-    /// takes them from the next level (2D images at once).</summary>
+    /// takes them from the next level (2D images at once). Then the HD textures' maker (desktop:
+    /// Android never makes them) and, on Android, the import of the MDK folder again.</summary>
     private void ShowMods(Action back)
     {
-        Clear();
+        ClearPage();
         _ui.ScanMods();
         var s = _ui.Settings;
         AddTitle("Mods: enhanced look");
@@ -391,14 +555,30 @@ public sealed class MenuItems
             AddDisabled("No mods in mods/");
         }
 
-        AddItem("Back", back);
+        if (HdMenu.Items(HdMenu.Current).Contains(HdItem.Make))
+        {
+            AddItem("Make HD textures", () => ShowHdTextures(() => ShowMods(back)));
+        }
+
+        // Android: pick the MDK folder again (new or changed files, HD textures made on a PC).
+        if (_ui.Import is { } import)
+        {
+            AddItem("Import from folder", () =>
+            {
+                import();
+                ShowMods(back);
+            });
+        }
+
+        EndPage(back);
     }
 
     /// <summary>Makes the HD textures (<see cref="HdGenerator"/>, minutes on a GPU) while showing
     /// its progress; leaving the page cancels it.</summary>
     private void ShowHdTextures(Action back)
     {
-        Clear();
+        ClearPage();
+        _back = back;
         AddTitle("HD textures");
         AddTitle("Real-ESRGAN, on the GPU");
         _jobLine = new Entry("", Kind.Title, null, null) { Grow = 1f };
@@ -421,10 +601,15 @@ public sealed class MenuItems
         _jobBack!.Text = _job.Progress.Finished ? "Back" : "Cancel";
     }
 
-    /// <summary>The key bindings: choosing an item waits for a key or a mouse button (Esc cancels).</summary>
+    /// <summary>The mouse, and the key bindings: choosing a binding waits for a key or a mouse
+    /// button (Esc cancels).</summary>
     public void ShowControls(Action back)
     {
-        Clear();
+        ClearPage();
+        var s = _ui.Settings;
+        AddOption(() => string.Create(CultureInfo.InvariantCulture, $"Mouse sensitivity: {s.MouseSensitivity:0.00}"),
+            step => s.MouseSensitivity = SensitivityStep(s.MouseSensitivity, step));
+        AddOption(() => $"Invert mouse: {OnOff(s.InvertMouse)}", _ => s.InvertMouse = !s.InvertMouse);
         foreach (var (key, name) in Settings.Actions)
         {
             Entry? entry = null;
@@ -444,7 +629,7 @@ public sealed class MenuItems
             _ui.ApplySettings();
             ShowControls(back);
         });
-        AddItem("Back", back);
+        EndPage(back);
     }
 
     /// <summary>The key or button pressed after the item was chosen becomes the binding.</summary>

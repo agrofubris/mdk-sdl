@@ -73,6 +73,9 @@ public sealed class DevUiView
         _console = new ConsoleView(text);
     }
 
+    /// <summary>The GPU's and the display's lines, set when they change.</summary>
+    public IReadOnlyList<string> System { get; set; } = [];
+
     /// <summary>The overlay asks the screen's lines only when it's shown.</summary>
     public void Draw(DevUi dev, DevSession session, Func<IReadOnlyList<string>> screen)
     {
@@ -80,7 +83,7 @@ public sealed class DevUiView
         {
             if (_lines.Count == 0 || Stopwatch.GetElapsedTime(_made).TotalSeconds >= Refresh)
             {
-                var sample = new OverlaySample(session.Profiler, _renderer.Stats, MemorySample.Now(), screen());
+                var sample = new OverlaySample(session.Profiler, _renderer.Stats, MemorySample.Now(), screen()) { System = System };
                 _lines = OverlayText.Lines(sample);
                 _made = Stopwatch.GetTimestamp();
             }

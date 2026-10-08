@@ -196,12 +196,15 @@ public sealed unsafe partial class Renderer : IDisposable
     private uint _targetWidth;
     private uint _targetHeight;
 
-    public Renderer(Window window)
+    public Renderer(Window window, GpuBackend backend = GpuBackend.Auto)
     {
         _window = window;
-        _device = CreateDevice(out _shaderFormat);
+        Requested = backend;
+        _device = CreateDevice(backend, out _shaderFormat);
         Check(_device != null, "SDL_CreateGPUDevice");
         Check(SDL_ClaimWindowForGPUDevice(_device, window.Handle), "SDL_ClaimWindowForGPUDevice");
+        Gpu = ReadGpuInfo();
+        SwapchainFormat = FormatName(SDL_GetGPUSwapchainTextureFormat(_device, window.Handle));
 
         var depthUsage = SDL_GPUTextureUsageFlags.SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET;
         _depthFormat = SDL_GPUTextureSupportsFormat(_device, SDL_GPUTextureFormat.SDL_GPU_TEXTUREFORMAT_D32_FLOAT, SDL_GPUTextureType.SDL_GPU_TEXTURETYPE_2D, depthUsage)
@@ -217,6 +220,7 @@ public sealed unsafe partial class Renderer : IDisposable
             ? SDL_GPUTextureFormat.SDL_GPU_TEXTUREFORMAT_D32_FLOAT
             : SDL_GPUTextureFormat.SDL_GPU_TEXTUREFORMAT_D16_UNORM;
         _mipSampler = CreateSampler(SDL_GPUSamplerAddressMode.SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE, Sampling.Linear);
+        DepthFormat = FormatName(_depthFormat);
 
         _canvasMesh = CreateDynamicMesh(CanvasQuads * QuadVertices);
         _streamMesh = CreateDynamicMesh(StreamVertices);
@@ -338,9 +342,98 @@ public sealed unsafe partial class Renderer : IDisposable
         }
     }
 
+    /// <summary>The backend asked for at start (Options, Display: a change applies after a restart).</summary>
+    public GpuBackend Requested { get; }
+
+    /// <summary>The device's backend, name and driver.</summary>
+    public GpuInfo Gpu { get; }
+
+    /// <summary>The device for the backend asked for, else (failing, or not on this OS: a warning)
+    /// SDL's choice.</summary>
+    private static SDL_GPUDevice* CreateDevice(GpuBackend backend, out ShaderFormat format)
+    {
+        if (backend != GpuBackend.Auto && GpuBackends.Resolve(backend, OsInfo.Current) != backend)
+        {
+            Console.Error.WriteLine($"GPU backend {GpuBackends.Name(backend)} not on this OS: using SDL's choice");
+        }
+
+        foreach (var attempt in GpuBackends.Attempts(backend, OsInfo.Current))
+        {
+            var device = attempt == GpuBackend.Auto ? CreateAuto(out format) : CreateFor(attempt, out format);
+            if (device != null)
+            {
+                return device;
+            }
+        }
+
+        format = default;
+        return null;
+    }
+
+    /// <summary>The shader format each backend takes.</summary>
+    private static ShaderFormat FormatOf(GpuBackend backend) => backend switch
+    {
+        GpuBackend.Direct3D12 => ShaderFormats[0],
+        GpuBackend.Metal => ShaderFormats[1],
+        _ => ShaderFormats[2],
+    };
+
+    private static bool Embedded(ShaderFormat format) =>
+        typeof(Renderer).Assembly.GetManifestResourceNames().Contains(ShaderProbe + format.Extension);
+
+    /// <summary>A device of one backend (SDL_CreateGPUDeviceWithProperties with its driver name), or null.</summary>
+    private static SDL_GPUDevice* CreateFor(GpuBackend backend, out ShaderFormat format)
+    {
+        format = FormatOf(backend);
+        var name = GpuBackends.Name(backend);
+        if (!Embedded(format))
+        {
+            Console.Error.WriteLine($"GPU backend {name}: no {format.Extension} shaders in this build, using SDL's choice");
+            return null;
+        }
+
+        var properties = SDL_CreateProperties();
+        SDL_SetStringProperty(properties, SDL_PROP_GPU_DEVICE_CREATE_NAME_STRING, GpuBackends.Driver(backend));
+        if (format.Format == SDL_GPUShaderFormat.SDL_GPU_SHADERFORMAT_DXIL)
+        {
+            SDL_SetBooleanProperty(properties, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_DXIL_BOOLEAN, true);
+        }
+        else if (format.Format == SDL_GPUShaderFormat.SDL_GPU_SHADERFORMAT_MSL)
+        {
+            SDL_SetBooleanProperty(properties, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_MSL_BOOLEAN, true);
+        }
+        else
+        {
+            SDL_SetBooleanProperty(properties, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_SPIRV_BOOLEAN, true);
+        }
+
+        var device = SDL_CreateGPUDeviceWithProperties(properties);
+        SDL_DestroyProperties(properties);
+        if (device == null)
+        {
+            Console.Error.WriteLine($"GPU backend {name} failed ({SDL_GetError()}), using SDL's choice");
+        }
+
+        return device;
+    }
+
+    /// <summary>The backends of this OS whose shaders are embedded and whose driver SDL has.</summary>
+    public static IReadOnlyList<GpuBackend> Backends() =>
+        GpuBackends.On(OsInfo.Current)
+            .Where(b => b == GpuBackend.Auto || (Embedded(FormatOf(b)) && SDL_GPUSupportsShaderFormats(FormatOf(b).Format, GpuBackends.Driver(b))))
+            .ToList();
+
+    private GpuInfo ReadGpuInfo()
+    {
+        var properties = SDL_GetGPUDeviceProperties(_device);
+        return new GpuInfo(GpuBackends.Of(SDL_GetGPUDeviceDriver(_device) ?? ""),
+            SDL_GetStringProperty(properties, SDL_PROP_GPU_DEVICE_NAME_STRING, "") ?? "",
+            SDL_GetStringProperty(properties, SDL_PROP_GPU_DEVICE_DRIVER_VERSION_STRING, "") ?? "");
+    }
+
     /// <summary>A device for the first embedded shader format a GPU driver takes (SDL_GPU_DRIVER can
     /// choose the driver, e.g. vulkan on Windows), or null.</summary>
-    private static SDL_GPUDevice* CreateDevice(out ShaderFormat format)
+    private static SDL_GPUDevice* CreateAuto(out ShaderFormat format)
     {
         var embedded = typeof(Renderer).Assembly.GetManifestResourceNames();
         foreach (var candidate in ShaderFormats)
@@ -683,7 +776,7 @@ public sealed unsafe partial class Renderer : IDisposable
         }
 
         var wait = Stopwatch.GetElapsedTime(waitStart);
-        EnsureTargets(width, height);
+        EnsureTargets(shown ? Scaled(width) : width, shown ? Scaled(height) : height);
         QueueCanvas();
         QueueStream();
         UploadDynamic(commands);
@@ -773,6 +866,63 @@ public sealed unsafe partial class Renderer : IDisposable
         _triangles += primitive == Primitive.Triangles ? count / TriangleVertices : 0;
         SDL_DrawGPUPrimitives(pass, (uint)count, 1, (uint)first, 0);
     }
+
+    /// <summary>The render scales (%): the frame is drawn at this share of the window's size, then
+    /// stretched to it (below 100: faster, blurrier; above: supersampled).</summary>
+    public static readonly int[] Scales = [50, 100, 150, 200];
+    public const int FullScale = 100;
+    /// <summary>The largest texture side every backend takes.</summary>
+    private const uint MaxTargetSide = 16384;
+
+    /// <summary>The render scale (%) of a shown window; a hidden one always draws 1280 x 960.</summary>
+    public int RenderScale { get; set; } = FullScale;
+
+    private uint Scaled(uint side) => Math.Clamp(side * (uint)RenderScale / FullScale, 1u, MaxTargetSide);
+
+    /// <summary>The present mode in use (SDL starts with VSync).</summary>
+    private VSync _vsync = VSync.On;
+
+    /// <summary>VSync as asked for; the mode used falls back to one the window supports.</summary>
+    public VSync VSync
+    {
+        get => _vsync;
+        set
+        {
+            var mode = PresentModes.Choose(value, m => SDL_WindowSupportsGPUPresentMode(_device, _window.Handle, PresentMode(m)));
+            if (mode == _vsync)
+            {
+                return;
+            }
+
+            if (!SDL_SetGPUSwapchainParameters(_device, _window.Handle, SDL_GPUSwapchainComposition.SDL_GPU_SWAPCHAINCOMPOSITION_SDR, PresentMode(mode)))
+            {
+                Console.Error.WriteLine($"VSync {mode}: {SDL_GetError()}");
+                return;
+            }
+
+            _vsync = mode;
+        }
+    }
+
+    private static SDL_GPUPresentMode PresentMode(VSync mode) => mode switch
+    {
+        VSync.Off => SDL_GPUPresentMode.SDL_GPU_PRESENTMODE_IMMEDIATE,
+        VSync.Adaptive => SDL_GPUPresentMode.SDL_GPU_PRESENTMODE_MAILBOX,
+        _ => SDL_GPUPresentMode.SDL_GPU_PRESENTMODE_VSYNC,
+    };
+
+    /// <summary>The frame's size (the last drawn).</summary>
+    public Resolution Target => new((int)_targetWidth, (int)_targetHeight);
+
+    /// <summary>The swapchain's and the depth buffer's formats, e.g. B8G8R8A8_UNORM, D32_FLOAT.</summary>
+    public string SwapchainFormat { get; }
+    public string DepthFormat { get; }
+
+    /// <summary>The samples per pixel (MSAA; 1: off).</summary>
+    public int Samples => (int)_samples;
+
+    private static string FormatName(SDL_GPUTextureFormat format) =>
+        format.ToString().Replace("SDL_GPU_TEXTUREFORMAT_", "", StringComparison.Ordinal);
 
     /// <summary>The offscreen frame of a hidden window (the shown one's default size).</summary>
     private const uint HiddenWidth = 1280;
@@ -919,7 +1069,8 @@ public sealed unsafe partial class Renderer : IDisposable
             source = new SDL_GPUBlitRegion { texture = _target, w = _targetWidth, h = _targetHeight },
             destination = new SDL_GPUBlitRegion { texture = swapchain, w = width, h = height },
             load_op = SDL_GPULoadOp.SDL_GPU_LOADOP_DONT_CARE,
-            filter = SDL_GPUFilter.SDL_GPU_FILTER_NEAREST,
+            // A scaled frame is smoothed; at 100 % pixels copy as they are.
+            filter = _targetWidth == width && _targetHeight == height ? SDL_GPUFilter.SDL_GPU_FILTER_NEAREST : SDL_GPUFilter.SDL_GPU_FILTER_LINEAR,
         };
         SDL_BlitGPUTexture(commands, &blit);
     }

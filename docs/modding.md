@@ -24,7 +24,7 @@ mods/
 ```
 
 `mods/` is next to the program (the user folder: `MDK_USER_DIR` overrides it; on Android the
-app's `files` folder, filled by Options, "Import from folder" from a `mods` folder next to the
+app's `files` folder, filled by Options, Mods, "Import from folder" from a `mods` folder next to the
 game files).
 
 `mod.txt` (`name=value` lines, `#` comments, all optional):
@@ -162,7 +162,7 @@ part's **look** only:
 
 ## HD textures
 
-Options, "Make HD textures" (desktop; `mdk --upscale-textures`) makes the mod
+Options, Mods, "Make HD textures" (desktop; `mdk --upscale-textures`) makes the mod
 `mods/hd-textures/`: the levels' textures, Kurt's frames and the 2D images (not the fonts) upscaled
 by Real-ESRGAN from your files, each named `NAME@<key>.png` (only the exact view it was made
 from). Switch it on the Mods page. Older builds' `textures-hd/` is moved into it at start.

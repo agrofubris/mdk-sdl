@@ -55,7 +55,7 @@ public class FlowTests
             MusicFilter = false,
             MouseSensitivity = 2.5f,
             InvertMouse = true,
-            Fullscreen = true,
+            Fullscreen = Engine.Platform.Fullscreen.Desktop,
             Difficulty = Difficulty.Hard,
             Gore = false,
             Graphics = Graphics.Enhanced,

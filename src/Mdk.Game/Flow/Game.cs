@@ -53,6 +53,8 @@ public sealed record GameOptions(Start Start, ViewerOptions Level)
     /// <summary>Measure the frames after this many seconds of game time, waiting for the GPU each
     /// frame, and print their costs at the end (--perf; tests).</summary>
     public float? Perf { get; init; }
+    /// <summary>The GPU backend instead of the settings' (--gpu=d3d12|vulkan|metal|auto; tests).</summary>
+    public string? Gpu { get; init; }
     /// <summary>The platform's import of the game files again (Android: the folder picked again,
     /// HD textures made on a PC with it); null where the game reads them in place.</summary>
     public Action? Import { get; init; }
@@ -67,8 +69,6 @@ public sealed record GameOptions(Start Start, ViewerOptions Level)
 /// </code></summary>
 public sealed class Game : IDisposable
 {
-    private const int WindowWidth = 1280;
-    private const int WindowHeight = 960;
     /// <summary>Where older builds kept settings and saves, under the local data folder.</summary>
     private const string UserFolderName = "mdk-sdl";
     /// <summary>The saves' folder in the user folder (<see cref="SaveGames"/>).</summary>
@@ -107,6 +107,72 @@ public sealed class Game : IDisposable
     /// <summary>The level that ended, for its counts.</summary>
     private Viewer? _viewer;
     private readonly PerfLog? _perf;
+    private readonly DevUiView _devView;
+    /// <summary>The display as last logged: a change is logged again.</summary>
+    private ScreenInfo _screenInfo;
+
+    /// <summary>--gpu's backend, else the settings'.</summary>
+    private static GpuBackend Backend(string? name, Settings settings)
+    {
+        if (name == null)
+        {
+            return settings.Backend;
+        }
+
+        if (GpuBackends.Parse(name) is { } backend)
+        {
+            return backend;
+        }
+
+        Console.Error.WriteLine($"--gpu={name}: d3d12, vulkan, metal or auto; using the settings'");
+        return settings.Backend;
+    }
+
+    /// <summary>The program, the GPU and the look, in the log (and the console); the display's line
+    /// follows with the first frame.</summary>
+    private void LogTechInfo(Settings settings)
+    {
+        Console.WriteLine(TechInfo.Build(BuildInfo.Current()));
+        Console.WriteLine(TechInfo.Gpu(_renderer.Gpu));
+        var mods = _ui.Mods.Enabled(settings).Select(m => m.Folder).ToList();
+        Console.WriteLine(TechInfo.Look(settings.Graphics, mods));
+    }
+
+    /// <summary>The display now; read every frame (no allocation).</summary>
+    private ScreenInfo ScreenNow()
+    {
+        var (width, height) = _window.Size;
+        return new ScreenInfo(_window.Desktop, new Resolution(width, height), _window.Fullscreen, _window.Visibility,
+            _renderer.Target, _renderer.SwapchainFormat, _renderer.DepthFormat, _renderer.Samples, _renderer.VSync);
+    }
+
+    /// <summary>A changed display (size, mode, frame, VSync) is logged and shown by the overlay.</summary>
+    private void WatchScreen()
+    {
+        var now = ScreenNow();
+        if (now == _screenInfo)
+        {
+            return;
+        }
+
+        _screenInfo = now;
+        Console.WriteLine(TechInfo.Display(now));
+        _devView.System = TechInfo.Overlay(_renderer.Gpu, now);
+    }
+
+    /// <summary>With VSync off or adaptive, frames wait out the frame limit (not in tests: their
+    /// frames are game steps).</summary>
+    private void LimitFrame(TimeSpan elapsed, TestRun test)
+    {
+        if (test == TestRun.Yes || _renderer.VSync == VSync.On)
+        {
+            return;
+        }
+
+        FrameLimiter.Wait(elapsed, _ui.Settings.FrameLimit);
+    }
+
+    private enum TestRun { No, Yes }
 
     public Game(MdkData data, GameOptions options)
     {
@@ -117,8 +183,10 @@ public sealed class Game : IDisposable
         // The original deletes LASTGAME.SAV when it quits.
         _saves.Delete(SaveGames.LastGame);
         var settings = Settings.Load(Settings.PathIn(folder));
-        _window = new Window("MDK", WindowWidth, WindowHeight, options.Display == Display.Hidden ? Visibility.Hidden : Visibility.Shown);
-        _renderer = new Renderer(_window);
+        var visibility = options.Display == Display.Hidden ? Visibility.Hidden : Visibility.Shown;
+        var size = visibility == Visibility.Shown ? settings.WindowSize : Settings.DefaultWindow;
+        _window = new Window("MDK", size.Width, size.Height, visibility);
+        _renderer = new Renderer(_window, Backend(options.Gpu, settings));
         _audio = new AudioDevice(options.Level.Sound == SoundMode.Muted ? Output.Muted : Output.Speakers);
         // Tests choose the look (saved only if the options change).
         if (options.Graphics is { } graphics)
@@ -150,7 +218,7 @@ public sealed class Game : IDisposable
         ConsoleCommands.Register(registry, _commands);
         _dev = new DevUi(new DevConsole(registry, _ui.Dev.History, _ui.Dev.Log, Console.WriteLine), () => _ui.Dev.ToggleOverlay());
         var small = new Fonts(_renderer, _ui.Fti, mods: _ui.CanvasMods()).Small;
-        var devView = new DevUiView(_renderer, small);
+        var devView = _devView = new DevUiView(_renderer, small);
         // The on-screen controls of a touch screen (Android), under the developer tools.
         var touchView = new TouchView(_renderer, small);
         // Made once: a lambda made in the overlay's would be made every frame.
@@ -161,6 +229,7 @@ public sealed class Game : IDisposable
             devView.Draw(_dev, _ui.Dev, status);
         };
         _scope = _renderer.Mark();
+        LogTechInfo(settings);
         _soak = options.Level.Soak is { } seed ? new SoakKeys(seed) : null;
         _soakMenus = options.Start is Start.Menu or Start.Statistics or Start.Briefing or Start.EndMovie;
         if (options.Perf is { } warmup)
@@ -220,6 +289,8 @@ public sealed class Game : IDisposable
             }
 
             _ui.Dev.Profiler.EndFrame();
+            WatchScreen();
+            LimitFrame(clock.Elapsed, test ? TestRun.Yes : TestRun.No);
             _perf?.Frame(time, _ui.Dev.Profiler, _renderer.Stats);
             if (shot != null)
             {
