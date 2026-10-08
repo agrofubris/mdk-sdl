@@ -63,6 +63,7 @@ through; the [Godot port](https://github.com/nemo22/mdk-godot) gets the same fix
 | Videos: the menu's FLC and slideshow, the end movies | █████████░ 90% |
 | Dev tools: console, F3 overlay, cheats, quick save/load | █████████░ 90% |
 | Playtesting and bug fixing (every level played through) | ████████░░ 80% |
+| Android: APK, data import, touch controls (emulator only, no phone yet) | ██████░░░░ 60% |
 | **Overall** | **about 90%** |
 
 The plan is in [docs/architecture.md](docs/architecture.md#roadmap).
@@ -227,6 +228,33 @@ the demo's Kurt and health display; Kurt dies as in the retail game, and no "Con
 Their own keys: Z and C roll left and right, T or Alt with a digit takes the demo's teleports (the
 city needs T + 4 to reach the top of `ARENA_4`); the sniper key puts the helmet on first.
 
+### Android
+
+`mdk-android.apk` (a release's or CI's artifact) runs on 64-bit Android 8+ phones with Vulkan
+(arm64; x64 for emulators). Install it by allowing installs from unknown sources. The game files
+aren't in it: copy your MDK folder (the one with `TRAVERSE`, `MISC`, `FALL3D`, `STREAM`) to the
+phone, e.g. into `Download/MDK`. On first start the app asks for that folder (Android's folder
+picker; `Download` itself can't be picked, a folder in it can) and copies its game files (about
+170 MB) into its own folder, `Android/data/io.github.nemo22.mdk/files/mdk`, once. Settings and
+saves live next to it, in `files`. To pick another folder, clear the app's storage.
+
+Touch controls in play: the left part of the screen is a stick where the finger lands (walk,
+strafe; far pushes run), dragging elsewhere looks around, buttons on the right fire, jump, use
+the item, pick the next item, toggle sniper mode and zoom (+ / -), and pause (top right). Menus
+take taps; Android's back button is Esc. A keyboard works as on the desktop.
+
+Not yet: game controllers, typing save names (no on-screen keyboard), the console. Only tested on the Android
+emulator (Vulkan through the host's GPU), not yet on a phone.
+
+Building it needs the Android workload (`dotnet workload install android`), JDK 21 and the
+Android SDK's API 36 platform, and SPIR-V shaders (`-p:DxcSpirv=...`):
+`dotnet publish src/Mdk.Android -c Release -p:DxcSpirv=path/to/dxc` gives
+`src/Mdk.Android/bin/Release/net10.0-android/publish/io.github.nemo22.mdk-Signed.apk`, signed
+with a debug key. CI signs with the `ANDROID_KEYSTORE` secret (base64 keystore;
+`ANDROID_KEYSTORE_PASS`, `ANDROID_KEY_ALIAS`) when it's set; without it every build has its own
+key and an update must be installed after uninstalling the old one (which deletes its copy of the
+game files and the saves).
+
 ## Building
 
 Needs the .NET 10 SDK and the shader compiler of the platform's GPU API (SDL_GPU):
@@ -258,8 +286,8 @@ The icon (original artwork, not the game's) is drawn by `python tools/gen_icon.p
 window's, embedded in the engine).
 
 GitHub Actions (`.github/workflows/build.yml`) builds and tests every push on Windows, Linux and
-macOS and publishes the three executables as the run's artifacts; a `v*` tag makes a release of
-them.
+macOS and publishes the three executables and the Android APK as the run's artifacts; a `v*` tag
+makes a release of them.
 
 ## Tests
 
@@ -312,6 +340,7 @@ collections are printed) and fails above 512 bytes a frame or on a gen 1-2 colle
   the game's flow (`Flow/`: screens, settings, saves), its menus (`Menu/`), the stream (`Stream/`)
   and the fall (`Fall/`).
 - `src/Mdk.App`: the program and its command line.
+- `src/Mdk.Android`: the Android app (SDL's activity, the game files' import, its dialogs).
 - `shaders/`: HLSL shaders, compiled to DXIL, SPIR-V and MSL at build time (`bindings.hlsli`:
   SDL_GPU's bindings).
 - `docs/`: [the architecture and roadmap](docs/architecture.md). The knowledge base about MDK

@@ -1,3 +1,4 @@
+using System.Numerics;
 using SDL;
 using static SDL.SDL3;
 
@@ -14,9 +15,22 @@ public sealed unsafe class Window : IDisposable
     /// <summary>A hidden window (tests) is never shown nor focused: frames are drawn off screen.</summary>
     public Visibility Visibility { get; }
 
+    /// <summary>The on-screen controls of a touch screen (Android), or null.</summary>
+    private readonly TouchControls? _touch = OperatingSystem.IsAndroid() ? new TouchControls() : null;
+    /// <summary>The mouse looks around (play): touches are the on-screen controls, not clicks.</summary>
+    private Capture _capture;
+
+    /// <summary>The on-screen controls while they're used (play), or null.</summary>
+    public TouchControls? Touch => _capture == Capture.On ? _touch : null;
+
     public Window(string title, int width, int height, Visibility visibility = Visibility.Shown)
     {
         Visibility = visibility;
+
+        // Android's back button is Esc, not "close the app".
+        SDL_SetHint(SDL_HINT_ANDROID_TRAP_BACK_BUTTON, "1");
+        // Phones play sideways, either way up.
+        SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
         if (!SDL_Init(SDL_InitFlags.SDL_INIT_VIDEO | SDL_InitFlags.SDL_INIT_EVENTS))
         {
             throw new InvalidOperationException($"SDL_Init: {SDL_GetError()}");
@@ -36,8 +50,11 @@ public sealed unsafe class Window : IDisposable
 
         SetIcon();
 
-        // Typed text (names of saved games, cheats).
-        SDL_StartTextInput(Handle);
+        // Typed text (names of saved games, cheats); not on a touch screen, where it opens the keyboard.
+        if (_touch == null)
+        {
+            SDL_StartTextInput(Handle);
+        }
     }
 
     /// <summary>The program's icon on the window (title bar, task bar, dock). A missing icon is
@@ -59,8 +76,8 @@ public sealed unsafe class Window : IDisposable
         SDL_DestroySurface(icon);
     }
 
-    /// <summary>The window fills the screen or not.</summary>
-    public void SetFullscreen(Fullscreen mode) => SDL_SetWindowFullscreen(Handle, mode == Fullscreen.On);
+    /// <summary>The window fills the screen or not; always on a touch screen (a phone).</summary>
+    public void SetFullscreen(Fullscreen mode) => SDL_SetWindowFullscreen(Handle, mode == Fullscreen.On || _touch != null);
 
     /// <summary>The window's size in pixels.</summary>
     public (int Width, int Height) Size
@@ -106,15 +123,34 @@ public sealed unsafe class Window : IDisposable
     }
 
     /// <summary>Mouse captured for looking around (relative motion, hidden cursor).</summary>
-    public void CaptureMouse(Capture capture) => SDL_SetWindowRelativeMouseMode(Handle, capture == Capture.On);
+    public void CaptureMouse(Capture capture)
+    {
+        _capture = capture;
+        if (_touch == null)
+        {
+            SDL_SetWindowRelativeMouseMode(Handle, capture == Capture.On);
+        }
+    }
 
     /// <summary>Handles pending events. Returns false when the window closes.</summary>
     public bool PumpEvents(Input input)
     {
         input.BeginFrame();
+
+        // Out of play, touches are clicks (SDL makes mouse events of them).
+        if (_capture == Capture.Off)
+        {
+            _touch?.Release(input);
+        }
+
         SDL_Event e;
         while (SDL_PollEvent(&e))
         {
+            if (Touch != null && TouchEvent(e, input))
+            {
+                continue;
+            }
+
             switch ((SDL_EventType)e.type)
             {
                 case SDL_EventType.SDL_EVENT_QUIT:
@@ -145,6 +181,36 @@ public sealed unsafe class Window : IDisposable
         }
 
         return true;
+    }
+
+    /// <summary>In play on a touch screen, fingers drive the on-screen controls and the mouse events
+    /// SDL makes of them are dropped. Returns whether the event was a touch.</summary>
+    private bool TouchEvent(in SDL_Event e, Input input)
+    {
+        var size = Size;
+        var screen = new Vector2(size.Width, size.Height);
+        var at = new Vector2(e.tfinger.x, e.tfinger.y) * screen;
+        var finger = (ulong)e.tfinger.fingerID;
+        switch ((SDL_EventType)e.type)
+        {
+            case SDL_EventType.SDL_EVENT_FINGER_DOWN:
+                _touch!.Down(finger, at, screen, input);
+                return true;
+            case SDL_EventType.SDL_EVENT_FINGER_MOTION:
+                _touch!.Move(finger, at, screen, input);
+                return true;
+            case SDL_EventType.SDL_EVENT_FINGER_UP:
+            case SDL_EventType.SDL_EVENT_FINGER_CANCELED:
+                _touch!.Up(finger, input);
+                return true;
+            case SDL_EventType.SDL_EVENT_MOUSE_BUTTON_DOWN:
+            case SDL_EventType.SDL_EVENT_MOUSE_BUTTON_UP:
+                return e.button.which == SDL_TOUCH_MOUSEID;
+            case SDL_EventType.SDL_EVENT_MOUSE_MOTION:
+                return e.motion.which == SDL_TOUCH_MOUSEID;
+            default:
+                return false;
+        }
     }
 
     /// <summary><see cref="MouseButton"/> keeps SDL's numbers.</summary>

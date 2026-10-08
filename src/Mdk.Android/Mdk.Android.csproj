@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-android</TargetFramework>
+    <SupportedOSPlatformVersion>26</SupportedOSPlatformVersion>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Mdk.Android</RootNamespace>
+    <ApplicationId>io.github.nemo22.mdk</ApplicationId>
+    <ApplicationTitle>MDK</ApplicationTitle>
+    <ApplicationVersion>1</ApplicationVersion>
+    <ApplicationDisplayVersion>0.1</ApplicationDisplayVersion>
+    <RuntimeIdentifiers>android-arm64;android-x64</RuntimeIdentifiers>
+    <AndroidPackageFormat>apk</AndroidPackageFormat>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- The desktop projects take the program's runtime (SDL3 next to the executable); the APK
+         gets SDL3 from the package's Android flavour, so they build without one
+         (all three: transitive references would pass it on). -->
+    <ProjectReference Include="..\Mdk.Game\Mdk.Game.csproj" GlobalPropertiesToRemove="RuntimeIdentifier;SelfContained" />
+    <ProjectReference Include="..\Mdk.Engine\Mdk.Engine.csproj" GlobalPropertiesToRemove="RuntimeIdentifier;SelfContained" />
+    <ProjectReference Include="..\Mdk.Formats\Mdk.Formats.csproj" GlobalPropertiesToRemove="RuntimeIdentifier;SelfContained" />
+    <PackageReference Include="ppy.SDL3-CS" Version="2026.722.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The launcher icon (tools/gen_icon.py). -->
+    <AndroidResource Include="..\..\assets\icon.png" Link="Resources\drawable\icon.png" />
+  </ItemGroup>
+</Project>

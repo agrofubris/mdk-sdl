@@ -6,6 +6,7 @@ using Mdk.Engine.Render;
 using Mdk.Formats;
 using Mdk.Game.DevTools;
 using Mdk.Game.HdTextures;
+using Mdk.Game.Hud;
 using Mdk.Game.Menu;
 
 namespace Mdk.Game.Flow;
@@ -131,10 +132,17 @@ public sealed class Game : IDisposable
         var registry = new CommandRegistry();
         ConsoleCommands.Register(registry, _commands);
         _dev = new DevUi(new DevConsole(registry, _ui.Dev.History, _ui.Dev.Log, Console.WriteLine), () => _ui.Dev.ToggleOverlay());
-        var devView = new DevUiView(_renderer, new Fonts(_renderer, _ui.Fti).Small);
+        var small = new Fonts(_renderer, _ui.Fti).Small;
+        var devView = new DevUiView(_renderer, small);
+        // The on-screen controls of a touch screen (Android), under the developer tools.
+        var touchView = new TouchView(_renderer, small);
         // Made once: a lambda made in the overlay's would be made every frame.
         Func<IReadOnlyList<string>> status = () => _screen?.Status ?? [Loading];
-        _renderer.Overlay = () => devView.Draw(_dev, _ui.Dev, status);
+        _renderer.Overlay = () =>
+        {
+            touchView.Draw(_window);
+            devView.Draw(_dev, _ui.Dev, status);
+        };
         _scope = _renderer.Mark();
         _soak = options.Level.Soak is { } seed ? new SoakKeys(seed) : null;
         _soakMenus = options.Start is Start.Menu or Start.Statistics or Start.Briefing or Start.EndMovie;

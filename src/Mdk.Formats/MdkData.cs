@@ -1,7 +1,7 @@
 namespace Mdk.Formats;
 
 /// <summary>Locates the original MDK installation and reads its files.</summary>
-public sealed class MdkData
+public sealed partial class MdkData
 {
     /// <summary>A file every installation has.</summary>
     private const string Marker = "TRAVERSE/TRAVSPRT.BNI";

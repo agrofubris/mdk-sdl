@@ -10,6 +10,7 @@ Each layer talks only to the one below it.
 
 ```
  Mdk.App      command line ──► Game.Run, Game.UpscaleTextures
+ Mdk.Android  SDLActivity, first start: folder picker ──► MdkData.Import ──► Game.Run
     │
  Mdk.Game     Flow: Game (screens), GameState, Settings, SaveGames, LevelFlow
     │         Menu: main menu, pause menu, options, loading, statistics, save prompt, videos
@@ -21,7 +22,8 @@ Each layer talks only to the one below it.
     │   └──────────────► Mdk.Formats  (parsers: DTI, MTO, MTI, SNI, FTI, BNI, models, PNG; the 1996 demo's)
  Mdk.Engine   Render (Renderer: meshes, index textures, palettes, panorama)
     │         Audio (AudioDevice: software mixer of voices, music and effects buses, streamed voices, master limiter)
-    │         Platform (Window and its icon, Input: game keys (rebindable), menu keys, raw keys, pointer, text, cursor, SDL3)
+    │         Platform (Window and its icon, Input: game keys (rebindable), menu keys, raw keys, pointer, text, cursor, SDL3;
+    │                   TouchControls: on-screen stick and buttons of a touch screen)
     │         Diagnostics (Profiler: frame sections; LogRing, LogWriter: the output's last lines)
     │         Upscale (RealEsrgan: the upscaler's download and process)
  SDL3         SDL_GPU (Direct3D 12 / Vulkan / Metal), events
@@ -55,9 +57,32 @@ for its runtime next to it (`SDL3.dll`, `libSDL3.so`, `libSDL3.dylib`).
   the SPIR-V bindings as Metal indices (`--msl-decoration-binding`).
 - A missing tool skips its format; CI requires its platform's (`-p:RequiredShaders`).
 - CI (`.github/workflows/build.yml`): Windows (DXIL, SPIR-V), Linux (SPIR-V), macOS (SPIR-V,
-  MSL) build, test without the game data (`[DataFact]` tests are skipped) and publish; a `v*` tag
-  releases the archives. Shader tools: the DirectXShaderCompiler release (Windows, Linux), the
-  Vulkan SDK (macOS).
+  MSL) build, test without the game data (`[DataFact]` tests are skipped) and publish; Android
+  (SPIR-V) builds the APK; a `v*` tag releases them. Shader tools: the DirectXShaderCompiler
+  release (Windows, Linux), the Vulkan SDK (macOS).
+
+### Android
+
+`src/Mdk.Android` (net10.0-android, Mono) is a head like `Mdk.App`: SDL's activity (Java side and
+`libSDL3.so` from ppy.SDL3-CS's Android flavour) runs `Game` on SDL's thread. The desktop
+projects are built without a runtime identifier for it (`GlobalPropertiesToRemove`). SDL_GPU uses
+Vulkan with the SPIR-V shaders.
+
+```
+ first start ─► MdkData.Imported? ─no─► dialog ─► ACTION_OPEN_DOCUMENT_TREE ─► DocumentTree (IDataTree)
+                       │                                                         │ MdkData.FindIn
+                       │yes                       app files/mdk ◄─MdkData.Import─┘ (TRAVERSE, FALL3D, STREAM, MISC + stamp)
+                       ▼
+              Game (MDK_USER_DIR = app files: settings, saves)
+```
+
+- Shared storage has no paths the game could open, so the picked folder is read through content
+  URIs and copied once; `.imported` is written last (an interrupted copy starts over).
+- `Window` on Android: landscape, full screen, back button trapped (Esc; the manifest turns
+  predictive back off), no text input (it would open the keyboard). While the mouse is captured
+  (play), fingers drive `TouchControls` (`Input.Touch`: keys of their own, which tests' holds
+  don't release) and SDL's mouse events made of touches are dropped; otherwise touches are clicks.
+  `TouchView` (Game) draws the controls in the renderer's overlay.
 
 ## Rendering (original look)
 

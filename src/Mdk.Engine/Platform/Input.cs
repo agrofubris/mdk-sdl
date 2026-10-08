@@ -64,6 +64,7 @@ public sealed class Input
         [SDL_Scancode.SDL_SCANCODE_4] = Key.Item4,
         [SDL_Scancode.SDL_SCANCODE_5] = Key.Item5,
         [SDL_Scancode.SDL_SCANCODE_ESCAPE] = Key.Escape,
+        [SDL_Scancode.SDL_SCANCODE_AC_BACK] = Key.Escape,
         [SDL_Scancode.SDL_SCANCODE_F12] = Key.Screenshot,
         [SDL_Scancode.SDL_SCANCODE_F1] = Key.Fly,
         [SDL_Scancode.SDL_SCANCODE_PAGEUP] = Key.ZoomIn,
@@ -120,6 +121,8 @@ public sealed class Input
         [SDL_Scancode.SDL_SCANCODE_KP_ENTER] = MenuKey.Accept,
         [SDL_Scancode.SDL_SCANCODE_SPACE] = MenuKey.Accept,
         [SDL_Scancode.SDL_SCANCODE_ESCAPE] = MenuKey.Back,
+        // Android's back button.
+        [SDL_Scancode.SDL_SCANCODE_AC_BACK] = MenuKey.Back,
         [SDL_Scancode.SDL_SCANCODE_BACKSPACE] = MenuKey.Backspace,
         [SDL_Scancode.SDL_SCANCODE_DELETE] = MenuKey.Delete,
         [SDL_Scancode.SDL_SCANCODE_HOME] = MenuKey.Home,
@@ -171,6 +174,8 @@ public sealed class Input
     private readonly HashSet<Key> _pressed = [];
     /// <summary>Keys held by the program (tests), whatever the keyboard does.</summary>
     private readonly HashSet<Key> _held = [];
+    /// <summary>Keys held by the on-screen controls of a touch screen (<see cref="TouchControls"/>).</summary>
+    private readonly HashSet<Key> _touched = [];
 
     public float MouseX { get; private set; }
     public float MouseY { get; private set; }
@@ -196,7 +201,7 @@ public sealed class Input
     public int Digit { get; private set; } = NoDigit;
 
     public bool IsDown(Key key) =>
-        _down.Contains(key) || _buttons.Contains(key) || _fly.Contains(key) || _wheel.Contains(key) || _held.Contains(key);
+        _down.Contains(key) || _buttons.Contains(key) || _fly.Contains(key) || _wheel.Contains(key) || _held.Contains(key) || _touched.Contains(key);
 
     /// <summary>Holds or releases a key from the program (automated tests).</summary>
     public void Hold(Key key, State state)
@@ -474,6 +479,21 @@ public sealed class Input
     }
 
     internal void AddText(string text) => Typed += text;
+
+    /// <summary>An on-screen control holds or releases a key; holding presses it this frame.</summary>
+    internal void Touch(Key key, State state)
+    {
+        if (state == State.Up)
+        {
+            _touched.Remove(key);
+            return;
+        }
+
+        if (_touched.Add(key))
+        {
+            Press(key);
+        }
+    }
 
     private void AddClick(MouseButton button)
     {
