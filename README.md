@@ -40,7 +40,8 @@ the original's fades, scripts animate textures, switch the sky and film cutscene
 leave bullet holes, and ropes, twisters' ribbons and the glass panes' outlines are drawn. An
 enhanced look (Options, Graphics) filters the textures, lights each arena from its level's sky
 (a sun and its shadows outdoors), lights muzzle flashes, explosions and fires, and adds ambient
-occlusion, a little glow and a haze, and can draw AI-upscaled textures made from your copy of the
+occlusion, a little glow and a haze, shades the models smoothly (hard edges kept; Options, "Smooth
+models" also rounds them), and can draw AI-upscaled textures made from your copy of the
 game ([HD textures](#hd-textures)); anti-aliasing smooths the edges. The three
 levels of the 1996 beta demo play as extras ([below](#the-1996-beta-demo)). The game can be played
 through; the [Godot port](https://github.com/nemo22/mdk-godot) gets the same fixes.
@@ -51,7 +52,7 @@ through; the [Godot port](https://github.com/nemo22/mdk-godot) gets the same fix
 | --- | --- |
 | Data formats: levels, textures, models, sprites, sounds, fonts, scripts, videos | █████████░ 95% |
 | Rendering: arenas, glass, sky, mirrors, Kurt's sprite, effects | █████████░ 95% |
-| Enhanced look: filtering, mipmaps, sky light and shadows, point lights, occlusion, glow, haze, HD textures; anti-aliasing | █████████░ 85% |
+| Enhanced look: filtering, mipmaps, sky light and shadows, point lights, occlusion, glow, haze, smooth models, HD textures; anti-aliasing | █████████░ 85% |
 | Collisions: the original's BSP | █████████░ 95% |
 | Kurt: walking, turning, jumping, chute, ledges, slides, camera, damage, death | █████████░ 95% |
 | Sound mixer (the original's laws) and music | █████████░ 90% |

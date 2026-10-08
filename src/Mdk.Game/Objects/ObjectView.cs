@@ -7,12 +7,14 @@ namespace Mdk.Game.Objects;
 
 /// <summary>Draws objects' models: each model's triangles laid out once by surface (per palette),
 /// then every frame posed (animation frame, hidden parts) into the renderer's vertex stream and placed
-/// by the object's transform. No mesh is built while playing. Models show both faces.
+/// by the object's transform. No mesh is built while playing. Models show both faces. The enhanced
+/// look's models take smooth normals, subdivided or not (<see cref="ModelShapes"/>, made at the load).
 /// <code>
 ///   model + palette ──once──► layout: batches by surface (part, vertex, UV per corner)
 ///   object ──pose (shared frames)──► stream vertices ──(transform)──► renderer
+///                  └─ shape: positions, normals per corner
 /// </code></summary>
-public sealed class ObjectView(Renderer renderer, MaterialResolver resolver)
+public sealed class ObjectView(Renderer renderer, MaterialResolver resolver, ModelShape shape = ModelShape.Flat)
 {
     private const int TriangleVertices = 3;
     /// <summary>A batch with no visible triangle.</summary>
@@ -25,6 +27,8 @@ public sealed class ObjectView(Renderer renderer, MaterialResolver resolver)
         public readonly Material Material = material;
         public readonly List<int> Parts = [];
         public readonly List<int> Indices = [];
+        /// <summary>Per corner, its place in the part's shape (its normal).</summary>
+        public readonly List<int> Corners = [];
         public readonly List<Vector2> Uvs = [];
         public readonly int[] PartCorners = new int[parts];
         public readonly int[] FirstTriangle = Enumerable.Repeat(Unseen, parts).ToArray();
@@ -42,9 +46,24 @@ public sealed class ObjectView(Renderer renderer, MaterialResolver resolver)
     public sealed record Look(Palette Palette, IReadOnlyList<TextureArchive> Archives);
 
     private readonly Dictionary<(Model, Palette), Layout?> _layouts = [];
+    private readonly ModelShapes? _shapes = shape == ModelShape.Flat ? null : new ModelShapes(shape);
 
-    /// <summary>Lays out a model with a look before it's drawn (a level's load).</summary>
-    public void Preload(Model model, Look look) => LayoutOf(model, look);
+    /// <summary>Lays out a model with a look before it's drawn, with its shape (a level's load).</summary>
+    public void Preload(Model model, Look look)
+    {
+        Shape(model, look);
+        LayoutOf(model, look);
+    }
+
+    /// <summary>Shapes a model (the enhanced look's; a level's load), the look's archives telling its glass.</summary>
+    public void Shape(Model model, Look look) => _shapes?.PartsOf(model, Pinned(model, look));
+
+    /// <summary>Glass and mirrors keep their panes flat when subdivided.</summary>
+    private static Func<int, bool> Pinned(Model model, Look look) =>
+        value => MaterialResolver.IsSpecial(value, model.Materials, look.Archives);
+
+    /// <summary>The models' shapes made (the load's report), null when flat.</summary>
+    public ModelShapes? Shapes => _shapes;
 
     public void Draw(MdkObject obj, Look look)
     {
@@ -55,6 +74,7 @@ public sealed class ObjectView(Renderer renderer, MaterialResolver resolver)
 
         var pose = obj.PoseParts();
         var hidden = obj.HiddenParts;
+        var shapes = _shapes?.Pose(obj.Model, pose, hidden);
         var transform = obj.Transform;
         var frame = obj.TextureFrame >= 0 ? obj.TextureFrame : 0;
         var count = Arrange(layout, hidden);
@@ -78,7 +98,9 @@ public sealed class ObjectView(Renderer renderer, MaterialResolver resolver)
                     continue;
                 }
 
-                vertices[at++] = new Vertex(pose[part][batch.Indices[c]], batch.Uvs[c]);
+                vertices[at++] = shapes == null
+                    ? new Vertex(pose[part][batch.Indices[c]], batch.Uvs[c])
+                    : new Vertex(shapes[part].Positions[batch.Indices[c]], batch.Uvs[c]) { Normal = shapes[part].Normals[batch.Corners[c]] };
             }
 
             renderer.Draw(mesh, first, corners, Shine(batch.Material, glows), frame, transform);
@@ -162,13 +184,21 @@ public sealed class ObjectView(Renderer renderer, MaterialResolver resolver)
         var parts = model.PartList.Count;
         var bySurface = new Dictionary<Material, Batch>();
         var batches = new List<Batch>();
-        var sequence = 0;
+        var shapes = _shapes?.PartsOf(model, Pinned(model, look));
+        var partStart = 0;
         for (var p = 0; p < parts; p++)
         {
             var part = model.PartList[p];
-            for (var t = 0; t < part.TriangleMaterials.Length; t++, sequence++)
+            var (corners, uvs, sources) = shapes != null
+                ? (shapes[p].Vertices, shapes[p].Uvs, shapes[p].Sources)
+                : (part.TriangleIndices, part.TriangleUvs, null);
+            var triangles = corners.Length / TriangleVertices;
+            for (var t = 0; t < triangles; t++)
             {
-                var surface = resolver.Resolve(part.TriangleMaterials[t], model.Materials, look.Palette, look.Archives, Pass.DoubleSided);
+                // A subdivided triangle's pieces take its material and place.
+                var source = sources?[t] ?? t;
+                var sequence = partStart + source;
+                var surface = resolver.Resolve(part.TriangleMaterials[source], model.Materials, look.Palette, look.Archives, Pass.DoubleSided);
                 if (surface is not { } s)
                 {
                     continue;
@@ -186,10 +216,13 @@ public sealed class ObjectView(Renderer renderer, MaterialResolver resolver)
                 for (var k = 0; k < TriangleVertices; k++)
                 {
                     batch.Parts.Add(p);
-                    batch.Indices.Add(part.TriangleIndices[t * TriangleVertices + k]);
-                    batch.Uvs.Add(part.TriangleUvs[t * TriangleVertices + k] * scale);
+                    batch.Indices.Add(corners[t * TriangleVertices + k]);
+                    batch.Corners.Add(t * TriangleVertices + k);
+                    batch.Uvs.Add(uvs[t * TriangleVertices + k] * scale);
                 }
             }
+
+            partStart += part.TriangleMaterials.Length;
         }
 
         return batches.Count == 0 ? null : new Layout(batches);

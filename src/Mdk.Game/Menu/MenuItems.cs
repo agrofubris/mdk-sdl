@@ -349,6 +349,8 @@ public sealed class MenuItems
         AddOption(() => $"HD textures: {OnOff(s.Textures == TextureSet.Hd)}",
             _ => s.Textures = s.Textures == TextureSet.Hd ? TextureSet.Original : TextureSet.Hd);
         AddItem("Make HD textures", () => ShowHdTextures(() => ShowOptions(back)));
+        AddOption(() => $"Smooth models: {OnOff(s.SmoothModels == SmoothModels.On)}",
+            _ => s.SmoothModels = s.SmoothModels == SmoothModels.On ? SmoothModels.Off : SmoothModels.On);
         AddOption(() => $"Gore: {OnOff(s.Gore)}", _ => s.Gore = !s.Gore);
         AddItem("Controls", () => ShowControls(() => ShowOptions(back)));
         AddItem("Back", back);

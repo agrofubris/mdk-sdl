@@ -11,8 +11,9 @@
 //
 // Point lights (muzzle flashes, explosions, fires; PointLights.cs) fade with (1 - d^2 / r^2)^2.
 // Light is added in linear colour (the palette is sRGB), on the colour textures: smooth, no palette
-// steps; the result is dithered (dither.hlsli) so 8 bits don't band it. Normals are flat: the
-// triangle's plane, from the world position's screen derivatives, turned to the camera.
+// steps; the result is dithered (dither.hlsli) so 8 bits don't band it. Normals: the vertices'
+// (smooth models), else flat: the triangle's plane, from the world position's screen derivatives;
+// either turned to the camera. Shadows are offset along the flat one.
 // SDL_GPU register spaces: vertex uniforms space1, fragment resources space2, fragment uniforms space3.
 
 #include "bindings.hlsli"
@@ -30,10 +31,13 @@ cbuffer VertexUniforms : register(b0, space1)
     float4x4 world;
 };
 
+// The colour is unused; declared so the normal keeps its location (SPIR-V numbers them in order).
 struct VertexIn
 {
     float3 position : TEXCOORD0;
     float2 uv : TEXCOORD1;
+    float4 colour : TEXCOORD2;
+    float4 normal : TEXCOORD3;
 };
 
 struct VertexOut
@@ -41,6 +45,8 @@ struct VertexOut
     float4 position : SV_Position;
     float2 uv : TEXCOORD0;
     float3 world_position : TEXCOORD1;
+    // Zero: flat.
+    float3 world_normal : TEXCOORD2;
 };
 
 VertexOut vs_main(VertexIn input)
@@ -49,6 +55,7 @@ VertexOut vs_main(VertexIn input)
     output.position = mul(transform, float4(input.position, 1.0));
     output.uv = input.uv;
     output.world_position = mul(world, float4(input.position, 1.0)).xyz;
+    output.world_normal = mul(world, float4(input.normal.xyz, 0.0)).xyz;
     return output;
 }
 
@@ -179,10 +186,18 @@ float4 ps_main(VertexOut input) : SV_Target
 {
     // Derivatives before any discard.
     float3 position = input.world_position;
-    float3 normal = normalize(cross(ddx(position), ddy(position)));
-    if (dot(normal, camera.xyz - position) < 0.0)
+    float3 flat_normal = normalize(cross(ddx(position), ddy(position)));
+    if (dot(flat_normal, camera.xyz - position) < 0.0)
     {
-        normal = -normal;
+        flat_normal = -flat_normal;
+    }
+
+    // A smooth normal on the flat one's side (both faces are drawn).
+    float3 normal = flat_normal;
+    if (dot(input.world_normal, input.world_normal) > 1e-6)
+    {
+        normal = normalize(input.world_normal);
+        normal = dot(normal, flat_normal) < 0.0 ? -normal : normal;
     }
 
     // Sampled before any discard (mips need the derivatives); the layer is the frame.
@@ -210,7 +225,7 @@ float4 ps_main(VertexOut input) : SV_Target
     {
         float facing = max(dot(normal, -sun.xyz), 0.0);
         float3 hemisphere = lerp(ground.rgb, sky.rgb, normal.z * 0.5 + 0.5);
-        float3 light = hemisphere + sun_colour.rgb * facing * sunlight(position, normal) + point_lights(position, normal);
+        float3 light = hemisphere + sun_colour.rgb * facing * sunlight(position, flat_normal) + point_lights(position, normal);
         lit = tonemap(albedo * sun.w * light, sky.w);
     }
 
