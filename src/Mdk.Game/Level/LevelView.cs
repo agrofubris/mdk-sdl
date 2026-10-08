@@ -290,8 +290,8 @@ public sealed class LevelView
         var bySurface = new Dictionary<Material, (Texture? Texture, List<int> Triangles)>();
         foreach (var t in group.Triangles)
         {
-            // The 1996 demo's triangles that only stop Kurt.
-            if ((arena.TriangleFlags[t] & arena.ClipFlag) != 0)
+            // The 1996 demo's triangles that only stop Kurt; the retail's disabled ones.
+            if ((arena.TriangleFlags[t] & (arena.ClipFlag | TriangleGroups.Disabled)) != 0)
             {
                 continue;
             }

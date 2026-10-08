@@ -30,6 +30,9 @@ public sealed class TriangleGroups
     }
 
     private const int GroupShift = 24;
+    /// <summary>The triangle flag the original's arena activation (0x40d46c(a,1)) turns into not drawn
+    /// and not solid (all in group 0: NONE walls, stray floors). The 1996 demo's clip flag instead.</summary>
+    public const uint Disabled = 0x2;
 
     public sealed class Group(int number)
     {
@@ -58,10 +61,23 @@ public sealed class TriangleGroups
             }
 
             group.Triangles.Add(t);
+            Disable(arena, t);
         }
 
         _arenas[arena.Name] = groups;
         _data[arena.Name] = arena;
+    }
+
+    /// <summary>A retail triangle flagged <see cref="Disabled"/> is hidden and not solid (e.g. LEVEL8
+    /// GUNT_2's invisible diagonal wall).</summary>
+    private static void Disable(Arena arena, int t)
+    {
+        if (arena.ClipFlag != 0 || (arena.TriangleFlags[t] & Disabled) == 0)
+        {
+            return;
+        }
+
+        arena.TriangleFlags[t] |= (uint)(State.Hidden | State.NotSolid);
     }
 
     public IReadOnlyCollection<Group> Of(string arena) => _arenas.TryGetValue(arena, out var groups) ? groups.Values : [];
