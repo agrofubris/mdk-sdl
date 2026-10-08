@@ -1,11 +1,12 @@
 // The stereo composite (Renderer.Stereo.cs): the two eyes' frames (drawn whole, each through its
 // own camera) into one frame:
 //
-//   side by side: the left eye in the left half, the right eye in the right half (3D TVs, VR)
-//   interlaced:   even rows one eye, odd rows the other (row-interleaved displays, shutter glasses)
+//   side by side:   the left eye in the left half, the right eye in the right half (3D TVs, VR)
+//   interlaced:     even rows one eye, odd rows the other (row-interleaved displays, shutter glasses)
+//   top and bottom: the left eye in the top half, the right eye in the bottom half (over-under)
 //
-// mode.y exchanges the eyes: crossed free viewing (crossview), or the other rows (interlaced
-// reversed; displays whose rows start with the right eye).
+// mode.y exchanges the eyes: crossed free viewing (crossview), or the other halves/rows (the
+// reversed interlaced and top and bottom; displays whose rows or halves start with the right eye).
 
 #include "bindings.hlsli"
 
@@ -32,7 +33,7 @@ COMBINED_SAMPLER(1) SamplerState right_sampler : register(s1, space2);
 
 cbuffer StereoUniforms : register(b0, space3)
 {
-    // x: 1 interlaced (0 side by side); y: 1 the eyes exchanged.
+    // x: 0 side by side, 1 interlaced, 2 top and bottom; y: 1 the eyes exchanged.
     float4 mode;
 };
 
@@ -48,9 +49,18 @@ float4 ps_main(VertexOut input) : SV_Target
                         : right_texture.SampleLevel(right_sampler, uv, 0.0);
     }
 
-    // Even rows one eye (the odd ones the other).
-    bool even = ((int)input.position.y & 1) == 0;
-    bool left_eye = even != swapped;
-    return left_eye ? left_texture.SampleLevel(left_sampler, input.uv, 0.0)
-                    : right_texture.SampleLevel(right_sampler, input.uv, 0.0);
+    if (mode.x < 1.5)
+    {
+        // Even rows one eye (the odd ones the other).
+        bool even = ((int)input.position.y & 1) == 0;
+        bool left_eye = even != swapped;
+        return left_eye ? left_texture.SampleLevel(left_sampler, input.uv, 0.0)
+                        : right_texture.SampleLevel(right_sampler, input.uv, 0.0);
+    }
+
+    // Top and bottom: each half gets an eye whole.
+    float2 uv = float2(input.uv.x, frac(input.uv.y * 2.0));
+    bool left_eye = (input.uv.y < 0.5) != swapped;
+    return left_eye ? left_texture.SampleLevel(left_sampler, uv, 0.0)
+                    : right_texture.SampleLevel(right_sampler, uv, 0.0);
 }

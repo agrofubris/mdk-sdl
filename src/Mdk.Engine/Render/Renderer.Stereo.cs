@@ -19,13 +19,18 @@ public enum Stereo
     Interlaced,
     /// <summary>Row-interleaved the other way: even rows the right eye.</summary>
     InterlacedReversed,
+    /// <summary>Top and bottom (over-under): the left eye's image in the top half.</summary>
+    Tab,
+    /// <summary>Top and bottom with the halves exchanged: the right eye's image in the top half.</summary>
+    TabReversed,
 }
 
 /// <summary>The stereo modes and their names (the options page, the console, --stereo).</summary>
 public static class StereoModes
 {
     /// <summary>The modes' names, by value (the options page's).</summary>
-    public static readonly string[] Names = ["Off", "Side by side", "Cross view", "Interlaced", "Interlaced reverse"];
+    public static readonly string[] Names =
+        ["Off", "Side by side", "Cross view", "Interlaced", "Interlaced reverse", "Top and bottom", "Top and bottom rev."];
 
     /// <summary>The most the eyes go apart and the farthest their images converge (the sliders).</summary>
     public const float MaxSeparation = 2f;
@@ -52,6 +57,12 @@ public static class StereoModes
             case "intr" or "interlacedreversed" or "interlacedreverse":
                 stereo = Stereo.InterlacedReversed;
                 return true;
+            case "tab" or "topandbottom" or "overunder":
+                stereo = Stereo.Tab;
+                return true;
+            case "tabr" or "tabreversed" or "topandbottomreversed" or "topandbottomreverse" or "overunderreversed":
+                stereo = Stereo.TabReversed;
+                return true;
             default:
                 stereo = Stereo.Off;
                 return false;
@@ -70,7 +81,8 @@ public sealed unsafe partial class Renderer
     [StructLayout(LayoutKind.Sequential)]
     private struct StereoUniforms
     {
-        /// <summary>x: 1 interlaced (0 side by side); y: 1 the eyes exchanged (crossview, reversed).</summary>
+        /// <summary>x: 0 side by side, 1 interlaced, 2 top and bottom; y: 1 the eyes exchanged
+        /// (crossview, the reversed interlaced and top and bottom).</summary>
         public Vector4 Mode;
     }
 
@@ -134,13 +146,15 @@ public sealed unsafe partial class Renderer
         RenderScene(commands, view.Eye(side, StereoSeparation, StereoConvergence), clearColour);
     }
 
-    /// <summary>The two eyes into the frame: side by side (an eye a half; crossview: exchanged), or
-    /// interlaced (an eye the even rows; reversed: the odd ones).</summary>
+    /// <summary>The two eyes into the frame: side by side or top and bottom (an eye a half;
+    /// crossview and the reversed top and bottom: exchanged), or interlaced (an eye the even rows;
+    /// reversed: the odd ones).</summary>
     private void CompositeStereo(SDL_GPUCommandBuffer* commands)
     {
-        var interlaced = StereoMode is Stereo.Interlaced or Stereo.InterlacedReversed;
-        var swapped = StereoMode is Stereo.CrossView or Stereo.InterlacedReversed;
-        var uniforms = new StereoUniforms { Mode = new Vector4(interlaced ? 1f : 0f, swapped ? 1f : 0f, 0f, 0f) };
+        var layout = StereoMode is Stereo.Interlaced or Stereo.InterlacedReversed ? 1f
+            : StereoMode is Stereo.Tab or Stereo.TabReversed ? 2f : 0f;
+        var swapped = StereoMode is Stereo.CrossView or Stereo.InterlacedReversed or Stereo.TabReversed;
+        var uniforms = new StereoUniforms { Mode = new Vector4(layout, swapped ? 1f : 0f, 0f, 0f) };
 
         var samplers = stackalloc SDL_GPUTextureSamplerBinding[(int)StereoEyes];
         samplers[0] = new SDL_GPUTextureSamplerBinding { texture = _eyes[0], sampler = _mipSampler };

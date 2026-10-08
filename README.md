@@ -23,8 +23,9 @@ original's box sweeps.
 
 ## Features
 
-- **Stereo 3D (optional)**: side by side, crossview, row-interlaced and interlaced-reversed, with
-  real eye separation and convergence ([below](#stereo-3d)).
+- **Stereo 3D (optional)**: side by side, crossview, row-interlaced, interlaced-reversed, top and
+  bottom and reversed top and bottom, with real eye separation and convergence
+  ([below](#stereo-3d)).
 - **The whole game**: every level, the fall before it and the stream after it, rides, menus,
   briefings, statistics, saves, the end movies. Plays like the original (its BSP collisions,
   scripts and sound laws, reverse engineered).
@@ -58,13 +59,15 @@ eye's own frustum, so it keeps the full eye separation's disparity).
     shutter glasses).
   - `intr` — row-interlaced the other way: even rows the right eye (displays whose rows start
     with the other eye).
+  - `tab` — top and bottom (over-under): the left eye in the top half.
+  - `tabr` — top and bottom with the halves exchanged: the right eye in the top half.
 - **Options, 3D Stereo** (main menu and pause menu): Mode, Separation (the eyes' distance apart,
   in the game's units) and Convergence (the distance their images meet at; at the most, `far`:
   parallel rays, meeting at infinity). Left/Right change them and, held, keep stepping; the
   settings apply at once and are saved (`settings.cfg`: `stereo`, `stereo_separation`,
   `stereo_convergence`).
-- **Console**: `stereo off|sbs|crossview|int|intr [separation] [convergence]` (saved).
-- **Command line** (tests, not saved): `--stereo=off|sbs|crossview|int|intr`,
+- **Console**: `stereo off|sbs|crossview|int|intr|tab|tabr [separation] [convergence]` (saved).
+- **Command line** (tests, not saved): `--stereo=off|sbs|crossview|int|intr|tab|tabr`,
   `--stereo-separation=0.25`, `--stereo-convergence=10`.
 
 Notes: the scene is rasterized twice, so stereo costs more GPU time (fine on a discrete GPU even
