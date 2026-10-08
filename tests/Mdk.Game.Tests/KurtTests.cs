@@ -16,6 +16,8 @@ public class KurtTests
     private const float Step = 1f / 60f;
     /// <summary>Frames of every animation: a knock-down then takes 10 ticks.</summary>
     private const int Frames = 5;
+    /// <summary>The flashes fade by 4 a tick (0x41d460).</summary>
+    private const float FlashFadePerTick = 4f;
     /// <summary>Above the pad (the Godot port's Kurt stands at z 192).</summary>
     private static readonly Vector3 Pad = new(-4f, 0f, 195f);
 
@@ -255,5 +257,19 @@ public class KurtTests
         kurt.Update(new Input(), Step);
         Assert.False(mixer.IsPlaying("CHUTEON"));
         Assert.False(mixer.IsPlaying("CHUTEIN"));
+    }
+
+    /// <summary>The flashes fade by 4 a tick in cutscenes too (0x478704): LEVEL5's last nuke frees
+    /// Bones, whose 23 s cutscene stayed white.</summary>
+    [DataFact]
+    public void FlashesFadeWhileFrozen()
+    {
+        var kurt = Standing();
+        kurt.Hurt(1);
+        kurt.WhiteFlash = byte.MaxValue;
+        kurt.Frozen = true;
+        Run(kurt, new Input(), 1f);
+        Assert.Equal(0f, kurt.HurtFlash);
+        Assert.Equal(byte.MaxValue - FlashFadePerTick * Kurt.Kurt.Ticks, kurt.WhiteFlash, FlashFadePerTick);
     }
 }
