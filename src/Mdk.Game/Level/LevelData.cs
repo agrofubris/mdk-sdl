@@ -22,7 +22,7 @@ public sealed class LevelData
         var dir = $"TRAVERSE/LEVEL{number}/LEVEL{number}";
         Dti = Dti.Load(data.PathOf(dir + ".DTI"));
         Mto = Mto.Load(data.PathOf(dir + "O.MTO"));
-        LevelTextures = TextureArchive.Load(data.PathOf(dir + "S.MTI"));
+        LevelTextures = TextureArchive.Load(data.PathOf(dir + "S.MTI"), TextureArchive.Zero.ByKind);
 
         foreach (var name in Mto.ArenaNames)
         {

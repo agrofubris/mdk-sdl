@@ -43,6 +43,19 @@ public class FormatTests
         Assert.Equal(Arena.PaletteColors * 3, mto.GetArena(FirstArena).PaletteRgb.Length);
     }
 
+    /// <summary>LEVEL8's walls paint black with index 0: drawn opaque, as the original uploads every
+    /// texture without kind bit 0 (0x474c9c). GUNT_2's beam showed the sky through them.</summary>
+    [DataFact]
+    public void OnlyKeyedTexturesSeeThrough()
+    {
+        var arena = Mto.Load(LevelPath(8, "O.MTO")).GetArena("GUNT_2");
+        Assert.DoesNotContain((byte)0, arena.Textures.Textures["I2_WALL1"].Indices);
+
+        var level = TextureArchive.Load(LevelPath(8, "S.MTI"), TextureArchive.Zero.ByKind);
+        Assert.DoesNotContain((byte)0, level.Textures["BULLET"].Indices);
+        Assert.Contains((byte)0, level.Textures["EXPLODE"].Indices);
+    }
+
     [DataFact]
     public void CorridorsParseFromSni()
     {
