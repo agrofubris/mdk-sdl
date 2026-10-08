@@ -189,7 +189,7 @@ The console (Grave, the key left of 1 by its scancode) and the debug overlay (F3
 - The engine's parts are generic: `RawKey` (fixed keys by place, auto-repeat included),
   `Profiler` sections, `RenderStats` (GPU draw calls and triangles of the last frame), the log.
 - `Kurt.Mortality` (god: no damage, no death by falling out) and `Kurt.Clipping` (noclip: the
-  walking keys move him freely). `ArenaStops` finds a floor of an arena (the soak tour, `tp`,
+  walking keys move him freely). `ArenaStops` finds a floor of an arena, no other arena's above it (the soak tour, `tp`,
   `map`); `GameState.StartArena` carries `map`'s arena to the next `Viewer`.
 - `--console="..."` opens the console on the first screen and runs the lines; in a level once
   Kurt's arena is known (after `--delay`) (`tests/console_test.sh`).
