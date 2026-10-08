@@ -167,6 +167,15 @@ Options, "Make HD textures" (desktop; `mdk --upscale-textures`) makes the mod
 by Real-ESRGAN from your files, each named `NAME@<key>.png` (only the exact view it was made
 from). Switch it on the Mods page. Older builds' `textures-hd/` is moved into it at start.
 
+The upscaler's archive comes from `settings.cfg` (empty: Real-ESRGAN v0.2.5.0 for the platform):
+
+```
+upscaler_url=https://example.org/realesrgan-ncnn-vulkan-windows.zip
+upscaler_sha256=<the archive's SHA-256, hex>
+```
+
+A URL needs its checksum; a local path or file URL works offline.
+
 ## Legal
 
 Mods must not redistribute the game's files or anything made from them (exports, upscaled

@@ -10,24 +10,18 @@ namespace Mdk.Engine.Upscale;
 public enum UpscaleModel { General, Anime }
 
 /// <summary>Real-ESRGAN's portable upscaler (realesrgan-ncnn-vulkan, BSD-3-Clause, with its models),
-/// downloaded once from its GitHub release into a folder of the user's, checked against the pinned
-/// SHA-256 of the release archive. It runs on any Vulkan GPU (integrated ones too, slower); without
-/// one it fails (its CPU path is far too slow to be offered).
+/// downloaded once from its release (<see cref="UpscalerSource"/>) into a folder of the user's,
+/// checked against the archive's SHA-256. It runs on any Vulkan GPU (integrated ones too, slower);
+/// without one it fails (its CPU path is far too slow to be offered).
 /// <code>
-///   Install: release zip ─► SHA-256 pinned? ─► extract ─► folder/realesrgan-ncnn-vulkan[.exe], models/
+///   Install: release zip ─► SHA-256 as given? ─► extract ─► folder/realesrgan-ncnn-vulkan[.exe], models/
 ///   Run:     folder of PNGs ─► the tool (-n model -s factor) ─► folder of PNGs (same names)
 /// </code></summary>
 public sealed class RealEsrgan
 {
-    /// <summary>The release (Real-ESRGAN v0.2.5.0, the 2022-04-24 build) and its archives' SHA-256.</summary>
-    private const string Release = "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/";
-    private const string WindowsZip = "realesrgan-ncnn-vulkan-20220424-windows.zip";
-    private const string WindowsSha256 = "abc02804e17982a3be33675e4d471e91ea374e65b70167abc09e31acb412802d";
-    private const string LinuxZip = "realesrgan-ncnn-vulkan-20220424-ubuntu.zip";
-    private const string LinuxSha256 = "e5aa6eb131234b87c0c51f82b89390f5e3e642b7b70f2b9bbe95b6a285a40c96";
-    private const string MacZip = "realesrgan-ncnn-vulkan-20220424-macos.zip";
-    private const string MacSha256 = "e0ad05580abfeb25f8d8fb55aaf7bedf552c375b5b4d9bd3c8d59764d2cc333a";
     private const string ToolName = "realesrgan-ncnn-vulkan";
+    /// <summary>The archive while it's downloaded and checked.</summary>
+    private const string Download = "download.zip";
     /// <summary>Written after a checked extraction: its content is the archive's SHA-256.</summary>
     private const string Marker = "installed.sha256";
     private const int PollMilliseconds = 200;
@@ -40,42 +34,38 @@ public sealed class RealEsrgan
 
     private RealEsrgan(string exe) => _exe = exe;
 
-    /// <summary>The release archive for this platform, and its SHA-256.</summary>
-    private static (string Zip, string Sha256) Archive() =>
-        OperatingSystem.IsWindows() ? (WindowsZip, WindowsSha256)
-        : OperatingSystem.IsMacOS() ? (MacZip, MacSha256)
-        : (LinuxZip, LinuxSha256);
-
-    /// <summary>Where the archive is downloaded from.</summary>
-    public static string Url => Release + Archive().Zip;
-
     private static string ExeIn(string folder) => Path.Combine(folder, OperatingSystem.IsWindows() ? ToolName + ".exe" : ToolName);
 
-    /// <summary>Whether the folder holds this release, checked when it was extracted.</summary>
-    public static bool IsInstalled(string folder)
+    /// <summary>Whether the folder holds the source's release, checked when it was extracted.</summary>
+    public static bool IsInstalled(string folder, UpscalerSource source)
     {
         var marker = Path.Combine(folder, Marker);
-        return File.Exists(ExeIn(folder)) && File.Exists(marker) && File.ReadAllText(marker).Trim() == Archive().Sha256;
+        return File.Exists(ExeIn(folder)) && File.Exists(marker) && File.ReadAllText(marker).Trim() == source.Sha256;
     }
 
     /// <summary>The tool in <paramref name="folder"/>, downloaded first when missing
     /// (<paramref name="progress"/>: bytes so far, total or 0).</summary>
-    public static RealEsrgan Install(string folder, Action<long, long>? progress, CancellationToken cancel)
+    public static RealEsrgan Install(string folder, UpscalerSource source, Action<long, long>? progress, CancellationToken cancel)
     {
-        if (IsInstalled(folder))
+        if (IsInstalled(folder, source))
         {
             return new RealEsrgan(ExeIn(folder));
         }
 
-        var (zip, sha256) = Archive();
+        // A release of the user's needs its checksum too (settings.cfg).
+        if (source.Sha256.Length == 0)
+        {
+            throw new InvalidDataException($"upscaler_sha256 needed for {source.Url}");
+        }
+
         Directory.CreateDirectory(folder);
-        var download = Path.Combine(folder, zip);
+        var download = Path.Combine(folder, Download);
         try
         {
-            var hash = Download(Release + zip, download, progress, cancel);
-            if (hash != sha256)
+            var hash = Fetch(source.Url, download, progress, cancel);
+            if (hash != source.Sha256)
             {
-                throw new InvalidDataException($"{zip}: SHA-256 {hash}, expected {sha256}");
+                throw new InvalidDataException($"{source.Url}: SHA-256 {hash}, expected {source.Sha256}");
             }
 
             ZipFile.ExtractToDirectory(download, folder, overwriteFiles: true);
@@ -90,18 +80,29 @@ public sealed class RealEsrgan
             File.SetUnixFileMode(ExeIn(folder), File.GetUnixFileMode(ExeIn(folder)) | UnixFileMode.UserExecute);
         }
 
-        File.WriteAllText(Path.Combine(folder, Marker), sha256);
+        File.WriteAllText(Path.Combine(folder, Marker), source.Sha256);
         return new RealEsrgan(ExeIn(folder));
     }
 
-    /// <summary>Saves a URL's file; returns its SHA-256 (hex).</summary>
-    private static string Download(string url, string path, Action<long, long>? progress, CancellationToken cancel)
+    /// <summary>Saves a URL's file (http(s), file or a local path); returns its SHA-256 (hex).</summary>
+    private static string Fetch(string url, string path, Action<long, long>? progress, CancellationToken cancel)
     {
-        using var http = new HttpClient();
-        using var response = http.Send(new HttpRequestMessage(HttpMethod.Get, url), HttpCompletionOption.ResponseHeadersRead, cancel);
-        response.EnsureSuccessStatusCode();
-        var total = response.Content.Headers.ContentLength ?? 0;
-        using var source = response.Content.ReadAsStream(cancel);
+        if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && !uri.IsFile)
+        {
+            using var http = new HttpClient();
+            using var response = http.Send(new HttpRequestMessage(HttpMethod.Get, uri), HttpCompletionOption.ResponseHeadersRead, cancel);
+            response.EnsureSuccessStatusCode();
+            using var body = response.Content.ReadAsStream(cancel);
+            return Copy(body, response.Content.Headers.ContentLength ?? 0, path, progress, cancel);
+        }
+
+        using var local = File.OpenRead(uri?.LocalPath ?? url);
+        return Copy(local, local.Length, path, progress, cancel);
+    }
+
+    /// <summary>Copies a stream into a file, hashing it.</summary>
+    private static string Copy(Stream source, long total, string path, Action<long, long>? progress, CancellationToken cancel)
+    {
         using var file = File.Create(path);
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         var buffer = new byte[CopyBuffer];

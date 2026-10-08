@@ -19,6 +19,9 @@ public sealed record HdOptions(IReadOnlyList<int> Levels, HdModel Model, int Sca
     public static readonly int[] Scales = [2, 4];
     public static HdOptions Default { get; } = new(AllLevels, HdModel.General, 2);
 
+    /// <summary>Where the upscaler is downloaded from (settings.cfg).</summary>
+    public UpscalerSource Source { get; init; } = UpscalerSource.Default;
+
     /// <summary>The engine's model.</summary>
     public UpscaleModel Upscaler => Model == HdModel.General ? UpscaleModel.General : UpscaleModel.Anime;
 }
@@ -115,7 +118,7 @@ public static class HdGenerator
         Migrate(userFolder);
         var clock = Stopwatch.StartNew();
         progress.Set(HdProgress.Stage.Download, 0, 0);
-        var tool = RealEsrgan.Install(ToolIn(userFolder), (done, total) => progress.Set(HdProgress.Stage.Download, done, total), cancel);
+        var tool = RealEsrgan.Install(ToolIn(userFolder), options.Source, (done, total) => progress.Set(HdProgress.Stage.Download, done, total), cancel);
 
         var folder = FolderIn(userFolder);
         Directory.CreateDirectory(folder);

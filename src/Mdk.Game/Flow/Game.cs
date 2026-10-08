@@ -442,8 +442,9 @@ public sealed class Game : IDisposable
         }
 
         var folder = Environment.GetEnvironmentVariable(UserFolderVariable) ?? UserFolder();
+        var source = Settings.Load(Settings.PathIn(folder)).Upscaler;
         var progress = new HdProgress();
-        var run = Task.Run(() => HdGenerator.Run(data, folder, options, progress, CancellationToken.None));
+        var run = Task.Run(() => HdGenerator.Run(data, folder, options with { Source = source }, progress, CancellationToken.None));
         var last = "";
         while (!run.Wait(UpscalePoll))
         {

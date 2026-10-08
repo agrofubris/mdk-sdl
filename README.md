@@ -210,7 +210,9 @@ only; the original look is unchanged). Other mods override them.
 - Downloaded once into `tools/realesrgan/` next to the program: the portable
   [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) release v0.2.5.0
   (`realesrgan-ncnn-vulkan-20220424-<windows|ubuntu|macos>.zip`, about 45 MB, from GitHub), its
-  SHA-256 checked against the one pinned in the code. Real-ESRGAN and its models: BSD 3-Clause
+  SHA-256 checked. If the release moves, set its archive and checksum in `settings.cfg`:
+  `upscaler_url=` (https, file URL or local path) and `upscaler_sha256=`; empty means the
+  default. A new checksum installs it again. Real-ESRGAN and its models: BSD 3-Clause
   (Xintao Wang); the ncnn-Vulkan executable: MIT; ncnn: BSD 3-Clause (Tencent).
 - Needs a Vulkan GPU (integrated ones work, slower). There is no CPU fallback: it would take hours.
 - Made: `mods/hd-textures/textures/LEVELn/<NAME>@<key>.png` (2D images in `images/`), `mod.txt`

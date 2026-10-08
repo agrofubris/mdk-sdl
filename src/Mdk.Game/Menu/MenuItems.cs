@@ -405,7 +405,7 @@ public sealed class MenuItems
         Add(_jobLine);
         _jobBack = new Entry("Cancel", Kind.Item, back, null);
         Add(_jobBack);
-        _job = HdJob.Start(_ui.Data, _ui.UserFolder, HdOptions.Default);
+        _job = HdJob.Start(_ui.Data, _ui.UserFolder, HdOptions.Default with { Source = _ui.Settings.Upscaler });
         ShowJob();
     }
 

@@ -2,6 +2,7 @@ using System.Globalization;
 using Mdk.Engine.Audio;
 using Mdk.Engine.Platform;
 using Mdk.Engine.Render;
+using Mdk.Engine.Upscale;
 using Mdk.Game.HdTextures;
 using Mdk.Game.Kurt;
 using Mdk.Game.Mods;
@@ -55,6 +56,11 @@ public sealed class Settings
     public readonly Dictionary<Key, string> Bindings = [];
     /// <summary>Mods by folder; those not listed are on (<see cref="ModCatalog"/>).</summary>
     public readonly Dictionary<string, ModState> Mods = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>The HD textures' upscaler archive and its SHA-256; empty: the platform's default.</summary>
+    public string UpscalerUrl = "";
+    public string UpscalerSha256 = "";
+
+    public UpscalerSource Upscaler => UpscalerSource.Of(UpscalerUrl, UpscalerSha256);
 
     public ModState StateOf(string mod) => Mods.GetValueOrDefault(mod, ModState.On);
 
@@ -109,6 +115,8 @@ public sealed class Settings
             $"gore={Gore}",
             $"graphics={Graphics}",
             $"antialiasing={AntiAliasing}",
+            $"upscaler_url={UpscalerUrl}",
+            $"upscaler_sha256={UpscalerSha256}",
         };
         lines.AddRange(Bindings.Select(b => $"{BindPrefix}{b.Key}={b.Value}"));
         lines.AddRange(Mods.OrderBy(m => m.Key, StringComparer.OrdinalIgnoreCase).Select(m => $"{ModPrefix}{m.Key}={m.Value}"));
@@ -171,6 +179,12 @@ public sealed class Settings
                 break;
             case "antialiasing":
                 AntiAliasing = Enum.TryParse<AntiAliasing>(value, out var antiAliasing) && Enum.IsDefined(antiAliasing) ? antiAliasing : AntiAliasing;
+                break;
+            case "upscaler_url":
+                UpscalerUrl = value;
+                break;
+            case "upscaler_sha256":
+                UpscalerSha256 = value;
                 break;
             // Older settings' HD switch: now the HD textures mod's.
             case "textures" when value is "Hd" or "Original":
