@@ -343,7 +343,7 @@ src/Mdk.App/bin/Debug/net10.0/mdk --level=3
 
 One native executable (Native AOT; also needs the Visual Studio C++ tools on Windows, clang and
 zlib on Linux, Xcode on macOS): `sh tools/publish.sh [win-x64|linux-x64|osx-arm64|osx-x64]` (this
-machine's by default; `publish.bat` on Windows) gives `publish/mdk` or `publish/mdk.exe` (about 5 MB) and SDL3's library next to
+machine's by default; `publish.bat` on Windows) gives `publish/mdk` or `publish/mdk.exe` (about 8 MB) and SDL3's library next to
 it (`SDL3.dll`, `libSDL3.so`, `libSDL3.dylib`).
 
 The icon (original artwork, not the game's) is drawn by `python tools/gen_icon.py` (Pillow, numpy):
