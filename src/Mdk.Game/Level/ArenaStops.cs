@@ -6,7 +6,8 @@ namespace Mdk.Game.Level;
 
 /// <summary>Where Kurt can be put in an arena (the soak test's tour, the console's teleport): just
 /// above a floor of that arena, under its first cover spot, else waypoint, alien or connection
-/// record.
+/// record; one with no other arena's floor above that floor first (LEVEL4: MEAT_5's floor lies 2
+/// above CMEAT_5's by door #1999; Kurt would stand outside his arena).
 /// <code>
 ///   record ●
 ///          │ ≤ 200
@@ -23,6 +24,8 @@ public static class ArenaStops
     private const float MaxDrop = 200f;
     /// <summary>A doorway's stop is this far into its arena.</summary>
     private const float DoorwayInset = 4f;
+    /// <summary>Floors this close are one height (the soak's astray reach).</summary>
+    private const float SameFloor = 1f;
 
     private static readonly uint[] Preferred = [DtiCover, DtiWaypoint, DtiAlien, LevelData.Connection];
 
@@ -35,10 +38,17 @@ public static class ArenaStops
             return null;
         }
 
-        return Preferred.SelectMany(type => entry.Records.Where(r => r.Type == type))
-            .Select(r => FloorBelow(space, arena, StopOf(r)))
-            .FirstOrDefault(p => p != null) is { } floor ? floor + new Vector3(0f, 0f, Lift) : null;
+        // Arenas covered by another's floor everywhere (LEVEL4 MEAT_6, CMEAT_6) still get one.
+        var points = Preferred.SelectMany(type => entry.Records.Where(r => r.Type == type)).Select(StopOf).ToList();
+        var floor = FirstFloor(space, arena, points, Overlap.Clear) ?? FirstFloor(space, arena, points, Overlap.Allowed);
+        return floor is { } f ? f + new Vector3(0f, 0f, Lift) : null;
     }
+
+    /// <summary>Whether another arena's floor may lie between a stop and its arena's floor.</summary>
+    private enum Overlap { Clear, Allowed }
+
+    private static Vector3? FirstFloor(ArenaSpace space, string arena, List<Vector3> points, Overlap overlap) =>
+        points.Select(p => FloorBelow(space, arena, p)).FirstOrDefault(f => f != null && (overlap == Overlap.Allowed || !IsCovered(space, arena, f.Value)));
 
     /// <summary>Which way a doorway (DTI connection) leaves its arena; hatches go up or down.</summary>
     private enum Doorway { MinusX, PlusX, MinusY, PlusY }
@@ -72,5 +82,13 @@ public static class ArenaStops
         var bsp = space.At(from).FirstOrDefault(b => b.Arena.Name == arena);
         var to = from - new Vector3(0f, 0f, MaxDrop);
         return bsp != null && bsp.Segment(from, to, Bsp.SegmentMode.Floor, out var floor) != Bsp.None ? floor : null;
+    }
+
+    /// <summary>Whether Kurt, dropped onto that floor, meets another arena's floor first.</summary>
+    private static bool IsCovered(ArenaSpace space, string arena, Vector3 floor)
+    {
+        var from = floor + new Vector3(0f, 0f, Lift);
+        var to = floor + new Vector3(0f, 0f, SameFloor);
+        return space.At(from).Any(b => b.Arena.Name != arena && b.Segment(from, to, Bsp.SegmentMode.Floor, out _) != Bsp.None);
     }
 }
