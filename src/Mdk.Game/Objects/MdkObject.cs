@@ -49,6 +49,9 @@ public sealed class MdkObject : ISoundSource
     public const int FlagBounces = 0x20000000;
     /// <summary>The holy cow of SW_EWJ (0x440074).</summary>
     public const int FlagCow = 0x40000000;
+    /// <summary>The animation's root motion doesn't move it (obj+0x14b bit 7; anim_step_frames 0x43ab70),
+    /// e.g. Gunter on his pillar.</summary>
+    public const int FlagNoRootMotion = unchecked((int)0x80000000);
 
     /// <summary>How Kurt meets the object: null, he passes through it.</summary>
     public Collision.Solids.Footing? Footing
@@ -386,6 +389,11 @@ public sealed class MdkObject : ISoundSource
             // tick's move collides with the arena (anim_step_frames 0x43ab70): an alien's pose
             // doesn't sink it through the floor.
             var step = frame > AnimationFrame ? frame - AnimationFrame : frame + count - AnimationFrame;
+            if ((Flags & FlagNoRootMotion) != 0)
+            {
+                step = 0;
+            }
+
             var turn = Matrix4x4.CreateRotationZ(float.DegreesToRadians(Yaw));
             for (var i = 0; i < step; i++)
             {
