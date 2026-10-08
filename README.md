@@ -40,27 +40,28 @@ the original's fades, scripts animate textures, switch the sky and film cutscene
 leave bullet holes, and ropes, twisters' ribbons and the glass panes' outlines are drawn. An
 enhanced look (Options, Graphics) filters the textures, lights the levels with a sun and its
 shadows, and adds ambient occlusion, a little glow and a haze; anti-aliasing smooths the edges. The three
-levels of the 1996 beta demo play as extras ([below](#the-1996-beta-demo)). The
-[Godot port](https://github.com/nemo22/mdk-godot) is more complete for now.
+levels of the 1996 beta demo play as extras ([below](#the-1996-beta-demo)). The game can be played
+through; the [Godot port](https://github.com/nemo22/mdk-godot) gets the same fixes.
 
 ## Progress
 
 | Area | Done |
 | --- | --- |
-| Data formats: levels, textures, models, sprites, sounds, fonts, scripts, videos | █████████░ 90% |
-| Rendering: arenas, glass, sky, mirrors, Kurt's sprite, effects | █████████░ 90% |
-| Enhanced look: filtering, sun and shadows, occlusion, glow, haze; anti-aliasing | ████████░░ 80% |
-| Collisions: the original's BSP | ████████░░ 80% |
-| Kurt: walking, turning, jumping, chute, ledges, slides, camera, damage, death | █████████░ 90% |
-| Sound mixer (the original's laws) and music | ████████░░ 80% |
-| Script VM, aliens, objects, doors, effects, fans | ███████░░░ 70% |
-| Weapons, items, sniper mode | ████████░░ 80% |
-| HUD (health, inventory, messages, health bar) | ███████░░░ 70% |
-| Menus, saves, level flow | ████████░░ 80% |
-| The fall and the stream between levels, rides | ████████░░ 80% |
-| Videos: the menu's FLC and slideshow, the end movies | ████████░░ 80% |
-| Playtesting and bug fixing | ██░░░░░░░░ 20% |
-| **Overall** | **about 78%** |
+| Data formats: levels, textures, models, sprites, sounds, fonts, scripts, videos | █████████░ 95% |
+| Rendering: arenas, glass, sky, mirrors, Kurt's sprite, effects | █████████░ 95% |
+| Enhanced look: filtering, mipmaps, sun and shadows, occlusion, glow, haze; anti-aliasing | ████████░░ 80% |
+| Collisions: the original's BSP | █████████░ 95% |
+| Kurt: walking, turning, jumping, chute, ledges, slides, camera, damage, death | █████████░ 95% |
+| Sound mixer (the original's laws) and music | █████████░ 90% |
+| Script VM, aliens, objects, doors, effects, fans | █████████░ 90% |
+| Weapons, items, sniper mode | █████████░ 90% |
+| HUD (health, inventory, messages, health bar) | █████████░ 90% |
+| Menus, saves, level flow | █████████░ 90% |
+| The fall and the stream between levels, rides | █████████░ 90% |
+| Videos: the menu's FLC and slideshow, the end movies | █████████░ 90% |
+| Dev tools: console, F3 overlay, cheats, quick save/load | █████████░ 90% |
+| Playtesting and bug fixing (every level played through) | ████████░░ 80% |
+| **Overall** | **about 90%** |
 
 The plan is in [docs/architecture.md](docs/architecture.md#roadmap).
 
