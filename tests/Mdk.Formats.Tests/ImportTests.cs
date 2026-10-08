@@ -20,7 +20,7 @@ public sealed class ImportTests : IDisposable
     /// <summary>An installation as copied from a CD or a store, in any case, with files the game doesn't read.</summary>
     private FolderTree Installation(string under = "")
     {
-        Put(Path.Combine(under, "traverse/travsprt.bni"));
+        Put(Path.Combine(under, "TRAVERSE/travsprt.bni"));
         Put(Path.Combine(under, "TRAVERSE/LEVEL3/LEVEL3O.MTO"));
         Put(Path.Combine(under, "MISC/MDKFONT.FTI"));
         Put(Path.Combine(under, "FALL3D/FALL3D.BNI"));
