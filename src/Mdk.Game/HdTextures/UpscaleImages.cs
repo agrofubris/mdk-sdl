@@ -1,10 +1,15 @@
 namespace Mdk.Game.HdTextures;
 
+/// <summary>An HD image's cover: hard (0 or 255: surfaces' cut-outs), or soft (the source's, smooth:
+/// sprites, whose outline the shader cuts at half cover as smoothly as the original's).</summary>
+public enum HdAlpha { Hard, Soft }
+
 /// <summary>A texture frame before and after the upscaler (RGBA8, straight alpha). The upscaler
 /// sees colour only: clear texels take their neighbours' colour first (no dark fringe where a
 /// cut-out ends), and the frame wraps around by a margin, so a tiling texture's edges are upscaled
 /// with what they meet. After: the margin cut, the size brought to the cache's scale (a box filter),
-/// and the alpha the source's, upscaled and kept hard (0 or 255: cut-outs stay cut-outs).
+/// and the alpha the source's, upscaled and kept hard (0 or 255: cut-outs stay cut-outs), or soft
+/// for sprites (<see cref="HdAlpha"/>).
 /// <code>
 ///   ┌───────────┐            ┌─────────────┐
 ///   │ m  wrap   │  upscaler  │             │   crop m × factor ─► box ÷ (factor / scale)
@@ -131,7 +136,8 @@ public static class UpscaleImages
 
     /// <summary>The cache's frame (<paramref name="scale"/> × the source's size) from the upscaler's
     /// output of <see cref="Input"/> (<paramref name="factor"/> × its size).</summary>
-    public static byte[] Output(byte[] upscaled, int factor, byte[] source, int width, int height, int margin, int scale)
+    public static byte[] Output(byte[] upscaled, int factor, byte[] source, int width, int height, int margin, int scale,
+        HdAlpha alpha = HdAlpha.Hard)
     {
         var upscaledWidth = Padded(width, height, margin).Width * factor;
         var shrink = factor / scale;
@@ -144,7 +150,7 @@ public static class UpscaleImages
             {
                 var target = (y * outWidth + x) * Channels;
                 Box(upscaled, upscaledWidth, margin * factor + x * shrink, margin * factor + y * shrink, shrink, result.AsSpan(target, Alpha));
-                result[target + Alpha] = opaque ? Opaque : Cover(source, width, height, (x + 0.5f) / scale - 0.5f, (y + 0.5f) / scale - 0.5f);
+                result[target + Alpha] = opaque ? Opaque : Cover(source, width, height, (x + 0.5f) / scale - 0.5f, (y + 0.5f) / scale - 0.5f, alpha);
             }
         }
 
@@ -187,8 +193,8 @@ public static class UpscaleImages
     }
 
     /// <summary>The source's alpha at a point (texel centres at whole numbers, edges clamped),
-    /// bilinear, then hard: opaque from half cover on.</summary>
-    private static byte Cover(byte[] rgba, int width, int height, float x, float y)
+    /// bilinear, then hard (opaque from half cover on) or as it is.</summary>
+    private static byte Cover(byte[] rgba, int width, int height, float x, float y, HdAlpha alpha)
     {
         x = Math.Clamp(x, 0f, width - 1);
         y = Math.Clamp(y, 0f, height - 1);
@@ -198,6 +204,12 @@ public static class UpscaleImages
         float At(int ax, int ay) => rgba[(ay * width + ax) * Channels + Alpha];
         var top = float.Lerp(At(x0, y0), At(x1, y0), fx);
         var bottom = float.Lerp(At(x0, y1), At(x1, y1), fx);
-        return float.Lerp(top, bottom, fy) >= HalfCover ? Opaque : (byte)0;
+        var cover = float.Lerp(top, bottom, fy);
+        if (alpha == HdAlpha.Soft)
+        {
+            return (byte)MathF.Round(cover);
+        }
+
+        return cover >= HalfCover ? Opaque : (byte)0;
     }
 }

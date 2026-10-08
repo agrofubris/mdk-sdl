@@ -1,5 +1,8 @@
+using Mdk.Engine.Render;
+using Mdk.Game.Audio;
 using Mdk.Formats;
 using Mdk.Game.HdTextures;
+using Mdk.Game.Kurt;
 using Mdk.Game.Level;
 
 namespace Mdk.Game.Tests;
@@ -120,6 +123,25 @@ public class HdTexturesTests : IDisposable
         }
     }
 
+    /// <summary>Sprites (Kurt) keep their cover soft: the shader's half-cover cut then follows the
+    /// source's outline as smoothly as the original's, not in steps.</summary>
+    [Fact]
+    public void SpritesKeepSoftEdges()
+    {
+        var source = TextureExport.Frame(Texture("K_RUN_0", 2, 1, [1, 0]), Colours(), 0);
+        const int margin = 1;
+        const int factor = 4;
+        var (paddedWidth, paddedHeight) = UpscaleImages.Padded(2, 1, margin);
+        var upscaled = new byte[paddedWidth * factor * paddedHeight * factor * Rgba];
+
+        var hard = UpscaleImages.Output(upscaled, factor, source, 2, 1, margin, Scale);
+        var soft = UpscaleImages.Output(upscaled, factor, source, 2, 1, margin, Scale, HdAlpha.Soft);
+
+        // Row 0: x = 0..3 at source x 0 (clamped), 0.25, 0.75, 1: cover 1, 0.75, 0.25, 0.
+        Assert.Equal([Opaque, Opaque, 0, 0], Enumerable.Range(0, 4).Select(x => hard[x * Rgba + 3]));
+        Assert.Equal([Opaque, 191, 64, 0], Enumerable.Range(0, 4).Select(x => soft[x * Rgba + 3]));
+    }
+
     // --- Cache -------------------------------------------------------------------------------
 
     private HdCache CacheWith(Texture texture, Palette palette, int scale = Scale, int format = HdManifest.Format)
@@ -235,6 +257,19 @@ public class HdTexturesTests : IDisposable
         Assert.Null(HdCache.Open(_folder).Find(texture, Colours()));
     }
 
+    /// <summary>Kurt's frames take their HD image in the enhanced look only (sprites), when made.</summary>
+    [Fact]
+    public void KurtTakesHdFrames()
+    {
+        var frame = Texture("K_RUN_0", 2, 2, [0, 1, 2, 0]);
+        var cache = CacheWith(frame, Colours());
+
+        Assert.NotNull(KurtSprite.Upscaled(cache, Shading.Sprite, frame, Colours()));
+        Assert.Null(KurtSprite.Upscaled(cache, Shading.Original, frame, Colours()));
+        Assert.Null(KurtSprite.Upscaled(null, Shading.Sprite, frame, Colours()));
+        Assert.Null(KurtSprite.Upscaled(cache, Shading.Sprite, Texture("K_RUN_1", 2, 2, [1, 1, 1, 0]), Colours()));
+    }
+
     // --- The game's textures --------------------------------------------------------------------
 
     /// <summary>Level 3's arenas and models: each texture once per distinct look, all in palettes of
@@ -250,5 +285,25 @@ public class HdTexturesTests : IDisposable
         Assert.True(sources.Count > 50, $"{sources.Count} textures");
         Assert.Equal(sources.Count, sources.Select(s => s.Key).Distinct().Count());
         Assert.All(sources, s => Assert.Equal(HdKey.Of(s.Texture, s.Palette), s.Key));
+    }
+
+    /// <summary>Kurt's frames: TRAVSPRT.BNI's he's drawn with, through the level's palette, and the
+    /// level's own (LEVEL4's snowboard).</summary>
+    [DataFact]
+    public void LevelExportsKurt()
+    {
+        var level = new LevelData(Data.Value, 4);
+        var sprites = Bni.Load(Data.Value.PathOf("TRAVERSE/TRAVSPRT.BNI"));
+        var run = sprites.GetAnimation("K_RUN");
+
+        var sources = TextureExport.Kurt(level, sprites, SoundBank.ForLevel(Data.Value, 4).Animation);
+
+        var keys = sources.Select(s => s.Key).ToHashSet();
+        Assert.Contains(HdKey.Of(run.GetFrame(0).Image, level.Dti.Palette), keys);
+        Assert.Contains(sources, s => s.Name == "K_SURF_0");
+        Assert.Contains(sources, s => s.Name == "K_CHUTEC_0");
+        Assert.All(sources, s => Assert.Same(level.Dti.Palette, s.Palette));
+        Assert.All(sources, s => Assert.Equal(HdAlpha.Soft, s.Alpha));
+        Assert.Equal(sources.Count, keys.Count);
     }
 }

@@ -194,7 +194,7 @@ public sealed class Viewer : IScreen
         // The 1996 demo's levels show its Kurt and its health display.
         var sprites = Bni.Load(data.PathOf("TRAVERSE/TRAVSPRT.BNI"));
         _beta?.AddSprites(sprites);
-        _sprite = new KurtSprite(renderer, sprites, level.Dti.Palette, EnhancedLook.Sprites(graphics));
+        _sprite = new KurtSprite(renderer, sprites, level.Dti.Palette, EnhancedLook.Sprites(graphics), hd);
         foreach (var name in KurtSprite.LevelAnimations)
         {
             _sprite.Add(bank.Animation(name));

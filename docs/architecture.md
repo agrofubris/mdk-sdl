@@ -164,8 +164,9 @@ download, SHA-256, process); the game decides what and how.
  make (HdGenerator: --upscale-textures, Options "Make HD textures" via HdJob)
  ───────────────────────────────────────────────────────────────────────────
  LevelData, CMI ─► TextureExport (arenas, corridors, models × arena palettes) ─► HdSource (key = HdKey)
+ TRAVSPRT.BNI, level SNI ─► TextureExport.Kurt (Kurt's frames × the level's palette, soft alpha) ─┘
    ─► UpscaleImages.Input (bleed, wrap 8) ─► PNG ─► realesrgan-ncnn-vulkan (x4plus 4x | animevideov3 2x)
-   ─► UpscaleImages.Output (crop, box to 2x, the source's alpha hard) ─► textures-hd/LEVELn/*.png + manifest.txt
+   ─► UpscaleImages.Output (crop, box to 2x, the source's alpha: hard, soft for sprites) ─► textures-hd/LEVELn/*.png + manifest.txt
 
  use (Viewer, enhanced look, settings textures=Hd)
  ─────────────────────────────────────────────────

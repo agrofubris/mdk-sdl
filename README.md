@@ -171,12 +171,15 @@ only; the original look is unchanged).
   Each image is the texture as an arena's palette shows it, its key a hash of that (size, indices,
   colours): a changed or other game file never gets a stale image. Run again, it keeps what is
   still current and makes the rest.
-- Upscaled: arenas, corridors, the objects' models (each texture once per distinct palette).
-  Kept original: the sky, Kurt, effects' sprites, the HUD, fonts and 2D screens; a texture a
-  sniper round marks with a bullet hole goes back to the original.
+- Upscaled: arenas, corridors, the objects' models (each texture once per distinct palette), and
+  Kurt's sprite in the levels (407 frames, shared by all levels: 50 s, 27 MB on disk). Kept
+  original: the sky, effects' sprites, the HUD, fonts, 2D screens, the fall's and the stream's
+  Kurt (drawn in the original look); a texture a sniper round marks with a bullet hole goes back
+  to the original.
 - Cut-outs keep hard edges: the upscaler gets the colour only (clear texels filled with their
   neighbours' colour, the frame wrapped around by 8 texels so tiling textures stay seamless); the
-  alpha is the original's, upscaled bilinear and cut at half cover.
+  alpha is the original's, upscaled bilinear and cut at half cover. Kurt's frames keep that alpha
+  soft: the shader cuts their outline at half cover as smoothly as the original's.
 - Cost (default: x4plus, 2x): all six levels in about 4 minutes on an RTX 3060 (the anime
   model: seconds), 243 MB on disk; a level's upscaled textures take 4 times the GPU memory
   (LEVEL3: 40 MB to 160 MB; 195 MB with Kurt, sprites and effects); 4x would be 16 times (about
