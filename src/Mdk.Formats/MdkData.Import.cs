@@ -10,7 +10,11 @@ public interface IDataTree
     Stream Open(string file);
 }
 
-public readonly record struct DataEntry(string Name, EntryKind Kind);
+/// <summary>A file or folder of a tree; a file's size in bytes, or <see cref="UnknownSize"/>.</summary>
+public readonly record struct DataEntry(string Name, EntryKind Kind, long Size = DataEntry.UnknownSize)
+{
+    public const long UnknownSize = -1;
+}
 
 public enum EntryKind { File, Folder }
 
@@ -43,7 +47,8 @@ public sealed partial class MdkData
     }
 
     /// <summary>Copies the game's folders of <paramref name="root"/> in the tree into
-    /// <paramref name="dir"/>, reporting (files copied, files) after each file.</summary>
+    /// <paramref name="dir"/>, reporting (files done, files) after each file. A file already
+    /// there with the same size is kept (an import again copies what changed).</summary>
     public static MdkData Import(IDataTree tree, string root, string dir, Action<int, int>? progress)
     {
         // A copy over an older one: interrupted until the stamp is back.
@@ -56,11 +61,44 @@ public sealed partial class MdkData
             .SelectMany(e => FilesOf(tree, Join(root, e.Name)))
             .ToList();
 
-        var done = 0;
-        foreach (var file in files)
+        CopyFiles(tree, files, root, dir, progress);
+        File.WriteAllText(stamp, "");
+        return new MdkData(dir);
+    }
+
+    /// <summary>Copies the folder <paramref name="name"/> (any case) of <paramref name="root"/> in
+    /// the tree into <paramref name="target"/>, e.g. HD textures made on a PC; returns the files
+    /// copied (0 without that folder). Unchanged files are kept, as in <see cref="Import"/>.</summary>
+    public static int CopyFolder(IDataTree tree, string root, string name, string target, Action<int, int>? progress)
+    {
+        var folder = tree.List(root)
+            .FirstOrDefault(e => e.Kind == EntryKind.Folder && string.Equals(e.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (folder.Name == null)
         {
-            var relative = root.Length == 0 ? file : file[(root.Length + 1)..];
+            return 0;
+        }
+
+        var from = Join(root, folder.Name);
+        return CopyFiles(tree, FilesOf(tree, from).ToList(), from, target, progress);
+    }
+
+    /// <summary>Copies files of the tree under <paramref name="from"/> into <paramref name="dir"/>,
+    /// skipping those already there with the same size; returns the files copied.</summary>
+    private static int CopyFiles(IDataTree tree, List<(string Path, long Size)> files, string from, string dir, Action<int, int>? progress)
+    {
+        var done = 0;
+        var copied = 0;
+        foreach (var (file, size) in files)
+        {
+            var relative = from.Length == 0 ? file : file[(from.Length + 1)..];
             var path = Path.Combine(dir, relative);
+            done++;
+            if (size != DataEntry.UnknownSize && File.Exists(path) && new FileInfo(path).Length == size)
+            {
+                progress?.Invoke(done, files.Count);
+                continue;
+            }
+
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             using (var source = tree.Open(file))
             using (var target = File.Create(path))
@@ -68,12 +106,11 @@ public sealed partial class MdkData
                 source.CopyTo(target);
             }
 
-            done++;
+            copied++;
             progress?.Invoke(done, files.Count);
         }
 
-        File.WriteAllText(stamp, "");
-        return new MdkData(dir);
+        return copied;
     }
 
     /// <summary>A finished import in <paramref name="dir"/>, or null.</summary>
@@ -107,15 +144,15 @@ public sealed partial class MdkData
         return true;
     }
 
-    /// <summary>The files under a folder of the tree, at any depth.</summary>
-    private static IEnumerable<string> FilesOf(IDataTree tree, string folder)
+    /// <summary>The files under a folder of the tree, at any depth, with their sizes.</summary>
+    private static IEnumerable<(string Path, long Size)> FilesOf(IDataTree tree, string folder)
     {
         foreach (var entry in tree.List(folder))
         {
             var path = Join(folder, entry.Name);
             if (entry.Kind == EntryKind.File)
             {
-                yield return path;
+                yield return (path, entry.Size);
                 continue;
             }
 

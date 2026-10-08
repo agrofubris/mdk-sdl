@@ -359,6 +359,16 @@ public sealed class MenuItems
             AddItem("Make HD textures", () => ShowHdTextures(() => ShowOptions(back)));
         }
 
+        // Android: pick the MDK folder again (new or changed files, HD textures made on a PC).
+        if (_ui.Import is { } import)
+        {
+            AddItem("Import from folder", () =>
+            {
+                import();
+                ShowOptions(back);
+            });
+        }
+
         AddOption(() => $"Smooth models: {OnOff(s.SmoothModels == SmoothModels.On)}",
             _ => s.SmoothModels = s.SmoothModels == SmoothModels.On ? SmoothModels.Off : SmoothModels.On);
         AddOption(() => $"Gore: {OnOff(s.Gore)}", _ => s.Gore = !s.Gore);

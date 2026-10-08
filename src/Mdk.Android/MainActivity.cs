@@ -38,10 +38,11 @@ public sealed class MainActivity : SDLActivity
     protected override void Main()
     {
         var files = GetExternalFilesDir(null)?.AbsolutePath ?? FilesDir!.AbsolutePath;
-        _setup = new DataSetup(this, Path.Combine(files, DataFolder));
+        var setup = new DataSetup(this, Path.Combine(files, DataFolder), files);
+        _setup = setup;
         try
         {
-            var data = _setup.Get();
+            var data = setup.Get();
             if (data == null)
             {
                 return;
@@ -49,7 +50,7 @@ public sealed class MainActivity : SDLActivity
 
             Environment.SetEnvironmentVariable(UserFolderVariable, files);
             var level = new ViewerOptions(DefaultLevel, null, null, 0f, SoundMode.On);
-            using var game = new Mdk.Game.Flow.Game(data, new GameOptions(Start.Menu, level) { Splash = true });
+            using var game = new Mdk.Game.Flow.Game(data, new GameOptions(Start.Menu, level) { Splash = true, Import = setup.Reimport });
             game.Run();
         }
         catch (Exception e)

@@ -65,6 +65,52 @@ public sealed class ImportTests : IDisposable
     }
 
     [Fact]
+    public void AFolderBesideTheGameIsCopiedElsewhere()
+    {
+        var tree = Installation("MDK");
+        Put("MDK/textures-hd/manifest.txt");
+        Put("MDK/textures-hd/LEVEL3/WALL_1.png");
+        var target = Path.Combine(_temp, "user", "textures-hd");
+
+        var copied = MdkData.CopyFolder(tree, "MDK", "TEXTURES-HD", target, null);
+
+        Assert.Equal(2, copied);
+        Assert.EndsWith("manifest.txt", File.ReadAllText(Path.Combine(target, "manifest.txt")));
+        Assert.True(File.Exists(Path.Combine(target, "LEVEL3", "WALL_1.png")));
+    }
+
+    [Fact]
+    public void AMissingFolderCopiesNothing()
+    {
+        var tree = Installation("MDK");
+        var target = Path.Combine(_temp, "user", "textures-hd");
+
+        Assert.Equal(0, MdkData.CopyFolder(tree, "MDK", "textures-hd", target, null));
+        Assert.False(Directory.Exists(target));
+    }
+
+    [Fact]
+    public void AnImportAgainCopiesOnlyChangedFiles()
+    {
+        var tree = Installation("MDK");
+        var target = Path.Combine(_temp, "copy");
+        var data = MdkData.Import(tree, "MDK", target, null);
+
+        // Same size: kept; another size: copied again.
+        var kept = data.PathOf("MISC/MDKFONT.FTI");
+        File.WriteAllText(kept, "MDK/MISC/MDKFONT.FTX");
+        var changed = data.PathOf("STREAM/STREAM.MTO");
+        File.WriteAllText(changed, "old");
+        var steps = new List<(int Done, int Total)>();
+
+        MdkData.Import(tree, "MDK", target, (done, total) => steps.Add((done, total)));
+
+        Assert.Equal("MDK/MISC/MDKFONT.FTX", File.ReadAllText(kept));
+        Assert.EndsWith("STREAM.MTO", File.ReadAllText(changed));
+        Assert.Equal((5, 5), steps[^1]);
+    }
+
+    [Fact]
     public void AnInterruptedCopyIsNoInstallation()
     {
         Put("copy/TRAVERSE/TRAVSPRT.BNI");
@@ -81,7 +127,7 @@ public sealed class ImportTests : IDisposable
         {
             var dir = Path.Combine(root, folder);
             var folders = Directory.GetDirectories(dir).Select(d => new DataEntry(Path.GetFileName(d), EntryKind.Folder));
-            var files = Directory.GetFiles(dir).Select(f => new DataEntry(Path.GetFileName(f), EntryKind.File));
+            var files = Directory.GetFiles(dir).Select(f => new DataEntry(Path.GetFileName(f), EntryKind.File, new FileInfo(f).Length));
             return [.. folders, .. files];
         }
 

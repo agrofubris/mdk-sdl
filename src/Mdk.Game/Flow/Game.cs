@@ -49,6 +49,9 @@ public sealed record GameOptions(Start Start, ViewerOptions Level)
     /// <summary>Measure the frames after this many seconds of game time, waiting for the GPU each
     /// frame, and print their costs at the end (--perf; tests).</summary>
     public float? Perf { get; init; }
+    /// <summary>The platform's import of the game files again (Android: the folder picked again,
+    /// HD textures made on a PC with it); null where the game reads them in place.</summary>
+    public Action? Import { get; init; }
 }
 
 /// <summary>The game: its screens one after the other, as the original's game states.
@@ -125,7 +128,7 @@ public sealed class Game : IDisposable
         }
 
         settings.Apply(_audio, _window, _renderer, _input);
-        _ui = new Ui(data, _window, _renderer, _audio, _input, settings, folder);
+        _ui = new Ui(data, _window, _renderer, _audio, _input, settings, folder) { Import = options.Import };
 
         // The developer tools draw over whatever screen presents; their font outlives the screens.
         _commands = new GameCommands(_ui, _state, () => (_screen as Viewer)?.Commands);

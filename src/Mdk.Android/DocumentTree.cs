@@ -14,6 +14,7 @@ internal sealed class DocumentTree : IDataTree
         DocumentsContract.Document.ColumnDocumentId,
         DocumentsContract.Document.ColumnDisplayName,
         DocumentsContract.Document.ColumnMimeType,
+        DocumentsContract.Document.ColumnSize,
     ];
 
     private readonly ContentResolver _resolver;
@@ -43,8 +44,9 @@ internal sealed class DocumentTree : IDataTree
             var id = cursor.GetString(0)!;
             var name = cursor.GetString(1)!;
             var kind = cursor.GetString(2) == DocumentsContract.Document.MimeTypeDir ? EntryKind.Folder : EntryKind.File;
+            var size = cursor.IsNull(3) ? DataEntry.UnknownSize : cursor.GetLong(3);
             _ids[folder.Length == 0 ? name : folder + "/" + name] = id;
-            entries.Add(new DataEntry(name, kind));
+            entries.Add(new DataEntry(name, kind, size));
         }
 
         return entries;

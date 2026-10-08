@@ -28,6 +28,8 @@ public sealed class Ui(MdkData data, Window window, Renderer renderer, AudioDevi
     public BetaDemo? Beta { get; } = BetaDemo.Find(data);
     /// <summary>The console's and the debug overlay's session: the log, timings, history.</summary>
     public DevSession Dev { get; } = new();
+    /// <summary>Imports the game files again (Android); null elsewhere.</summary>
+    public Action? Import { get; init; }
 
     /// <summary>The settings changed: applied, and saved.</summary>
     public void ApplySettings()
