@@ -346,9 +346,19 @@ public sealed class MenuItems
             step => s.AntiAliasing = (AntiAliasing)Wrap((int)s.AntiAliasing + step, AntiAliasingNames.Length));
         AddOption(() => $"Difficulty: {DifficultyNames[(int)s.Difficulty]}", step => s.Difficulty = (Difficulty)Wrap((int)s.Difficulty + step, DifficultyNames.Length));
         AddOption(() => $"Graphics: {s.Graphics}", step => s.Graphics = (Graphics)Wrap((int)s.Graphics + step, GraphicsCount));
-        AddOption(() => $"HD textures: {OnOff(s.Textures == TextureSet.Hd)}",
-            _ => s.Textures = s.Textures == TextureSet.Hd ? TextureSet.Original : TextureSet.Hd);
-        AddItem("Make HD textures", () => ShowHdTextures(() => ShowOptions(back)));
+        // Android shows the switch only for a cache copied from a PC, and never makes one.
+        var hd = HdMenu.Items(HdMenu.Current, _ui.UserFolder);
+        if (hd.Contains(HdItem.Switch))
+        {
+            AddOption(() => $"HD textures: {OnOff(s.Textures == TextureSet.Hd)}",
+                _ => s.Textures = s.Textures == TextureSet.Hd ? TextureSet.Original : TextureSet.Hd);
+        }
+
+        if (hd.Contains(HdItem.Make))
+        {
+            AddItem("Make HD textures", () => ShowHdTextures(() => ShowOptions(back)));
+        }
+
         AddOption(() => $"Smooth models: {OnOff(s.SmoothModels == SmoothModels.On)}",
             _ => s.SmoothModels = s.SmoothModels == SmoothModels.On ? SmoothModels.Off : SmoothModels.On);
         AddOption(() => $"Gore: {OnOff(s.Gore)}", _ => s.Gore = !s.Gore);

@@ -411,6 +411,13 @@ public sealed class Game : IDisposable
     /// printing the progress; returns the exit code.</summary>
     public static int UpscaleTextures(MdkData data, HdOptions options)
     {
+        // The upscaler's builds are desktop-only.
+        if (!HdMenu.CanMake(HdMenu.Current))
+        {
+            Console.Error.WriteLine("HD textures can't be made on this platform");
+            return 1;
+        }
+
         var folder = Environment.GetEnvironmentVariable(UserFolderVariable) ?? UserFolder();
         var progress = new HdProgress();
         var run = Task.Run(() => HdGenerator.Run(data, folder, options, progress, CancellationToken.None));
