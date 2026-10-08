@@ -111,8 +111,9 @@ public sealed class SniperOverlay
         _renderer = renderer;
         _colours = palette;
         _palette = paletteTexture;
-        _frame = Load(CutView(SniperScreen.Frame(sprites)), Vector2.Zero);
-        _mask = Load(SniperScreen.Mask(sprites), Vector2.Zero);
+        var mask = SniperScreen.Mask(sprites);
+        _frame = Load(CutView(SniperScreen.Frame(sprites), mask), Vector2.Zero);
+        _mask = Load(mask, Vector2.Zero);
         var cross = sprites.GetAnimation("CROSS").GetFrame(0);
         _cross = Load(cross.Image, new Vector2(cross.HotspotX, cross.HotspotY));
         _gauge = Load(sprites.GetImage("SNIP_RNG"), Vector2.Zero);
@@ -137,13 +138,25 @@ public sealed class SniperOverlay
     private Image Load(Texture texture, Vector2 hotspot) =>
         new(_renderer.CreateIndexTexture(texture.Width, texture.Height, texture.Indices), new Vector2(texture.Width, texture.Height), hotspot);
 
-    /// <summary>The frame without the view's rectangle.</summary>
-    private static Texture CutView(Texture frame)
+    /// <summary>The frame without the view's rectangle, but for its edge under the mask: filtered (the
+    /// enhanced look), the frame's and the mask's edges both fade there and would let the scene through
+    /// as a light line.</summary>
+    private static Texture CutView(Texture frame, Texture mask)
     {
         var indices = (byte[])frame.Indices.Clone();
-        for (var y = (int)View.Y; y < View.Y + SniperScreen.ViewHeight; y++)
+        var (left, top) = ((int)View.X, (int)View.Y);
+        for (var y = 0; y < SniperScreen.ViewHeight; y++)
         {
-            Array.Clear(indices, y * frame.Width + (int)View.X, SniperScreen.ViewWidth);
+            for (var x = 0; x < SniperScreen.ViewWidth; x++)
+            {
+                var edge = x == 0 || y == 0 || x == SniperScreen.ViewWidth - 1 || y == SniperScreen.ViewHeight - 1;
+                if (edge && mask.Indices[y * mask.Width + x] != 0)
+                {
+                    continue;
+                }
+
+                indices[(top + y) * frame.Width + left + x] = 0;
+            }
         }
 
         return new Texture { Name = frame.Name, Width = frame.Width, Height = frame.Height, Indices = indices };
