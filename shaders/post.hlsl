@@ -1,11 +1,12 @@
 // The enhanced look's post-processing, over the lit scene: the ambient occlusion (occlusion.hlsl)
 // blurred over 4 x 4 pixels on the same surface, then a little glow (the scene's blurred mips,
-// screen-blended).
+// screen-blended), dithered (dither.hlsli).
 //
 //   scene (mips) --+------------- colour x occlusion --+- screen -> frame
 //   occlusion -----' 4 x 4 blur, same plane     glow --'
 
 #include "screen.hlsli"
+#include "dither.hlsli"
 
 // How far off a pixel's plane a neighbour may be, per unit of distance, and still be blurred in.
 #define SAME_SURFACE 0.02
@@ -57,5 +58,5 @@ float4 ps_main(VertexOut input) : SV_Target
         + scene_texture.SampleLevel(scene_sampler, uv, glow.w + 2.0).rgb) * 0.5);
     float3 shine = saturate((blurred * glow.x + max(blurred - glow.y, 0.0)) * glow.z);
     colour = 1.0 - (1.0 - colour) * (1.0 - shine);
-    return float4(to_srgb(colour), 1.0);
+    return float4(dither(to_srgb(colour), input.position.xy), 1.0);
 }

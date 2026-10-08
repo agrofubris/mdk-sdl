@@ -10,11 +10,13 @@
 //   mode 3 canvas: the 2D canvas: albedo, its edges blended by their cover
 //
 // Point lights (muzzle flashes, explosions, fires; PointLights.cs) fade with (1 - d^2 / r^2)^2.
-// Light is added in linear colour (the palette is sRGB). Normals are flat: the triangle's plane,
-// from the world position's screen derivatives, turned to the camera.
+// Light is added in linear colour (the palette is sRGB), on the colour textures: smooth, no palette
+// steps; the result is dithered (dither.hlsli) so 8 bits don't band it. Normals are flat: the
+// triangle's plane, from the world position's screen derivatives, turned to the camera.
 // SDL_GPU register spaces: vertex uniforms space1, fragment resources space2, fragment uniforms space3.
 
 #include "bindings.hlsli"
+#include "dither.hlsli"
 
 #define MODE_LIT 1
 #define MODE_SPRITE 2
@@ -213,5 +215,5 @@ float4 ps_main(VertexOut input) : SV_Target
     }
 
     float fog = 1.0 - exp(-haze.a * length(position - camera.xyz));
-    return float4(to_srgb(lerp(lit, to_linear(haze.rgb), fog)), colour.a);
+    return float4(dither(to_srgb(lerp(lit, to_linear(haze.rgb), fog)), input.position.xy), colour.a);
 }
