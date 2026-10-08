@@ -500,7 +500,7 @@ public sealed class Items(ScriptRuntime runtime, Bni sprites)
             var direction = Heading(runtime.KurtPosition, runtime.GetWorldBounds(other).Center());
             if (other.Health < ScriptRuntime.Indestructible)
             {
-                other.Health -= runtime.KurtDamage(MortarDamage, other.Health);
+                other.Health -= runtime.KurtDamage(other, MortarDamage);
             }
 
             other.HitEvent = -1;
@@ -655,7 +655,7 @@ public sealed class Items(ScriptRuntime runtime, Bni sprites)
             var direction = Heading(center, point);
             if (obj.Health < ScriptRuntime.Indestructible)
             {
-                obj.Health -= BlastHit(best, obj.Health, kills);
+                obj.Health -= kills == Kills.Counted ? runtime.KurtDamage(obj, best) : best;
             }
 
             obj.HitEvent = hitEvent == 0 ? BlastEvent : hitEvent;

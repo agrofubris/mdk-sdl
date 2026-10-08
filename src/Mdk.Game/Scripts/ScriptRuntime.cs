@@ -949,6 +949,7 @@ public sealed partial class ScriptRuntime
         UpdateSniperTarget();
 
         // Only the objects of Kurt's arena and of the active second arena are updated (0x43c7dc).
+        HoldOneHits();
         using var objects = ListCopy<MdkObject>.Of(Objects);
         foreach (var obj in objects)
         {
@@ -975,6 +976,8 @@ public sealed partial class ScriptRuntime
                 Kurt.Carry(position, obj.Position, obj.Yaw - yaw);
             }
         }
+
+        EndOneHits();
 
         // Then the arenas' own scripts (game_frame: 0x43c7dc, then 0x440bc8). E.g. MEAT_5's
         // arena_show NONE drops CMEAT_4 only after the ridden board there followed Kurt in.
@@ -2091,7 +2094,7 @@ public sealed partial class ScriptRuntime
 
         if (obj.Health < Indestructible)
         {
-            obj.Health -= KurtDamage(damage, obj.Health);
+            obj.Health -= KurtDamage(obj, damage);
         }
 
         obj.HitType = superGun ? -2 : -1;

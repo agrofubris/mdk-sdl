@@ -115,7 +115,7 @@ public sealed class Twister(ScriptRuntime runtime, string arena, Vector3 origin,
             var direction = Heading(runtime.KurtPosition, bounds.Center());
             if (obj.Health < ScriptRuntime.Indestructible)
             {
-                obj.Health -= runtime.KurtDamage(Damage, obj.Health);
+                obj.Health -= runtime.KurtDamage(obj, Damage);
             }
 
             obj.HitEvent = HitEvent;

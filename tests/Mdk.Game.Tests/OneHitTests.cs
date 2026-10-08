@@ -9,7 +9,8 @@ using Mdk.Game.Scripts;
 
 namespace Mdk.Game.Tests;
 
-/// <summary>The console's onehit: Kurt's hits kill at once; damage to Kurt is unchanged.</summary>
+/// <summary>The console's onehit: Kurt's hits kill, once the target's script has run; damage to
+/// Kurt is unchanged.</summary>
 public class OneHitTests
 {
     private const int Level = 3;
@@ -66,7 +67,9 @@ public class OneHitTests
         var grunt = FaceGrunt(runtime);
         runtime.Lethality = Lethality.OneHit;
 
+        // It dies once its script has run without giving health back.
         runtime.FireChainGun();
+        runtime.Update(Tick);
 
         Assert.Equal(0, grunt.Health);
     }

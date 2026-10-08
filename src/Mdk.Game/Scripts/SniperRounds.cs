@@ -619,7 +619,7 @@ public sealed class SniperRounds(ScriptRuntime runtime)
 
         if (obj.Health < Unhurt)
         {
-            obj.Health -= runtime.KurtDamage(Damage, obj.Health);
+            obj.Health -= runtime.KurtDamage(obj, Damage);
         }
 
         if (obj.Health > 0)
