@@ -1,6 +1,6 @@
 # MDK in C# and SDL3
 
-![Status: alpha](https://img.shields.io/badge/status-alpha-orange)
+![Status: beta](https://img.shields.io/badge/status-beta-yellow)
 ![Progress: about 92%](https://img.shields.io/badge/progress-~92%25-yellowgreen)
 [![Release](https://img.shields.io/github/v/release/nemo22/mdk-sdl?include_prereleases)](https://github.com/nemo22/mdk-sdl/releases)
 ![.NET 10](https://img.shields.io/badge/.NET-10-512bd4?logo=dotnet&logoColor=white)
@@ -55,7 +55,7 @@ Original | enhanced | enhanced with the HD textures mod (click for full size).
 
 ## Status
 
-**Alpha.** Every level loads, Kurt walks it and the level scripts run:
+**Beta.** The whole game can be played through and has been playtested level by level; please report bugs (with the console's `pos` output). Every level loads, Kurt walks it and the level scripts run:
 aliens spawn, walk and fly their paths, doors open, pickups fall on their chutes. Kurt fires his
 chain gun, throws his items, gets hurt, knocked down and dies, and the HUD shows his health,
 inventory, messages and the target's health bar. Aliens blow up into pieces, sparks fly, slime
