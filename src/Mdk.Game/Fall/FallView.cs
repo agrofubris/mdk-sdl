@@ -183,7 +183,7 @@ public sealed class FallView
         var view = Matrix4x4.CreateLookAt(camera, camera - Vector3.UnitZ, Vector3.UnitY);
         var fieldOfView = 2f * MathF.Atan(ViewCentreY / Focal);
         var projection = Matrix4x4.CreatePerspectiveFieldOfView(fieldOfView, _renderer.AspectRatio, Near, Far);
-        return new View(view * projection, Matrix4x4.Identity, camera);
+        return new View(view * projection, Matrix4x4.Identity, camera, new ViewCamera(-Vector3.UnitZ, Vector3.UnitY, projection, Near));
     }
 
     /// <summary>The effects over everything: towards white in the intro, then darkened.</summary>

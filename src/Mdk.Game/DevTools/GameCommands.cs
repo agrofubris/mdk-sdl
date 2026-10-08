@@ -106,6 +106,22 @@ public sealed class GameCommands(Ui ui, GameState state, Func<ILevelTarget?> lev
         ui.ApplySettings();
     }
 
+    public void SetStereo(Stereo stereo, float? separation, float? convergence)
+    {
+        ui.Settings.Stereo = stereo;
+        if (separation is { } apart)
+        {
+            ui.Settings.StereoSeparation = Math.Clamp(apart, 0f, StereoModes.MaxSeparation);
+        }
+
+        if (convergence is { } distance)
+        {
+            ui.Settings.StereoConvergence = Math.Clamp(distance, 0f, StereoModes.MaxConvergence);
+        }
+
+        ui.ApplySettings();
+    }
+
     public void SetTimeScale(float scale) => TimeScale = scale;
 
     public Switch ToggleOverlay() => ui.Dev.ToggleOverlay();

@@ -77,9 +77,44 @@ public sealed record Panorama(int Sky, int MirrorSky, int Palette, float WrapWid
 /// colour, or the last frame kept.</summary>
 public enum Backdrop { Sky, Clear, Keep }
 
+/// <summary>A view's camera: what a stereo eye is built from (the projection is shifted off-centre
+/// for convergence).</summary>
+public readonly record struct ViewCamera(Vector3 Forward, Vector3 Up, Matrix4x4 Projection, float Near);
+
 /// <summary>The camera: its view-projection, the inverse of its rotation and projection (clip space
 /// to world directions, for the sky), and its position.</summary>
-public readonly record struct View(Matrix4x4 ViewProjection, Matrix4x4 ClipToDirection, Vector3 Position);
+public readonly record struct View(Matrix4x4 ViewProjection, Matrix4x4 ClipToDirection, Vector3 Position, ViewCamera? Camera = null)
+{
+    /// <summary>The view from an eye <paramref name="side"/> (−1 the left, +1 the right; 0 the view
+    /// itself): the eyes are <paramref name="separation"/> apart, parallel, and their images converge
+    /// at <paramref name="convergence"/> (0 or less: at infinity). A view without a camera (the 2D
+    /// screens) stays as it is.</summary>
+    public View Eye(float side, float separation, float convergence)
+    {
+        if (Camera is not { } camera || side == 0f)
+        {
+            return this;
+        }
+
+        var right = Vector3.Normalize(Vector3.Cross(camera.Forward, camera.Up));
+        var position = Position + right * (side * separation * 0.5f);
+        var view = Matrix4x4.CreateLookAt(position, position + camera.Forward, camera.Up);
+        var projection = camera.Projection;
+        if (convergence > 0f)
+        {
+            // Shifts the frustum sideways so the eyes' rays meet at the convergence distance
+            // (the same off-centre projection the scope uses).
+            var shift = -side * separation * camera.Near / (2f * convergence);
+            projection.M31 += shift * projection.M11 / camera.Near;
+        }
+
+        // The sky's rays follow the eye's frustum too: its panorama stays at infinity (the eyes'
+        // directions at a pixel differ as a camera axis' would, not as a finite surface's).
+        var rotation = Matrix4x4.CreateLookAt(Vector3.Zero, camera.Forward, camera.Up);
+        Matrix4x4.Invert(rotation * projection, out var clipToDirection);
+        return new View(view * projection, clipToDirection, position, camera);
+    }
+}
 
 /// <summary>What the last frame drew: its GPU draw calls and triangles (lines count none), and the
 /// milliseconds it waited for the GPU (the swapchain: earlier frames, the display's refresh; with
@@ -783,7 +818,21 @@ public sealed unsafe partial class Renderer : IDisposable
         PrepareColours(commands);
         (_drawCalls, _triangles) = (0, 0);
         PushLights(commands, view);
-        RenderScene(commands, view, clearColour);
+        _eyeSide = 0f;
+        if (StereoMode != Stereo.Off && _eyes[0] != null)
+        {
+            // Each eye's whole frame, then the two into the frame (side by side or interlaced).
+            RenderEye(commands, view, clearColour, 0, -1f);
+            RenderEye(commands, view, clearColour, 1, +1f);
+            CompositeStereo(commands);
+            _frame = _target;
+        }
+        else
+        {
+            _frame = _target;
+            RenderScene(commands, view, clearColour);
+        }
+
         if (swapchain != null)
         {
             Blit(commands, swapchain, width, height);
@@ -938,7 +987,7 @@ public sealed unsafe partial class Renderer : IDisposable
             return;
         }
 
-        var colourTarget = SceneColour(_target, clearColour);
+        var colourTarget = SceneColour(_frame, clearColour);
         var depthTarget = SceneDepth();
         var pass = SDL_BeginGPURenderPass(commands, &colourTarget, 1, &depthTarget);
         _passSamples = _samples;
@@ -1099,7 +1148,8 @@ public sealed unsafe partial class Renderer : IDisposable
     private void EnsureTargets(uint width, uint height)
     {
         var samples = SupportedSamples();
-        if (_target != null && width == _targetWidth && height == _targetHeight && samples == _samples)
+        if (_target != null && width == _targetWidth && height == _targetHeight && samples == _samples
+            && (StereoMode != Stereo.Off) == (_eyes[0] != null))
         {
             return;
         }
@@ -1117,6 +1167,7 @@ public sealed unsafe partial class Renderer : IDisposable
         _targetHeight = height;
         _samples = samples;
         CreateMultisampled(width, height);
+        EnsureEyes();
     }
 
     private SDL_GPUTexture* CreateTexture(SDL_GPUTextureFormat format, uint width, uint height, SDL_GPUTextureUsageFlags usage,

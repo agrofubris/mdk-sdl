@@ -80,6 +80,11 @@ public class ConsoleCommandsTests
         Assert.Equal(Graphics.Enhanced, _game.Look);
         Run("aa 4x");
         Assert.Equal(AntiAliasing.X4, _game.AntiAliasing);
+        Assert.Equal("stereo intr", Run("stereo intr"));
+        Assert.Equal(Stereo.InterlacedReversed, _game.Stereo);
+        Run("stereo sbs 0.5 6");
+        Assert.Equal((Stereo.Sbs, 0.5f, 6f), (_game.Stereo, _game.StereoSeparation, _game.StereoConvergence));
+        Assert.StartsWith("Usage", Run("stereo sideways"));
         Run("timescale 0.5");
         Assert.Equal(0.5f, _game.TimeScale);
         Assert.StartsWith("Usage", Run("timescale -1"));
@@ -227,6 +232,17 @@ public class ConsoleCommandsTests
         }
 
         public void SetAntiAliasing(AntiAliasing antiAliasing) => AntiAliasing = antiAliasing;
+
+        public Stereo Stereo;
+        public float? StereoSeparation;
+        public float? StereoConvergence;
+
+        public void SetStereo(Stereo stereo, float? separation, float? convergence)
+        {
+            Stereo = stereo;
+            StereoSeparation = separation;
+            StereoConvergence = convergence;
+        }
 
         public void SetTimeScale(float scale) => TimeScale = scale;
 

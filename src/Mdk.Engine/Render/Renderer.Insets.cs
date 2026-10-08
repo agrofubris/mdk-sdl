@@ -103,9 +103,10 @@ public sealed unsafe partial class Renderer
         SDL_SetGPUScissor(pass, &scissor);
 
         var scene = inset.Content == InsetContent.Scene;
+        var view = _eyeSide == 0f ? inset.View : inset.View.Eye(_eyeSide, StereoSeparation, StereoConvergence);
         if (scene && Panorama != null)
         {
-            DrawSky(commands, pass, inset.View, Panorama);
+            DrawSky(commands, pass, view, Panorama);
         }
 
         var source = scene ? _commands : inset.Commands;
@@ -113,7 +114,7 @@ public sealed unsafe partial class Renderer
         {
             if (order != Pass.Overlay)
             {
-                DrawPass(commands, pass, source, order, inset.View);
+                DrawPass(commands, pass, source, order, view);
             }
         }
 
@@ -133,7 +134,7 @@ public sealed unsafe partial class Renderer
     {
         var colourTarget = new SDL_GPUColorTargetInfo
         {
-            texture = _target,
+            texture = _frame,
             load_op = SDL_GPULoadOp.SDL_GPU_LOADOP_LOAD,
             store_op = SDL_GPUStoreOp.SDL_GPU_STOREOP_STORE,
         };

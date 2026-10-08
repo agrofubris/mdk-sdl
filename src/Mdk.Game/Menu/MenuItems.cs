@@ -61,6 +61,11 @@ public sealed class MenuItems
     private const int MaxModName = 24;
     private static readonly string[] DifficultyNames = ["Easy", "Normal", "Hard"];
     private static readonly string[] AntiAliasingNames = ["Off", "2x", "4x"];
+    /// <summary>The stereo sliders: a held Left/Right waits, then steps again.</summary>
+    private const float RepeatWait = 0.4f;
+    private const float RepeatRate = 0.06f;
+    private const float SeparationStep = 0.05f;
+    private const float ConvergenceRate = 1.15f;
     private static readonly int GraphicsCount = Enum.GetValues<Graphics>().Length;
     /// <summary>The options' sounds (0x42bb6c): the <c>OPTSONG</c> loop on the music bus and
     /// <c>OPTBUTT</c> on each change.</summary>
@@ -79,6 +84,8 @@ public sealed class MenuItems
     private Key? _waiting;
     private Entry? _waitingEntry;
     private bool _armed;
+    /// <summary>The time to the next step of an option whose Left/Right is held.</summary>
+    private float _repeat;
     /// <summary>The HD textures being made, and the page's lines that follow it.</summary>
     private HdJob? _job;
     private Entry? _jobLine;
@@ -135,6 +142,7 @@ public sealed class MenuItems
         _entries.Clear();
         _selected = -1;
         _waiting = null;
+        _repeat = 0f;
     }
 
     public void AddItem(string text, Action press) => Add(new Entry(text, Kind.Item, press, null));
@@ -203,7 +211,7 @@ public sealed class MenuItems
         Layout();
         if (Visible)
         {
-            HandleInput();
+            HandleInput(delta);
         }
 
         for (var i = 0; i < _entries.Count; i++)
@@ -217,7 +225,7 @@ public sealed class MenuItems
     private static float MoveToward(float value, float target, float step) =>
         value < target ? MathF.Min(value + step, target) : MathF.Max(value - step, target);
 
-    private void HandleInput()
+    private void HandleInput(float delta)
     {
         var input = _ui.Input;
         if (_waiting != null)
@@ -270,10 +278,30 @@ public sealed class MenuItems
         if (input.WasPressed(MenuKey.Right))
         {
             selected.Change(1);
+            _repeat = RepeatWait;
         }
         else if (input.WasPressed(MenuKey.Left) || (input.WasClicked(Pointer.Right) && pointed))
         {
             selected.Change(-1);
+            _repeat = RepeatWait;
+        }
+        else
+        {
+            // Held, an option steps on (the stereo sliders: separations and distances).
+            var held = input.IsDown(MenuKey.Right) ? 1 : input.IsDown(MenuKey.Left) ? -1 : 0;
+            if (held == 0)
+            {
+                _repeat = 0f;
+            }
+            else
+            {
+                _repeat -= delta;
+                if (_repeat <= 0f)
+                {
+                    selected.Change(held);
+                    _repeat = RepeatRate;
+                }
+            }
         }
     }
 
@@ -376,7 +404,7 @@ public sealed class MenuItems
         _back = back;
         var pages = new (string Name, Action<Action> Show)[]
         {
-            ("Display", ShowDisplay), ("Graphics", ShowGraphics), ("Audio", ShowAudio),
+            ("Display", ShowDisplay), ("Graphics", ShowGraphics), ("3D Stereo", ShowStereo), ("Audio", ShowAudio),
             ("Controls", ShowControls), ("Game", ShowGame), ("Mods", ShowMods),
         };
         for (var i = 0; i < pages.Length; i++)
@@ -533,6 +561,30 @@ public sealed class MenuItems
         AddOption(() => $"Difficulty: {DifficultyNames[(int)s.Difficulty]}", step => s.Difficulty = (Difficulty)Wrap((int)s.Difficulty + step, DifficultyNames.Length));
         EndPage(back);
     }
+
+    /// <summary>The 3D stereo page: the layout of the two eyes, their separation and the distance
+    /// where their images converge (the same point on the screen in both; sliders: hold Left or
+    /// Right to step again). <see cref="Stereo"/>.</summary>
+    private void ShowStereo(Action back)
+    {
+        ClearPage();
+        var s = _ui.Settings;
+        AddOption(() => $"Mode: {StereoModes.Names[(int)s.Stereo]}",
+            step => s.Stereo = (Stereo)Wrap((int)s.Stereo + step, StereoModes.Names.Length));
+        AddOption(() => string.Create(CultureInfo.InvariantCulture, $"Separation: {s.StereoSeparation:0.00}"),
+            step => s.StereoSeparation = Math.Clamp(s.StereoSeparation + step * SeparationStep, 0f, StereoModes.MaxSeparation));
+        AddOption(() => $"Convergence: {ConvergenceText(s.StereoConvergence)}",
+            step => s.StereoConvergence = ConvergenceStep(s.StereoConvergence, step));
+        EndPage(back);
+    }
+
+    /// <summary>A convergence change: each step scales the distance (they span an order of magnitude).</summary>
+    private static float ConvergenceStep(float value, int step) =>
+        Math.Clamp(step > 0 ? value * ConvergenceRate : value / ConvergenceRate, StereoModes.MinConvergence, StereoModes.MaxConvergence);
+
+    /// <summary>The convergence distance ("far" at the most: parallel rays).</summary>
+    private static string ConvergenceText(float value) => value >= StereoModes.MaxConvergence
+        ? "far" : value.ToString("0.#", CultureInfo.InvariantCulture);
 
     /// <summary>The mods found (<see cref="ModCatalog"/>), each switched on or off; the enhanced look
     /// takes them from the next level (2D images at once). Then the HD textures' maker (desktop:

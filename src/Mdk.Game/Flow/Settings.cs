@@ -66,6 +66,11 @@ public sealed class Settings
     /// <summary>The levels' look, from the next level on; the 2D screens are filtered at once.</summary>
     public Graphics Graphics = Graphics.Original;
     public AntiAliasing AntiAliasing = AntiAliasing.Off;
+    /// <summary>How the frame holds the two eyes (<see cref="Stereo"/>), the eyes' distance apart
+    /// (MDK units) and the distance their images converge at (0: infinity).</summary>
+    public Stereo Stereo = Stereo.Off;
+    public float StereoSeparation = 0.25f;
+    public float StereoConvergence = 10f;
     /// <summary>Rebound actions: action → key or mouse button name (see <see cref="Input.Bind"/>).</summary>
     public readonly Dictionary<Key, string> Bindings = [];
     /// <summary>Mods by folder; those not listed are on (<see cref="ModCatalog"/>).</summary>
@@ -135,6 +140,9 @@ public sealed class Settings
             $"gore={Gore}",
             $"graphics={Graphics}",
             $"antialiasing={AntiAliasing}",
+            $"stereo={Stereo}",
+            $"stereo_separation={StereoSeparation.ToString(CultureInfo.InvariantCulture)}",
+            $"stereo_convergence={StereoConvergence.ToString(CultureInfo.InvariantCulture)}",
             $"upscaler_url={UpscalerUrl}",
             $"upscaler_sha256={UpscalerSha256}",
         };
@@ -222,6 +230,17 @@ public sealed class Settings
             case "antialiasing":
                 AntiAliasing = Enum.TryParse<AntiAliasing>(value, out var antiAliasing) && Enum.IsDefined(antiAliasing) ? antiAliasing : AntiAliasing;
                 break;
+            case "stereo":
+                Stereo = Enum.TryParse<Stereo>(value, out var stereo) && Enum.IsDefined(stereo) ? stereo : Stereo;
+                break;
+            case "stereo_separation":
+                StereoSeparation = float.TryParse(value, CultureInfo.InvariantCulture, out var separation)
+                    ? Math.Clamp(separation, 0f, StereoModes.MaxSeparation) : StereoSeparation;
+                break;
+            case "stereo_convergence":
+                StereoConvergence = float.TryParse(value, CultureInfo.InvariantCulture, out var convergence)
+                    ? Math.Clamp(convergence, 0f, StereoModes.MaxConvergence) : StereoConvergence;
+                break;
             case "upscaler_url":
                 UpscalerUrl = value;
                 break;
@@ -242,6 +261,9 @@ public sealed class Settings
     public void Apply(AudioDevice audio, Window window, Renderer renderer, Input input)
     {
         renderer.AntiAliasing = AntiAliasing;
+        renderer.StereoMode = Stereo;
+        renderer.StereoSeparation = StereoSeparation;
+        renderer.StereoConvergence = StereoConvergence;
         renderer.CanvasSampling = Graphics == Graphics.Enhanced ? Sampling.Linear : Sampling.Nearest;
         audio.MasterGain = Gain(MasterVolume);
         audio.SetBusGain(Bus.Music, Gain(MusicVolume));
