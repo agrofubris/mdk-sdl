@@ -1,9 +1,12 @@
 # MDK in C# and SDL3
 
-![Status: work in progress](https://img.shields.io/badge/status-work%20in%20progress-orange)
-![Progress: about 78%](https://img.shields.io/badge/progress-~78%25-yellow)
+![Status: alpha](https://img.shields.io/badge/status-alpha-orange)
+![Progress: about 92%](https://img.shields.io/badge/progress-~92%25-yellowgreen)
+[![Release](https://img.shields.io/github/v/release/nemo22/mdk-sdl?include_prereleases)](https://github.com/nemo22/mdk-sdl/releases)
 ![.NET 10](https://img.shields.io/badge/.NET-10-512bd4?logo=dotnet&logoColor=white)
 ![SDL3](https://img.shields.io/badge/SDL-3-blue)
+
+![Level 3 in the enhanced look with HD textures](docs/media/gameplay.gif)
 
 A port of [MDK](https://en.wikipedia.org/wiki/MDK_(video_game)) (Shiny Entertainment, 1997) to
 C# on [SDL3](https://libsdl.org/). It's the successor of the Godot port
@@ -18,7 +21,37 @@ original's box sweeps.
 > copy of the original game (available for example on GOG). Without the original game data the
 > port won't run.
 
-**Status: work in progress, not yet played through.** Every level loads, Kurt walks it and the level scripts run:
+## Features
+
+- **The whole game**: every level, the fall before it and the stream after it, rides, menus,
+  briefings, statistics, saves, the end movies. Plays like the original (its BSP collisions,
+  scripts and sound laws, reverse engineered).
+- **HD textures (optional)**: Options, "Make HD textures" upscales the game's textures 2x with the
+  AI upscaler [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN), locally on your GPU, from your
+  copy of the game. Nothing upscaled is distributed. [Details](#hd-textures).
+- **Enhanced look (optional)**: filtered textures, each level lit from its sky (sun and shadows
+  outdoors), dynamic lights of muzzle flashes, explosions and fires, ambient occlusion, glow, haze,
+  smooth models, anti-aliasing. The original look stays pixel-exact.
+- **Windows, Linux, macOS and Android** (touch controls; [notes](#android)).
+- Quick save and load (F2, F9), a developer console and overlay, cheats.
+
+[Downloads](https://github.com/nemo22/mdk-sdl/releases): `mdk-win-x64.zip`, `mdk-linux-x64.tar.gz`,
+`mdk-osx-arm64.zip`, `mdk-android.apk`. They need the original game's data (GOG, Steam or CD;
+[below](#running)).
+
+## Screenshots
+
+Original | enhanced | enhanced with HD textures and smooth models (click for full size).
+
+![Level 3, the canyon](docs/media/level3-canyon.jpg)
+![Level 4, the snow](docs/media/level4-snow.jpg)
+![Level 7, outdoors](docs/media/level7-outdoor.jpg)
+![Level 3, inside](docs/media/level3-interior.jpg)
+![Level 6, a corridor](docs/media/level6-interior.jpg)
+
+## Status
+
+**Alpha.** Every level loads, Kurt walks it and the level scripts run:
 aliens spawn, walk and fly their paths, doors open, pickups fall on their chutes. Kurt fires his
 chain gun, throws his items, gets hurt, knocked down and dies, and the HUD shows his health,
 inventory, messages and the target's health bar. Aliens blow up into pieces, sparks fly, slime
@@ -44,7 +77,7 @@ occlusion, a little glow and a haze, shades the models smoothly (hard edges kept
 models" also rounds them), and can draw AI-upscaled textures made from your copy of the
 game ([HD textures](#hd-textures)); anti-aliasing smooths the edges. The three
 levels of the 1996 beta demo play as extras ([below](#the-1996-beta-demo)). The game can be played
-through; the [Godot port](https://github.com/nemo22/mdk-godot) gets the same fixes.
+through. The [Godot port](https://github.com/nemo22/mdk-godot) is no longer developed.
 
 ## Progress
 
@@ -52,7 +85,7 @@ through; the [Godot port](https://github.com/nemo22/mdk-godot) gets the same fix
 | --- | --- |
 | Data formats: levels, textures, models, sprites, sounds, fonts, scripts, videos | █████████░ 95% |
 | Rendering: arenas, glass, sky, mirrors, Kurt's sprite, effects | █████████░ 95% |
-| Enhanced look: filtering, mipmaps, sky light and shadows, point lights, occlusion, glow, haze, smooth models, HD textures; anti-aliasing | █████████░ 85% |
+| Enhanced look: filtering, mipmaps, sky light and shadows, point lights, occlusion, glow, haze, smooth models, HD textures; anti-aliasing | █████████░ 90% |
 | Collisions: the original's BSP | █████████░ 95% |
 | Kurt: walking, turning, jumping, chute, ledges, slides, camera, damage, death | █████████░ 95% |
 | Sound mixer (the original's laws) and music | █████████░ 90% |
@@ -64,8 +97,11 @@ through; the [Godot port](https://github.com/nemo22/mdk-godot) gets the same fix
 | Videos: the menu's FLC and slideshow, the end movies | █████████░ 90% |
 | Dev tools: console, F3 overlay, cheats, quick save/load | █████████░ 90% |
 | Playtesting and bug fixing (every level played through) | ████████░░ 80% |
-| Android: APK, data import, touch controls (emulator only, no phone yet) | ██████░░░░ 60% |
-| **Overall** | **about 90%** |
+| Android: APK, data import, touch controls (runs on a phone; controls to tune) | ███████░░░ 75% |
+| **Overall** | **about 92%** |
+
+Recently added: the Android app, HD textures, per-level sky light and shadows, dynamic lights,
+smooth models, the icon.
 
 The plan is in [docs/architecture.md](docs/architecture.md#roadmap).
 
@@ -133,7 +169,8 @@ mdk.exe
   too when it starts in the menus), 0.1 s a frame; in a level Kurt is healed and problems print
   as `Soak problem` (`--tour`: every arena in turn during `--wait`, doors shut before each teleport).
   `--press=QuickSave@1,Menu.Accept@1.5`: presses game keys, or menu keys after `Menu.`, once at
-  those times.
+  those times. `--frames=dir,count[,every]`: after `--wait`, saves every Nth frame of a level (4:
+  15 a second) as `frame000.bmp`..., then quits (the animation above).
 
 Settings (volumes, music filter, mouse, fullscreen, anti-aliasing, difficulty, graphics, gore, HD
 textures, key bindings) and saved games
@@ -188,6 +225,8 @@ only; the original look is unchanged).
 - x4plus sharpens edges, cracks and painted shapes, but smooths fine grain away (lava, noisy
   floors); animevideov3 keeps more grain, with more ringing. Judge for yourself.
 - Nothing from the game is in this repository or its releases: the images stay on your computer.
+- Not made on Android (the upscaler is desktop-only): make them on a PC and copy `textures-hd`
+  into the phone's MDK folder ([below](#android)).
 
 ### Console and debug overlay
 
@@ -240,15 +279,23 @@ aren't in it: copy your MDK folder (the one with `TRAVERSE`, `MISC`, `FALL3D`, `
 phone, e.g. into `Download/MDK`. On first start the app asks for that folder (Android's folder
 picker; `Download` itself can't be picked, a folder in it can) and copies its game files (about
 170 MB) into its own folder, `Android/data/io.github.nemo22.mdk/files/mdk`, once. Settings and
-saves live next to it, in `files`. To pick another folder, clear the app's storage.
+saves live next to it, in `files`.
+
+HD textures: make them on a PC ([above](#hd-textures)), copy the `textures-hd` folder (next to
+`mdk.exe`) into the phone's MDK folder, then Options, "Import from folder" and pick it again: new
+or changed files are copied, `textures-hd` too. Options then shows "HD textures: On/Off"
+(enhanced look).
 
 Touch controls in play: the left part of the screen is a stick where the finger lands (walk,
 strafe; far pushes run), dragging elsewhere looks around, buttons on the right fire, jump, use
 the item, pick the next item, toggle sniper mode and zoom (+ / -), and pause (top right). Menus
 take taps; Android's back button is Esc. A keyboard works as on the desktop.
 
-Not yet: game controllers, typing save names (no on-screen keyboard), the console. Only tested on the Android
-emulator (Vulkan through the host's GPU), not yet on a phone.
+Not yet: game controllers, typing save names (no on-screen keyboard), the console. Tested on the
+Android emulator and one phone.
+
+The APK is signed with a debug key until a release key is set: to update, uninstall the old one
+first (that deletes its copy of the game files and the saves; the first start imports again).
 
 Building it needs the Android workload (`dotnet workload install android`), JDK 21 and the
 Android SDK's API 36 platform, and SPIR-V shaders (`-p:DxcSpirv=...`):

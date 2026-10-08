@@ -179,5 +179,8 @@ jobs:
           path: dist
           merge-multiple: true
 
+      # A tag with a suffix (v0.9.0-alpha) is a prerelease.
       - name: Release
-        run: gh release create "$GITHUB_REF_NAME" dist/* -R "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes
+        run: |
+          PRE=$(case "$GITHUB_REF_NAME" in *-*) echo --prerelease;; esac)
+          gh release create "$GITHUB_REF_NAME" dist/* -R "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes $PRE
