@@ -9,7 +9,7 @@ opcodes). Requires the original game data.
 Each layer talks only to the one below it.
 
 ```
- Mdk.App      command line ──► Game.Run, Game.UpscaleTextures
+ Mdk.App      command line ──► Game.Run, Game.UpscaleTextures, Game.ExportAssets
  Mdk.Android  SDLActivity, first start: folder picker ──► MdkData.Import ──► Game.Run
     │
  Mdk.Game     Flow: Game (screens), GameState, Settings, SaveGames, LevelFlow
@@ -18,8 +18,9 @@ Each layer talks only to the one below it.
     │         Fall: the fall before a level (FallSim, FallView, FallHud)
     │         Viewer (a level): level, camera, collision (BSP), sound mixer, scripts and objects, Kurt
     │         DevTools: the console, its commands, the debug overlay
-    │         HdTextures: the enhanced look's upscaled textures (export, cache, generator)
-    │   └──────────────► Mdk.Formats  (parsers: DTI, MTO, MTI, SNI, FTI, BNI, models, PNG; the 1996 demo's)
+    │         HdTextures: the enhanced look's upscaled textures (export, generator: a mod)
+    │         Mods: mods/ (catalogue, images, models from glTF, the exports)
+    │   └──────────────► Mdk.Formats  (parsers: DTI, MTO, MTI, SNI, FTI, BNI, models, PNG, glTF binary; the 1996 demo's)
  Mdk.Engine   Render (Renderer: meshes, index textures, palettes, panorama)
     │         Audio (AudioDevice: software mixer of voices, music and effects buses, streamed voices, master limiter)
     │         Platform (Window and its icon, Input: game keys (rebindable), menu keys, raw keys, pointer, text, cursor, SDL3;
@@ -159,22 +160,22 @@ light, exposure, shadows, glow, haze in the colour below the sky panorama) and t
 
 ## HD textures
 
-The enhanced look's textures upscaled by Real-ESRGAN, made on the player's computer from the game's
-files (`HdTextures/`), never distributed. The tool is the engine's (`Upscale/RealEsrgan.cs`:
-download, SHA-256, process); the game decides what and how.
+The enhanced look's textures and 2D images upscaled by Real-ESRGAN, made on the player's computer
+from the game's files (`HdTextures/`) into a mod (`mods/hd-textures/`, priority -100; see Mods),
+never distributed. The tool is the engine's (`Upscale/RealEsrgan.cs`: download, SHA-256, process);
+the game decides what and how.
 
 ```
  make (HdGenerator: --upscale-textures, Options "Make HD textures" via HdJob)
  ───────────────────────────────────────────────────────────────────────────
  LevelData, CMI ─► TextureExport (arenas, corridors, models × arena palettes) ─► HdSource (key = HdKey)
- TRAVSPRT.BNI, level SNI ─► TextureExport.Kurt (Kurt's frames × the level's palette, soft alpha) ─┘
+ TRAVSPRT.BNI, level SNI ─► TextureExport.Kurt (Kurt's frames × the level's palette, soft alpha) ─┤
+ CanvasExport (the HUD × level palette; menus, loading screens, falls' HUD; no fonts) ────────────┘
    ─► UpscaleImages.Input (bleed, wrap 8) ─► PNG ─► realesrgan-ncnn-vulkan (x4plus 4x | animevideov3 2x)
-   ─► UpscaleImages.Output (crop, box to 2x, the source's alpha: hard, soft for sprites) ─► textures-hd/LEVELn/*.png + manifest.txt
+   ─► UpscaleImages.Output (crop, box to 2x, the source's alpha: hard, soft for sprites and 2D)
+   ─► mods/hd-textures/{textures,images}/LEVELn/NAME@key.png + manifest.txt + mod.txt
 
- use (Viewer, enhanced look, settings textures=Hd)
- ─────────────────────────────────────────────────
- HdCache.Open (the level's images decoded on every core) ─► MaterialResolver (Lit textures, once per
-   texture × palette) ─► HdCache.Find (key, size) ─► Renderer.Replace ─► colour texture + mips from it
+ use: as any mod (ModImages: the key matches the texture through that palette only)
 ```
 
 - The key hashes the size, frames, indices and the colours of the used indices: arenas whose
@@ -183,7 +184,35 @@ download, SHA-256, process); the game decides what and how.
   palette change (a bullet hole) drops it and expands the original again. UVs are unchanged (same
   aspect).
 - The manifest records the format, the model and the scale; another format is ignored, another
-  model or scale makes everything again.
+  model or scale makes everything again. The loader ignores it (the generator's).
+- An older build's `textures-hd/` is moved into the mod at start (`HdGenerator.Migrate`; its
+  `textures=Hd` setting becomes `mod.hd-textures=On`).
+
+## Mods
+
+The user folder's `mods/<name>/` (`docs/modding.md`): textures, 2D images and models replacing the
+game's in the enhanced look; the original look never reads them. `Mods/`:
+
+```
+ ModCatalog (mods/: mod.txt, priority order; Settings mod.<folder>=Off; --mod)
+   ─► ModImages (a level's: textures/ and images/ by key, LEVELn/, name; PNG decoded, premultiplied)
+   │    ├─► MaterialResolver (Lit textures) ─► Renderer.Replace ─► colour texture
+   │    ├─► KurtSprite (frames ANIM_n) ─► Renderer.Replace
+   │    └─► CanvasImages (HUD, sniper, bomber, fall, stream, menus, fonts) ─► Renderer.ReplaceImage
+   └─► ModModels (models/: Glb ─► ModelSwap per model: parts by node name, glTF Y up ─► MDK Z up)
+         ─► ObjectView: replaced parts' own batches; each draw PartFit (the original part's pose as
+            one affine fit: rigid exact) moves them; collisions, hits, scripts keep the original
+ --export-assets: AssetExport (TextureExport, CanvasExport, ModelExport ─► Glb) ─► the same layout
+```
+
+- First enabled mod with a file wins; within one: `NAME@key` (exact view), `LEVELn/NAME`, `NAME`.
+- `Renderer.ReplaceImage`: a canvas image (index texture × palette) drawn from an RGBA image of any
+  size in the enhanced canvas (`MODE_IMAGE`: filtered, mipmapped, clamped: sharp at the window's
+  resolution); kept through palette changes. The original look's canvas ignores it.
+- A replaced part's images become surfaces of their own (`MaterialResolver.Image`: a 1 x 1 index
+  texture standing for the RGBA image); a material named as an original one uses it; else a flat
+  colour. Parts are shaded flat (normals ignored).
+- The console's `mods` and F3 report what a level replaced (`ModReport`).
 
 ## Loading and frames
 

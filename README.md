@@ -28,7 +28,9 @@ original's box sweeps.
   scripts and sound laws, reverse engineered).
 - **HD textures (optional)**: Options, "Make HD textures" upscales the game's textures 2x with the
   AI upscaler [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN), locally on your GPU, from your
-  copy of the game. Nothing upscaled is distributed. [Details](#hd-textures).
+  copy of the game, as a mod. Nothing upscaled is distributed. [Details](#hd-textures).
+- **Mods (optional)**: replace textures, the HUD and menus' images, fonts and models (glTF) in the
+  enhanced look; `--export-assets` writes the originals to start from. [docs/modding.md](docs/modding.md).
 - **Enhanced look (optional)**: filtered textures, each level lit from its sky (sun and shadows
   outdoors), dynamic lights of muzzle flashes, explosions and fires, ambient occlusion, glow, haze,
   anti-aliasing. The original look stays pixel-exact.
@@ -95,12 +97,13 @@ through. The [Godot port](https://github.com/nemo22/mdk-godot) is no longer deve
 | The fall and the stream between levels, rides | █████████░ 90% |
 | Videos: the menu's FLC and slideshow, the end movies | █████████░ 90% |
 | Dev tools: console, F3 overlay, cheats, quick save/load | █████████░ 90% |
+| Mods: textures, 2D images, fonts, models (glTF), export | ████████░░ 80% |
 | Playtesting and bug fixing (every level played through) | ████████░░ 80% |
 | Android: APK, data import, touch controls (runs on a phone; controls to tune) | ███████░░░ 75% |
 | **Overall** | **about 92%** |
 
-Recently added: the Android app, HD textures, per-level sky light and shadows, dynamic lights,
-the icon.
+Recently added: mods (HD textures among them), the Android app, HD textures, per-level sky light
+and shadows, dynamic lights, the icon.
 
 The plan is in [docs/architecture.md](docs/architecture.md#roadmap).
 
@@ -149,6 +152,9 @@ mdk.exe
 - `--enhanced`, `--original`: the enhanced or the original look instead of the settings' (not
   saved).
 - `--upscale-textures[=3,7]`: make the enhanced look's HD textures, then quit ([below](#hd-textures)).
+- `--export-assets=dir`: write the game's textures, 2D images (PNG) and models (glTF .glb) into
+  `dir` for modding, then quit ([docs/modding.md](docs/modding.md)).
+- `--mod=a,b`: only these mods (folders of `mods/`) for this run (not saved).
 - `--bloodyes`, `--nobloodno`: gore on or off instead of the settings' (not saved; the original's
   `-bloodyes`, `-nobloodno`).
 - Tests: `--screenshot=file.bmp` (after `--wait=seconds` of game time, then quit),
@@ -195,8 +201,9 @@ S the stream after LEVEL7, D the statistics with random counts).
 The enhanced look can draw the textures upscaled 2x by an AI upscaler, made once on your computer
 from your copy of the game: Options, "Make HD textures" (a progress page; leaving it cancels), or
 `mdk --upscale-textures` (all levels; `=3,7` only those; `--hd-model=general|anime`,
-`--hd-scale=2|4`). Then Options, "HD textures: On" uses them from the next level on (enhanced look
-only; the original look is unchanged).
+`--hd-scale=2|4`). They are a mod, `mods/hd-textures/` ([docs/modding.md](docs/modding.md)):
+Options, Mods, "HD textures (Real-ESRGAN)" switches them, from the next level on (enhanced look
+only; the original look is unchanged). Other mods override them.
 
 - Downloaded once into `tools/realesrgan/` next to the program: the portable
   [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) release v0.2.5.0
@@ -204,15 +211,18 @@ only; the original look is unchanged).
   SHA-256 checked against the one pinned in the code. Real-ESRGAN and its models: BSD 3-Clause
   (Xintao Wang); the ncnn-Vulkan executable: MIT; ncnn: BSD 3-Clause (Tencent).
 - Needs a Vulkan GPU (integrated ones work, slower). There is no CPU fallback: it would take hours.
-- Made: `textures-hd/LEVELn/<NAME>_<key>.png` and `textures-hd/manifest.txt` next to the program.
-  Each image is the texture as an arena's palette shows it, its key a hash of that (size, indices,
-  colours): a changed or other game file never gets a stale image. Run again, it keeps what is
-  still current and makes the rest.
-- Upscaled: arenas, corridors, the objects' models (each texture once per distinct palette), and
-  Kurt's sprite in the levels (407 frames, shared by all levels: 50 s, 27 MB on disk). Kept
-  original: the sky, effects' sprites, the HUD, fonts, 2D screens, the fall's and the stream's
-  Kurt (drawn in the original look); a texture a sniper round marks with a bullet hole goes back
-  to the original.
+- Made: `mods/hd-textures/textures/LEVELn/<NAME>@<key>.png` (2D images in `images/`), `mod.txt`
+  and `manifest.txt` next to the program. Each image is the texture as an arena's palette shows
+  it, its key a hash of that (size, indices, colours): a changed or other game file never gets a
+  stale image. Run again, it keeps what is still current and makes the rest. An older build's
+  `textures-hd/` is moved into the mod at start.
+- Upscaled: arenas, corridors, the objects' models (each texture once per distinct palette),
+  Kurt's sprite in the levels (407 frames, shared by all levels: 50 s, 27 MB on disk), and the 2D
+  images: the HUD, sniper mode's screen, the bomber's sight, the falls' HUD, the main menu's and
+  the loading screens' pictures (drawn at the window's resolution). Kept original: the fonts
+  (upscaled, they blur; a mod can replace them), the sky, effects' sprites, the statistics, the
+  fall's and the stream's 3D views; a texture a sniper round marks with a bullet hole goes back to
+  the original.
 - Cut-outs keep hard edges: the upscaler gets the colour only (clear texels filled with their
   neighbours' colour, the frame wrapped around by 8 texels so tiling textures stay seamless); the
   alpha is the original's, upscaled bilinear and cut at half cover. Kurt's frames keep that alpha
@@ -224,7 +234,7 @@ only; the original look is unchanged).
 - x4plus sharpens edges, cracks and painted shapes, but smooths fine grain away (lava, noisy
   floors); animevideov3 keeps more grain, with more ringing. Judge for yourself.
 - Nothing from the game is in this repository or its releases: the images stay on your computer.
-- Not made on Android (the upscaler is desktop-only): make them on a PC and copy `textures-hd`
+- Not made on Android (the upscaler is desktop-only): make them on a PC and copy `mods`
   into the phone's MDK folder ([below](#android)).
 
 ### Console and debug overlay
@@ -254,6 +264,7 @@ scroll, Esc closes). The screen runs on, without the keys. Outside a level `tp`,
 | `save <slot>`, `load <slot>` | a full save (as F2), a saved game |
 | `difficulty <easy\|normal\|hard>`, `look <original\|enhanced>`, `aa <off\|2x\|4x>` | settings (saved; the look reloads the level) |
 | `timescale <x>` | game time faster or slower (0 to 10) |
+| `mods` | the mods (on/off, priority); in a level, the images and models they replaced |
 | `fps`, `help`, `clear`, `quit` | the overlay, the commands, clear the log, quit |
 
 ### The 1996 beta demo
@@ -280,10 +291,10 @@ picker; `Download` itself can't be picked, a folder in it can) and copies its ga
 170 MB) into its own folder, `Android/data/io.github.nemo22.mdk/files/mdk`, once. Settings and
 saves live next to it, in `files`.
 
-HD textures: make them on a PC ([above](#hd-textures)), copy the `textures-hd` folder (next to
+Mods and HD textures: make them on a PC ([above](#hd-textures)), copy the `mods` folder (next to
 `mdk.exe`) into the phone's MDK folder, then Options, "Import from folder" and pick it again: new
-or changed files are copied, `textures-hd` too. Options then shows "HD textures: On/Off"
-(enhanced look).
+or changed files are copied, `mods` too (an older `textures-hd` becomes the HD textures mod).
+Options, Mods then switches them (enhanced look).
 
 Touch controls in play: the left part of the screen is a stick where the finger lands (walk,
 strafe; far pushes run), dragging elsewhere looks around, buttons on the right fire, jump, use
@@ -366,6 +377,7 @@ sh tests/visuals_test.sh
 sh tests/enhanced_test.sh
 sh tests/beta_test.sh
 sh tests/console_test.sh
+sh tests/mods_test.sh
 sh tests/alloc_test.sh
 sh tests/soak_test.sh short
 ```
@@ -373,8 +385,8 @@ sh tests/soak_test.sh short
 `tests/soak_test.sh` (about 3 minutes with `short`, 15 without) plays every level, arena, fall,
 stream and menu with random keys and reports exceptions, hangs and `Soak problem` lines.
 `MDK_REFERENCE=<another build's mdk> sh tests/enhanced_test.sh` also checks that the original look
-is that build's, pixel for pixel; `MDK_HD_DIR=<a folder with textures-hd/>` that HD textures
-change the enhanced look and not the original. The upscaler itself isn't run by the tests (it
+is that build's, pixel for pixel; `MDK_HD_DIR=<a user folder with mods/hd-textures/>` that HD
+textures change the enhanced look and not the original. The upscaler itself isn't run by the tests (it
 needs the game's files and a GPU).
 `tests/beta_test.sh` and the demo's unit test are skipped without the 1996 demo.
 `tests/alloc_test.sh` plays levels hidden with `--perf[=warmup seconds]` (each frame waits for the
