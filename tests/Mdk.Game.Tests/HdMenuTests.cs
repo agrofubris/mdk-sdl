@@ -2,39 +2,20 @@ using Mdk.Game.HdTextures;
 
 namespace Mdk.Game.Tests;
 
-/// <summary>The options page's HD texture items per platform: Android can't run the upscaler, and
-/// shows the switch only for a cache copied from a PC.</summary>
-public class HdMenuTests : IDisposable
+/// <summary>The options page's HD texture items per platform: Android can't run the upscaler (it
+/// uses the mod made on a PC, switched on the Mods page).</summary>
+public class HdMenuTests
 {
-    private readonly string _folder = Directory.CreateTempSubdirectory("mdk-hdmenu-").FullName;
-
-    public void Dispose() => Directory.Delete(_folder, recursive: true);
-
-    private void AddCache()
+    [Fact]
+    public void DesktopMakes()
     {
-        var cache = HdCache.FolderIn(_folder);
-        Directory.CreateDirectory(cache);
-        new HdManifest("general", 2).Save(cache);
+        Assert.Equal([HdItem.Make], HdMenu.Items(Host.Desktop));
     }
 
     [Fact]
-    public void DesktopShowsBoth()
+    public void AndroidDoesnt()
     {
-        Assert.Equal([HdItem.Switch, HdItem.Make], HdMenu.Items(Host.Desktop, _folder));
-    }
-
-    [Fact]
-    public void AndroidHidesBothWithoutCache()
-    {
-        Assert.Empty(HdMenu.Items(Host.Android, _folder));
-    }
-
-    [Fact]
-    public void AndroidShowsSwitchWithCache()
-    {
-        AddCache();
-
-        Assert.Equal([HdItem.Switch], HdMenu.Items(Host.Android, _folder));
+        Assert.Empty(HdMenu.Items(Host.Android));
     }
 
     [Fact]

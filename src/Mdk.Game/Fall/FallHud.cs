@@ -4,6 +4,7 @@ using Mdk.Engine.Render;
 using Mdk.Formats;
 using Mdk.Game.Hud;
 using Mdk.Game.Kurt;
+using Mdk.Game.Mods;
 
 namespace Mdk.Game.Fall;
 
@@ -41,6 +42,8 @@ public sealed class FallHud
 
     private readonly Renderer _renderer;
     private readonly int _palette;
+    private readonly Palette? _colours;
+    private readonly ModImages? _mods;
     private readonly Image _panel;
     private readonly Image _skull;
     private readonly Image _digits;
@@ -49,18 +52,23 @@ public sealed class FallHud
 
     public Messages Messages { get; }
 
-    public FallHud(Renderer renderer, Bni bni, int palette, Fti fti)
+    /// <summary>The fall's HUD; <paramref name="mods"/>' images (through <paramref name="colours"/>,
+    /// the palette's colours before its effects) replace its own, named as the level's HUD's.</summary>
+    public FallHud(Renderer renderer, Bni bni, int palette, Fti fti, Palette? colours = null, ModImages? mods = null)
     {
         _renderer = renderer;
         _palette = palette;
-        _panel = Load(bni.GetImage("SC_STAT"), 0, 0);
-        _skull = Load(bni.GetImage("SKULL"), 0, 0);
-        _digits = Load(bni.GetImage("SNIP_TXT"), 0, 0);
+        _colours = colours;
+        _mods = mods;
+        var images = HudView.Images(bni).ToList();
+        _panel = Load(images[0], 0, 0);
+        _skull = Load(images[1], 0, 0);
+        _digits = Load(images[2], 0, 0);
         var pickups = bni.GetAnimation("PICKUPS");
         for (var i = 0; i < pickups.FrameCount; i++)
         {
             var frame = pickups.GetFrame(i);
-            _icons.Add(Load(frame.Image, frame.HotspotX, frame.HotspotY));
+            _icons.Add(Load(images[HudFirstIcon + i], frame.HotspotX, frame.HotspotY));
         }
 
         // The fonts use the fall's palette and its effects (fall.gd).
@@ -69,8 +77,20 @@ public sealed class FallHud
         Messages = new Messages(fti, big, small);
     }
 
-    private Image Load(Texture texture, int hotspotX, int hotspotY) =>
-        new(_renderer.CreateIndexTexture(texture.Width, texture.Height, texture.Indices), new Vector2(texture.Width, texture.Height), hotspotX, hotspotY);
+    /// <summary>The panel, the skull and the digits come before the icons in <see cref="HudView.Images"/>.</summary>
+    private const int HudFirstIcon = 3;
+
+    private Image Load((string Name, Texture Texture) image, int hotspotX, int hotspotY)
+    {
+        var texture = image.Texture;
+        var id = _renderer.CreateIndexTexture(texture.Width, texture.Height, texture.Indices);
+        if (_colours != null)
+        {
+            CanvasImages.Replace(_renderer, _mods, image.Name, texture, _colours, id, _palette);
+        }
+
+        return new(id, new Vector2(texture.Width, texture.Height), hotspotX, hotspotY);
+    }
 
     /// <summary>Some ticks passed: the blink.</summary>
     public void Tick(Inventory inventory, int ticks)

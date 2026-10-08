@@ -8,6 +8,7 @@ using Mdk.Game.DevTools;
 using Mdk.Game.HdTextures;
 using Mdk.Game.Hud;
 using Mdk.Game.Menu;
+using Mdk.Game.Mods;
 
 namespace Mdk.Game.Flow;
 
@@ -46,6 +47,8 @@ public sealed record GameOptions(Start Start, ViewerOptions Level)
     public bool? Gore { get; init; }
     /// <summary>Keys pressed once at given times (--press; tests).</summary>
     public TestPresses? Presses { get; init; }
+    /// <summary>Only these mods on, by folder (--mod; tests; saved only if the options change).</summary>
+    public IReadOnlyList<string>? Mods { get; init; }
     /// <summary>Measure the frames after this many seconds of game time, waiting for the GPU each
     /// frame, and print their costs at the end (--perf; tests).</summary>
     public float? Perf { get; init; }
@@ -128,14 +131,24 @@ public sealed class Game : IDisposable
         }
 
         settings.Apply(_audio, _window, _renderer, _input);
+        // Older builds' HD textures become the HD textures mod.
+        if (HdGenerator.Migrate(folder) is > 0 and var moved)
+        {
+            Console.WriteLine($"HD textures: {moved} images moved into mods/{HdGenerator.ModFolder}");
+        }
+
         _ui = new Ui(data, _window, _renderer, _audio, _input, settings, folder) { Import = options.Import };
+        if (options.Mods is { } mods)
+        {
+            UseOnly(mods);
+        }
 
         // The developer tools draw over whatever screen presents; their font outlives the screens.
         _commands = new GameCommands(_ui, _state, () => (_screen as Viewer)?.Commands);
         var registry = new CommandRegistry();
         ConsoleCommands.Register(registry, _commands);
         _dev = new DevUi(new DevConsole(registry, _ui.Dev.History, _ui.Dev.Log, Console.WriteLine), () => _ui.Dev.ToggleOverlay());
-        var small = new Fonts(_renderer, _ui.Fti).Small;
+        var small = new Fonts(_renderer, _ui.Fti, mods: _ui.CanvasMods()).Small;
         var devView = new DevUiView(_renderer, small);
         // The on-screen controls of a touch screen (Android), under the developer tools.
         var touchView = new TouchView(_renderer, small);
@@ -412,6 +425,13 @@ public sealed class Game : IDisposable
 
     /// <summary>Makes the HD textures in the user folder without a window (--upscale-textures),
     /// printing the progress; returns the exit code.</summary>
+    /// <summary>--export-assets: the game's textures, 2D images and models for modding (<see cref="AssetExport"/>).</summary>
+    public static int ExportAssets(MdkData data, string folder)
+    {
+        Console.WriteLine($"Exported to {folder}: {AssetExport.Run(data, folder)}");
+        return 0;
+    }
+
     public static int UpscaleTextures(MdkData data, HdOptions options)
     {
         // The upscaler's builds are desktop-only.
@@ -447,6 +467,17 @@ public sealed class Game : IDisposable
 
     /// <summary>Settings and saves live next to the executable (a portable install). The first run
     /// moves over what an older build kept in the local data folder.</summary>
+    /// <summary>--mod: only these mods on (unknown ones named).</summary>
+    private void UseOnly(IReadOnlyList<string> mods)
+    {
+        foreach (var unknown in mods.Where(m => !_ui.Mods.Mods.Any(f => string.Equals(f.Folder, m, StringComparison.OrdinalIgnoreCase))))
+        {
+            Console.Error.WriteLine($"No mod {unknown} in {ModCatalog.FolderIn(_ui.UserFolder)}");
+        }
+
+        _ui.Mods.Only(_ui.Settings, mods);
+    }
+
     private static string UserFolder()
     {
         var folder = AppContext.BaseDirectory;
@@ -484,7 +515,7 @@ public sealed class Game : IDisposable
 /// <summary>The save prompt alone (after LEVEL8), then the level.</summary>
 public sealed class SavePromptScreen(Ui ui, SaveGames saves, SaveGame save, string name) : IScreen
 {
-    private readonly SavePrompt _prompt = new(ui, new Fonts(ui.Renderer, ui.Fti), saves, save, name);
+    private readonly SavePrompt _prompt = new(ui, new Fonts(ui.Renderer, ui.Fti, mods: ui.CanvasMods()), saves, save, name);
 
     public Event Frame(float elapsed, string? screenshot)
     {

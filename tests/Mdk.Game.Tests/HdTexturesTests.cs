@@ -4,6 +4,7 @@ using Mdk.Formats;
 using Mdk.Game.HdTextures;
 using Mdk.Game.Kurt;
 using Mdk.Game.Level;
+using Mdk.Game.Mods;
 
 namespace Mdk.Game.Tests;
 
@@ -144,27 +145,6 @@ public class HdTexturesTests : IDisposable
 
     // --- Cache -------------------------------------------------------------------------------
 
-    private HdCache CacheWith(Texture texture, Palette palette, int scale = Scale, int format = HdManifest.Format)
-    {
-        var width = texture.Width * scale;
-        var height = texture.Height * scale * texture.FrameCount;
-        var rgba = new byte[width * height * Rgba];
-        for (var i = 0; i < width * height; i++)
-        {
-            rgba[i * Rgba] = 77;
-            rgba[i * Rgba + 3] = (byte)(i % 2 == 0 ? Opaque : 0);
-        }
-
-        var key = HdKey.Of(texture, palette);
-        var file = $"LEVEL3/{texture.Name}_{key}.png";
-        Directory.CreateDirectory(Path.Combine(_folder, "LEVEL3"));
-        File.WriteAllBytes(Path.Combine(_folder, file), Png.Encode(width, height, rgba, Png.Channels.Rgba));
-        var manifest = new HdManifest("model", scale) { Version = format };
-        manifest.Entries[key] = new HdManifest.Entry(key, 3, texture.Name, texture.Width, texture.Height, texture.FrameCount, file);
-        manifest.Save(_folder);
-        return HdCache.Open(_folder);
-    }
-
     [Fact]
     public void ManifestRoundTrips()
     {
@@ -180,94 +160,34 @@ public class HdTexturesTests : IDisposable
         Assert.Equal(manifest.Entries["abc"], loaded.Entries["abc"]);
     }
 
+    /// <summary>Older builds' textures-hd/ moves into the HD textures mod, where the loader finds
+    /// each image by its key (the texture through that palette).</summary>
     [Fact]
-    public void PresentHdIsUsed()
+    public void OldCacheBecomesTheMod()
     {
         var texture = Texture("WALL", 2, 2, [1, 2, 3, 1]);
-        var cache = CacheWith(texture, Colours());
+        var key = HdKey.Of(texture, Colours());
+        var old = Path.Combine(_folder, HdGenerator.OldFolder);
+        Directory.CreateDirectory(Path.Combine(old, "LEVEL3"));
+        var rgba = Enumerable.Repeat((byte)77, 4 * 4 * Rgba).ToArray();
+        File.WriteAllBytes(Path.Combine(old, "LEVEL3", $"WALL_{key}.png"), Png.Encode(4, 4, rgba, Png.Channels.Rgba));
+        var manifest = new HdManifest("model", Scale);
+        manifest.Entries[key] = new HdManifest.Entry(key, 3, "WALL", 2, 2, 1, $"LEVEL3/WALL_{key}.png");
+        manifest.Save(old);
 
-        var image = cache.Find(texture, Colours());
+        Assert.Equal(1, HdGenerator.Migrate(_folder));
 
-        Assert.NotNull(image);
-        Assert.Equal((4, 4, 1), (image.Width, image.Height, image.Frames));
-        // Premultiplied as the renderer's colour textures: no colour where clear.
-        Assert.Equal(new byte[] { 77, 0, 0, Opaque, 0, 0, 0, 0 }, image.Rgba.AsSpan(0, 2 * Rgba).ToArray());
-    }
+        var mod = HdGenerator.FolderIn(_folder);
+        Assert.False(Directory.Exists(old));
+        Assert.True(File.Exists(Path.Combine(mod, "textures", "LEVEL3", $"WALL@{key}.png")));
+        Assert.Equal($"textures/LEVEL3/WALL@{key}.png", HdManifest.Load(mod)!.Entries[key].File);
+        var catalog = ModCatalog.Scan(ModCatalog.FolderIn(_folder));
+        Assert.Equal(-100, Assert.Single(catalog.Mods).Priority);
+        var image = ModImages.Open([mod], 3).Texture("WALL", texture, Colours());
+        Assert.Equal((4, 4, 1), (image!.Width, image.Height, image.Frames));
 
-    /// <summary>A level's images are decoded at opening, handed out once, then read again if asked.</summary>
-    [Fact]
-    public void LevelImagesDecodeAtOpening()
-    {
-        var texture = Texture("WALL", 2, 2, [1, 2, 3, 1]);
-        CacheWith(texture, Colours());
-
-        var cache = HdCache.Open(_folder, 3);
-
-        Assert.Equal(cache.Find(texture, Colours())!.Rgba, cache.Find(texture, Colours())!.Rgba);
-    }
-
-    [Fact]
-    public void AnimatedFramesStack()
-    {
-        var texture = Texture("ANIM", 1, 1, [1, 2], frames: 2);
-
-        var image = CacheWith(texture, Colours()).Find(texture, Colours());
-
-        Assert.NotNull(image);
-        Assert.Equal((2, 2, 2), (image.Width, image.Height, image.Frames));
-        Assert.Equal(2 * 2 * 2 * Rgba, image.Rgba.Length);
-    }
-
-    [Fact]
-    public void AbsentHdKeepsTheOriginal()
-    {
-        var cache = CacheWith(Texture("WALL", 2, 2, [1, 2, 3, 1]), Colours());
-
-        Assert.Null(cache.Find(Texture("OTHER", 2, 2, [3, 3, 3, 3]), Colours()));
-        Assert.Null(HdCache.Open(Path.Combine(_folder, "missing")).Find(Texture("WALL", 2, 2, [1, 2, 3, 1]), Colours()));
-    }
-
-    /// <summary>The game's texture or palette changed since the cache was made: its image is stale.</summary>
-    [Fact]
-    public void StaleHdKeepsTheOriginal()
-    {
-        var texture = Texture("WALL", 2, 2, [1, 2, 3, 1]);
-        var cache = CacheWith(texture, Colours());
-
-        Assert.Null(cache.Find(Texture("WALL", 2, 2, [1, 2, 3, 2]), Colours()));
-        Assert.Null(cache.Find(texture, With(Colours(), 1, 9)));
-    }
-
-    [Fact]
-    public void OtherFormatOrSizeIsIgnored()
-    {
-        var texture = Texture("WALL", 2, 2, [1, 2, 3, 1]);
-
-        Assert.Null(CacheWith(texture, Colours(), format: HdManifest.Format + 1).Find(texture, Colours()));
-
-        // Images of another scale than the manifest's.
-        CacheWith(texture, Colours(), scale: 3);
-        var wrong = new HdManifest("model", Scale);
-        foreach (var (key, entry) in HdManifest.Load(_folder)!.Entries)
-        {
-            wrong.Entries[key] = entry;
-        }
-
-        wrong.Save(_folder);
-        Assert.Null(HdCache.Open(_folder).Find(texture, Colours()));
-    }
-
-    /// <summary>Kurt's frames take their HD image in the enhanced look only (sprites), when made.</summary>
-    [Fact]
-    public void KurtTakesHdFrames()
-    {
-        var frame = Texture("K_RUN_0", 2, 2, [0, 1, 2, 0]);
-        var cache = CacheWith(frame, Colours());
-
-        Assert.NotNull(KurtSprite.Upscaled(cache, Shading.Sprite, frame, Colours()));
-        Assert.Null(KurtSprite.Upscaled(cache, Shading.Original, frame, Colours()));
-        Assert.Null(KurtSprite.Upscaled(null, Shading.Sprite, frame, Colours()));
-        Assert.Null(KurtSprite.Upscaled(cache, Shading.Sprite, Texture("K_RUN_1", 2, 2, [1, 1, 1, 0]), Colours()));
+        // Once: nothing left to move.
+        Assert.Equal(0, HdGenerator.Migrate(_folder));
     }
 
     // --- The game's textures --------------------------------------------------------------------

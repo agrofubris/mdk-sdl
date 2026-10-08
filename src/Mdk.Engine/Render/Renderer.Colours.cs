@@ -1,3 +1,4 @@
+using System.Numerics;
 using System.Runtime.InteropServices;
 using SDL;
 using static SDL.SDL3;
@@ -29,6 +30,8 @@ public sealed unsafe partial class Renderer
     /// <summary>Colour textures given whole (HD textures) instead of expanded: premultiplied RGBA8,
     /// frames stacked downwards.</summary>
     private readonly Dictionary<ColourKey, Pixels> _replaced = [];
+    /// <summary>The canvas's images given whole (<see cref="ReplaceImage"/>): kept through palette changes.</summary>
+    private readonly HashSet<ColourKey> _images = [];
     /// <summary>This frame's missing colour textures (reused).</summary>
     private readonly HashSet<ColourKey> _missing = [];
     private readonly List<ColourKey> _stale = [];
@@ -85,6 +88,16 @@ public sealed unsafe partial class Renderer
         }
     }
 
+    /// <summary>Gives a canvas image (<see cref="DrawImage"/>'s index texture through a palette) an
+    /// RGBA image of any size, premultiplied, drawn instead in the enhanced look's canvas (filtered,
+    /// with mips: sharp at the window's size). Kept through palette changes (fades don't reach it).</summary>
+    public void ReplaceImage(int texture, int palette, int width, int height, byte[] rgba)
+    {
+        var key = new ColourKey(texture, palette, 1);
+        _images.Add(key);
+        Replace(new Material(texture, palette, Vector4.One, 1, Pass.Overlay), width, height, rgba);
+    }
+
     /// <summary>Bytes of the colour textures made and asked for, with their mips (GPU memory).</summary>
     public long ColourBytes
     {
@@ -135,10 +148,10 @@ public sealed unsafe partial class Renderer
             return;
         }
 
-        // An HD texture no longer shows the texture: expanded again from now on.
+        // An HD texture no longer shows the texture: expanded again from now on (canvas images stay).
         foreach (var key in _replaced.Keys)
         {
-            if (key.Texture == texture || key.Palette == texture)
+            if ((key.Texture == texture || key.Palette == texture) && !_images.Contains(key))
             {
                 _replaced.Remove(key);
             }
@@ -146,7 +159,7 @@ public sealed unsafe partial class Renderer
 
         foreach (var (key, colours) in _colours)
         {
-            if (key.Texture != texture && key.Palette != texture)
+            if ((key.Texture != texture && key.Palette != texture) || _images.Contains(key))
             {
                 continue;
             }
@@ -222,6 +235,8 @@ public sealed unsafe partial class Renderer
             _replaced.Remove(key);
         }
 
+        _images.RemoveWhere(k => k.Texture >= first || k.Palette >= first);
+
         foreach (var id in _indexPixels.Keys.Where(id => id >= first).ToList())
         {
             _indexPixels.Remove(id);
@@ -276,7 +291,7 @@ public sealed unsafe partial class Renderer
     {
         foreach (ref readonly var command in CollectionsMarshal.AsSpan(commands))
         {
-            if (command.Material.Texture == Material.None || ModeOf(command) is not (Mode.Lit or Mode.Sprite))
+            if (command.Material.Texture == Material.None || ModeOf(command) is not (Mode.Lit or Mode.Sprite or Mode.Image))
             {
                 continue;
             }

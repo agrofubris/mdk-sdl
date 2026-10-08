@@ -13,6 +13,7 @@ using Mdk.Game.Audio;
 using Mdk.Game.Collision;
 using Mdk.Game.DevTools;
 using Mdk.Game.HdTextures;
+using Mdk.Game.Mods;
 using Mdk.Game.Hud;
 using Mdk.Game.Kurt;
 using Mdk.Game.Level;
@@ -153,6 +154,8 @@ public sealed class Viewer : IScreen
     private readonly LevelCommands _commands;
     /// <summary>The enhanced look's light; null in the original look.</summary>
     private readonly LevelLight? _light;
+    /// <summary>What the level took from the mods (the enhanced look's).</summary>
+    private readonly ModReport _mods = ModReport.None;
 
     public Viewer(Ui ui, ViewerOptions options, GameState state)
     {
@@ -173,9 +176,10 @@ public sealed class Viewer : IScreen
         var groups = new TriangleGroups();
         var graphics = ui.Settings.Graphics;
         MdkObject.ForgetPoses();
-        // The enhanced look's HD textures, when chosen.
-        var hd = graphics == Graphics.Enhanced && ui.Settings.Textures == TextureSet.Hd ? HdCache.Open(HdCache.FolderIn(ui.UserFolder), level.Number) : null;
-        var surfaces = new MaterialResolver(renderer, level.Dti, EnhancedLook.Surfaces(graphics), hd);
+        // The enhanced look's mods (HD textures among them); the original look stays as made.
+        ui.ScanMods();
+        var mods = graphics == Graphics.Enhanced ? ui.ModImages(level.Number) : null;
+        var surfaces = new MaterialResolver(renderer, level.Dti, EnhancedLook.Surfaces(graphics), mods);
         Preload(surfaces, level);
         _view = new LevelView(renderer, level, groups, EnhancedLook.Surfaces(graphics), surfaces);
         var bank = _beta != null ? SoundBank.ForBeta(_beta, options.Level) : SoundBank.ForLevel(data, options.Level);
@@ -198,7 +202,7 @@ public sealed class Viewer : IScreen
         // The 1996 demo's levels show its Kurt and its health display.
         var sprites = Bni.Load(data.PathOf("TRAVERSE/TRAVSPRT.BNI"));
         _beta?.AddSprites(sprites);
-        _sprite = new KurtSprite(renderer, sprites, level.Dti.Palette, EnhancedLook.Sprites(graphics), hd);
+        _sprite = new KurtSprite(renderer, sprites, level.Dti.Palette, EnhancedLook.Sprites(graphics), mods);
         foreach (var name in KurtSprite.LevelAnimations)
         {
             _sprite.Add(bank.Animation(name));
@@ -230,7 +234,7 @@ public sealed class Viewer : IScreen
         _scripts.GameFinished += () => _next = Event.GameFinished;
 
         // The HUD; pickups show their names (0x46c448).
-        _hud = new HudView(renderer, sprites, level.Dti.Palette, ui.Fti);
+        _hud = new HudView(renderer, sprites, level.Dti.Palette, ui.Fti, mods);
         _scripts.Messages = _hud.Messages;
         CarryFromFall(state);
         RestoreSnapshot(state);
@@ -242,7 +246,9 @@ public sealed class Viewer : IScreen
             _kurt.Collect(pickup);
         }
         _scripts.ArenaEntered += _view.Enter;
-        _objects = new ObjectView(renderer, surfaces);
+        // The mods' models (the enhanced look's); collisions keep the originals.
+        var swaps = mods != null ? ModModels.Load(ui.Mods.Folders(ui.Settings), level.Number, _scripts.LevelModels().Concat(level.Arenas.SelectMany(a => a.Models.Values))) : null;
+        _objects = new ObjectView(renderer, surfaces) { Swaps = swaps };
         _scripts.PreparePoses();
         PreloadModels(level);
 
@@ -257,14 +263,16 @@ public sealed class Viewer : IScreen
         _flying = options.Fly;
         _pause = new PauseMenu(ui);
         Console.WriteLine($"Level {options.Level}: {level.Arenas.Count} arenas, {_view.TriangleCount} triangles, {_view.OutlineCount} outlines, loaded in {loading.ElapsedMilliseconds} ms");
-        if (hd != null)
+        var enabled = ui.Mods.Enabled(ui.Settings).Count;
+        if (mods != null && enabled > 0)
         {
-            Console.WriteLine($"HD textures: {surfaces.HdFound} of {surfaces.HdLooked} (cache {hd.Count}), colour textures {renderer.ColourBytes >> 20} MB");
+            _mods = new ModReport(enabled, mods.Found, swaps?.Found ?? []);
+            Console.WriteLine($"Mods: {_mods.Summary}; textures {surfaces.ModFound} of {surfaces.ModLooked}, colour textures {renderer.ColourBytes >> 20} MB");
         }
 
         _test = options.Screenshot != null || options.Frames != null;
         ui.Window.CaptureMouse(_test ? Capture.Off : Capture.On);
-        _commands = new LevelCommands(level, _kurt, _scripts, _space, SaveSlot);
+        _commands = new LevelCommands(level, _kurt, _scripts, _space, SaveSlot) { Mods = _mods };
 
         // The session's cheats hold in every level.
         _commands.SetGod(ui.Dev.God);
@@ -305,7 +313,12 @@ public sealed class Viewer : IScreen
     {
         get
         {
-            var level = OverlayText.Level(_commands.Where(), _scripts.Objects.Count, _kurt.Current.ToString());
+            IReadOnlyList<string> level = [.. OverlayText.Level(_commands.Where(), _scripts.Objects.Count, _kurt.Current.ToString())];
+            if (_mods.Mods > 0)
+            {
+                level = [.. level, _mods.Summary];
+            }
+
             if (_pause.Open)
             {
                 return ["pause menu", .. level];
@@ -693,7 +706,7 @@ public sealed class Viewer : IScreen
         var name = (GameState.IndexOf(_level.Number) + 1).ToString(CultureInfo.InvariantCulture);
         var json = _scripts.Capture();
         Console.WriteLine($"snapshot hash {Snapshot.Hash(json)}, objects {_scripts.Objects.Count}");
-        _snapshotPrompt = new SavePrompt(_ui, new Fonts(_renderer, _ui.Fti), SaveGames.In(_ui.UserFolder), SnapshotSave(json), name);
+        _snapshotPrompt = new SavePrompt(_ui, new Fonts(_renderer, _ui.Fti, mods: _ui.CanvasMods()), SaveGames.In(_ui.UserFolder), SnapshotSave(json), name);
         _ui.Window.CaptureMouse(Capture.Off);
     }
 

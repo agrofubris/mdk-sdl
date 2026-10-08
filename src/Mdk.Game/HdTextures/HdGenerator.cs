@@ -5,6 +5,7 @@ using Mdk.Engine.Upscale;
 using Mdk.Formats;
 using Mdk.Game.Audio;
 using Mdk.Game.Level;
+using Mdk.Game.Mods;
 
 namespace Mdk.Game.HdTextures;
 
@@ -72,17 +73,25 @@ public sealed class HdProgress
     public bool Finished => Read().Stage is Stage.Done or Stage.Failed or Stage.Cancelled;
 }
 
-/// <summary>Makes the HD textures (<see cref="HdCache"/>) from the user's game files: the levels'
-/// textures (<see cref="TextureExport"/>) through Real-ESRGAN (<see cref="RealEsrgan"/>), into the
-/// user's folder. Nothing of the game leaves the computer. Images already made for the same
-/// texture, palette, model and scale are kept; images of textures no longer exported are deleted.
+/// <summary>Makes the HD textures from the user's game files: the levels' textures and 2D images
+/// (<see cref="TextureExport"/>) through Real-ESRGAN (<see cref="RealEsrgan"/>), into a mod of the
+/// user's folder (<see cref="ModFolder"/>, priority below other mods: theirs win). Nothing of the
+/// game leaves the computer. Images already made for the same texture, palette, model and scale are
+/// kept; images of textures no longer exported are deleted. Each image's name holds its key: it
+/// replaces exactly that texture through that palette (<see cref="ModImages"/>).
 /// <code>
 ///   tools/realesrgan/ ◄── download (once, SHA-256 checked)
-///   textures-hd/work/in/&lt;key&gt;_&lt;frame&gt;.png ─► upscaler ─► work/out/ ─► crop, scale, alpha ─► textures-hd/LEVELn/&lt;NAME&gt;_&lt;key&gt;.png
-///                                                                                       manifest.txt
+///   mods/hd-textures/work/in/&lt;key&gt;_&lt;frame&gt;.png ─► upscaler ─► work/out/ ─► crop, scale, alpha
+///     ─► mods/hd-textures/textures/LEVELn/&lt;NAME&gt;@&lt;key&gt;.png (images/ for 2D), manifest.txt, mod.txt
 /// </code></summary>
 public static class HdGenerator
 {
+    /// <summary>The mod's folder in <c>mods/</c>.</summary>
+    public const string ModFolder = "hd-textures";
+    /// <summary>Below other mods (0 by default).</summary>
+    private const int ModPriority = -100;
+    /// <summary>Where older builds kept the HD textures, in the user folder.</summary>
+    public const string OldFolder = "textures-hd";
     /// <summary>Source texels wrapped around each frame for the upscaler (seamless tiling).</summary>
     private const int Margin = 8;
     private const string ToolsFolder = "tools";
@@ -106,10 +115,11 @@ public static class HdGenerator
         progress.Set(HdProgress.Stage.Download, 0, 0);
         var tool = RealEsrgan.Install(ToolIn(userFolder), (done, total) => progress.Set(HdProgress.Stage.Download, done, total), cancel);
 
-        var folder = HdCache.FolderIn(userFolder);
+        var folder = FolderIn(userFolder);
         Directory.CreateDirectory(folder);
         var model = RealEsrgan.NameOf(options.Upscaler);
         var manifest = Current(folder, model, options.Scale);
+        File.WriteAllText(Path.Combine(folder, ModInfo.FileName), Info(model, options.Scale).Format());
 
         // What each level shows, and what the cache lacks.
         var todo = new List<HdSource>();
@@ -121,13 +131,20 @@ public static class HdGenerator
             progress.Set(HdProgress.Stage.Read, number, 0);
             var level = new LevelData(data, number);
             var sources = TextureExport.Collect(level, Cmi.Load(data.PathOf($"TRAVERSE/LEVEL{number}/LEVEL{number}.CMI")));
-            sources = [.. sources.Concat(TextureExport.Kurt(level, sprites, SoundBank.ForLevel(data, number).Animation)).DistinctBy(s => s.Key)];
+            sources = [.. sources.Concat(TextureExport.Kurt(level, sprites, SoundBank.ForLevel(data, number).Animation))
+                .Concat(CanvasExport.Level(level, sprites)).DistinctBy(s => s.Key)];
             Prune(folder, manifest, number, sources);
             // Levels share some images: each is made once.
             todo.AddRange(sources.Where(s => !manifest.Entries.TryGetValue(s.Key, out var e) || !File.Exists(Path.Combine(folder, e.File)))
                 .Where(s => keys.Add(s.Key)));
             sizes.Add(Sizes(number, sources, options.Scale));
         }
+
+        // The menus' 2D images (no level's), the fonts left as made (upscaled, they blur).
+        var menus = CanvasExport.Menus(data, CanvasExport.Fonts.Skipped).DistinctBy(s => s.Key).ToList();
+        Prune(folder, manifest, CanvasExport.NoLevel, menus);
+        todo.AddRange(menus.Where(s => !manifest.Entries.TryGetValue(s.Key, out var e) || !File.Exists(Path.Combine(folder, e.File)))
+            .Where(s => keys.Add(s.Key)));
 
         manifest.Save(folder);
         var work = Path.Combine(folder, WorkFolder);
@@ -148,7 +165,7 @@ public static class HdGenerator
 
         manifest.Save(folder);
         var summary = string.Create(CultureInfo.InvariantCulture,
-            $"{todo.Count} textures made, {manifest.Entries.Count} in the cache, {FolderBytes(folder) / BytesPerMegabyte} MB on disk, {clock.Elapsed.TotalSeconds:0} s");
+            $"{todo.Count} textures made, {manifest.Entries.Count} in the mod, {FolderBytes(folder) / BytesPerMegabyte} MB on disk, {clock.Elapsed.TotalSeconds:0} s");
         foreach (var line in sizes)
         {
             Console.WriteLine(line);
@@ -157,6 +174,52 @@ public static class HdGenerator
         progress.Set(HdProgress.Stage.Done, todo.Count, todo.Count, summary);
         return summary;
     }
+
+    /// <summary>The mod's folder in a user folder.</summary>
+    public static string FolderIn(string userFolder) => Path.Combine(ModCatalog.FolderIn(userFolder), ModFolder);
+
+    /// <summary>The mod's <c>mod.txt</c>: the upscaler's model and scale.</summary>
+    private static ModInfo Info(string model, int scale) =>
+        new(ModFolder, "HD textures (Real-ESRGAN)", "made on this computer", "", $"{model}, {scale}x", ModPriority);
+
+    /// <summary>Moves older builds' <c>textures-hd/</c> into the mod (once; its images keep their
+    /// keys). Returns how many images moved.</summary>
+    public static int Migrate(string userFolder)
+    {
+        var old = Path.Combine(userFolder, OldFolder);
+        var folder = FolderIn(userFolder);
+        if (HdManifest.Load(old) is not { } manifest || HdManifest.Load(folder) != null)
+        {
+            return 0;
+        }
+
+        var moved = new HdManifest(manifest.Model, manifest.Scale) { Version = manifest.Version };
+        foreach (var entry in manifest.Entries.Values)
+        {
+            var source = Path.Combine(old, entry.File);
+            if (!File.Exists(source))
+            {
+                continue;
+            }
+
+            var file = FileOf(entry.Level, entry.Name, entry.Key);
+            var target = Path.Combine(folder, file);
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Move(source, target, overwrite: true);
+            moved.Entries[entry.Key] = entry with { File = file };
+        }
+
+        moved.Save(folder);
+        File.WriteAllText(Path.Combine(folder, ModInfo.FileName), Info(manifest.Model, manifest.Scale).Format());
+        Directory.Delete(old, recursive: true);
+        return moved.Entries.Count;
+    }
+
+    /// <summary>An image's file in the mod: its level's folder (the menus' none), its name, its key.</summary>
+    private static string FileOf(int level, string name, string key, ModImages.Kind kind = ModImages.Kind.Textures) =>
+        level == CanvasExport.NoLevel
+            ? $"{ModImages.FolderOf(kind)}/{SafeName(name)}@{key}.png"
+            : $"{ModImages.FolderOf(kind)}/{ModImages.LevelFolder(level)}/{SafeName(name)}@{key}.png";
 
     /// <summary>The cache's manifest when it was made the same way; else the old images go.</summary>
     private static HdManifest Current(string folder, string model, int scale)
@@ -265,7 +328,7 @@ public static class HdGenerator
             frame.CopyTo(image, f * frameBytes);
         }
 
-        var file = $"LEVEL{source.Level}/{SafeName(source.Name)}_{source.Key}.png";
+        var file = FileOf(source.Level, source.Name, source.Key, source.Kind);
         var path = Path.Combine(folder, file);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var opaque = t.Indices.AsSpan().IndexOf((byte)0) < 0;

@@ -53,7 +53,7 @@ public sealed class FallScreen : IScreen
         var data = ui.Data;
         var bni = Bni.Load(data.PathOf("FALL3D/FALL3D.BNI"));
         var mti = TextureArchive.Load(data.PathOf($"FALL3D/FALL3D_{n}.MTI"));
-        _view = new FallView(ui.Renderer, bni, mti, index, ui.Fti);
+        _view = new FallView(ui.Renderer, bni, mti, index, ui.Fti, ui.CanvasMods(state.Level));
         _sounds = new SoundBank([Sni.Load(data.PathOf("FALL3D/FALL3D.SNI"))]);
 
         var models = _view.Models;

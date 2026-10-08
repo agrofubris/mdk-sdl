@@ -112,5 +112,11 @@ public sealed class GameCommands(Ui ui, GameState state, Func<ILevelTarget?> lev
 
     public void Quit() => _next = Event.Quit;
 
+    public IReadOnlyList<string> ModList()
+    {
+        ui.ScanMods();
+        return [.. ui.Mods.Mods.Select(m => $"{m.Name} ({m.Folder}) {ui.Settings.StateOf(m.Folder).ToString().ToLowerInvariant()}, priority {m.Priority}")];
+    }
+
     private static Switch Flip(Switch value) => value == Switch.On ? Switch.Off : Switch.On;
 }

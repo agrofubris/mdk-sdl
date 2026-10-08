@@ -2,6 +2,7 @@ using System.Drawing;
 using System.Numerics;
 using Mdk.Engine.Render;
 using Mdk.Formats;
+using Mdk.Game.Mods;
 
 namespace Mdk.Game.Fall;
 
@@ -86,7 +87,7 @@ public sealed class FallView
     public FallModels Models { get; }
     public FallHud Hud { get; }
 
-    public FallView(Renderer renderer, Bni bni, TextureArchive mti, int index, Fti fti)
+    public FallView(Renderer renderer, Bni bni, TextureArchive mti, int index, Fti fti, ModImages? mods = null)
     {
         _renderer = renderer;
         _index = index;
@@ -99,7 +100,7 @@ public sealed class FallView
         Array.Fill(white, byte.MaxValue);
         _whitePalette = renderer.CreatePalette(white);
         Models = new FallModels(renderer, bni, mti, _effects, _palette);
-        Hud = new FallHud(renderer, bni, _palette, fti);
+        Hud = new FallHud(renderer, bni, _palette, fti, palette, mods);
 
         _ground = new FallGround(mti.Textures[$"LEVEL{n}"], mti.Textures[$"POD{n}"]);
         _groundTexture = renderer.CreateIndexTexture(FallGround.Size, FallGround.Size, _ground.Indices);

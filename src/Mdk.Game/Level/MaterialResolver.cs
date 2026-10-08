@@ -2,19 +2,20 @@ using System.Numerics;
 using Mdk.Engine.Render;
 using Mdk.Formats;
 using Mdk.Game.HdTextures;
+using Mdk.Game.Mods;
 
 namespace Mdk.Game.Level;
 
 /// <summary>Turns MDK material references (texture names, palette colours, special values) into
 /// renderer materials, creating each texture and palette on the GPU once. Opaque surfaces take
 /// <paramref name="shading"/> (the look); glass and mirrors keep the original's. Lit textures take
-/// their HD image when <paramref name="hd"/> has one (<see cref="HdCache"/>).
+/// a mod's image when <paramref name="mods"/> has one (<see cref="ModImages"/>: HD textures too).
 /// <code>
 ///   value &lt; 0          palette colour -value
 ///   value &gt;= 0         material name: texture, archive colour, PEN_n, NONE
 ///   colour 256-1028    special: glass (GLASS1-4), mirrors, NONE, PEN_ENV, RIPPLE
 /// </code></summary>
-public sealed class MaterialResolver(Renderer renderer, Dti dti, Shading shading = Shading.Original, HdCache? hd = null)
+public sealed class MaterialResolver(Renderer renderer, Dti dti, Shading shading = Shading.Original, ModImages? mods = null)
 {
     private const int SpecialFirst = 256;
     private const int MirrorFirst = 990;
@@ -30,12 +31,12 @@ public sealed class MaterialResolver(Renderer renderer, Dti dti, Shading shading
 
     private readonly Dictionary<Texture, int> _textures = [];
     private readonly Dictionary<Palette, int> _palettes = [];
-    /// <summary>The textures and palettes looked up in <c>hd</c> (once each).</summary>
+    /// <summary>The textures and palettes looked up in <c>mods</c> (once each).</summary>
     private readonly HashSet<(Texture, Palette)> _looked = [];
 
-    /// <summary>Textures through a palette looked up in the HD cache, and found.</summary>
-    public int HdLooked => _looked.Count;
-    public int HdFound { get; private set; }
+    /// <summary>Textures through a palette looked up in the mods, and found.</summary>
+    public int ModLooked => _looked.Count;
+    public int ModFound { get; private set; }
 
     /// <summary>A resolved surface and the texture whose texels its UVs count (null when flat).</summary>
     public readonly record struct Surface(Material Material, Texture? Texture);
@@ -55,7 +56,7 @@ public sealed class MaterialResolver(Renderer renderer, Dti dti, Shading shading
             if (archives[i].Textures.TryGetValue(name, out var texture))
             {
                 var material = new Material(TextureId(texture), PaletteId(palette), Vector4.One, texture.FrameCount, pass, Shading: ShadingOf(pass));
-                Upscale(material, texture, palette);
+                Replace(material, name, texture, palette);
                 renderer.Prepare(material);
                 return new Surface(material, texture);
             }
@@ -75,6 +76,35 @@ public sealed class MaterialResolver(Renderer renderer, Dti dti, Shading shading
         }
 
         return null;
+    }
+
+    /// <summary>The surface of a material name (a mod's model naming an original material), or null.</summary>
+    public Surface? Named(string name, Palette palette, IReadOnlyList<TextureArchive> archives, Pass pass) =>
+        Resolve(0, [name], palette, archives, pass);
+
+    /// <summary>A flat colour (sRGB) of the look's shading (a mod's model).</summary>
+    public Surface Flat(Vector4 colour, Pass pass) => new(Material.Flat(colour, pass) with { Shading = ShadingOf(pass) }, null);
+
+    /// <summary>A mod's image as a surface of its own: a 1 x 1 index texture stands for it, the
+    /// renderer draws the image (the enhanced look's colour texture).</summary>
+    public Surface Image(HdImage image, Pass pass)
+    {
+        var texture = renderer.CreateIndexTexture(1, 1, [ImageIndex]);
+        var material = new Material(texture, PaletteId(ImagePalette), Vector4.One, image.Frames, pass, Shading: ShadingOf(pass));
+        renderer.Replace(material, image.Width, image.Height, image.Rgba);
+        renderer.Prepare(material);
+        return new Surface(material, null);
+    }
+
+    /// <summary>The index of <see cref="Image"/>'s texture: opaque white in <see cref="ImagePalette"/>.</summary>
+    private const byte ImageIndex = 1;
+    private static readonly Palette ImagePalette = WhitePalette();
+
+    private static Palette WhitePalette()
+    {
+        var palette = new Palette();
+        Array.Fill(palette.Rgba, byte.MaxValue);
+        return palette;
     }
 
     /// <summary>Whether a material value is drawn (<see cref="Resolve"/> isn't null), without the GPU.</summary>
@@ -132,21 +162,21 @@ public sealed class MaterialResolver(Renderer renderer, Dti dti, Shading shading
         return null;
     }
 
-    /// <summary>A lit texture's HD image, given to the renderer the first time it's seen.</summary>
-    private void Upscale(Material material, Texture texture, Palette palette)
+    /// <summary>A lit texture's mod image, given to the renderer the first time it's seen.</summary>
+    private void Replace(Material material, string name, Texture texture, Palette palette)
     {
-        if (hd == null || material.Shading != Shading.Lit || !_looked.Add((texture, palette)))
+        if (mods == null || material.Shading != Shading.Lit || !_looked.Add((texture, palette)))
         {
             return;
         }
 
-        if (hd.Find(texture, palette) is not { } image)
+        if (mods.Texture(name, texture, palette) is not { } image)
         {
             return;
         }
 
         renderer.Replace(material, image.Width, image.Height, image.Rgba);
-        HdFound++;
+        ModFound++;
     }
 
     private Shading ShadingOf(Pass pass) => pass is Pass.Solid or Pass.DoubleSided ? shading : Shading.Original;

@@ -125,7 +125,7 @@ public sealed class StatsScreen : IScreen
         _systemRgb = new byte[PaletteSize];
         var system = ui.Fti.GetBytes("SYS_PAL");
         system.AsSpan(0, Math.Min(system.Length, PaletteSize)).CopyTo(_systemRgb);
-        _fonts = new Fonts(ui.Renderer, ui.Fti);
+        _fonts = new Fonts(ui.Renderer, ui.Fti, mods: ui.CanvasMods());
         _headsView = new HeadsView(ui.Renderer, _bni, PageRgb, ui.Data);
         foreach (var name in new[] { "CGUN", "SNIPER", "RICO1", "RICO2", "RICO3", "ALDIE", "XGHEAD1", "XGHEAD2", "TELETYPE" })
         {
@@ -292,7 +292,7 @@ public sealed class StatsScreen : IScreen
 
         var entry = _bni.Entries[name];
         var rgb = _bni.Bytes.AsSpan(entry.Offset, PaletteSize).ToArray();
-        return PalettedImage.Of(_ui.Renderer, Texture.Parse(name, _bni.Bytes, entry.Offset + PaletteSize), PageRgb(rgb));
+        return PalettedImage.Of(_ui.Renderer, Texture.Parse(name, _bni.Bytes, entry.Offset + PaletteSize), PageRgb(rgb), _ui.CanvasMods());
     }
 
     /// <summary>Advances the page; true once everything is shown.</summary>

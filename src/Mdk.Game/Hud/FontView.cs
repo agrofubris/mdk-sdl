@@ -2,6 +2,7 @@ using System.Drawing;
 using System.Numerics;
 using Mdk.Engine.Render;
 using Mdk.Formats;
+using Mdk.Game.Mods;
 
 namespace Mdk.Game.Hud;
 
@@ -21,8 +22,15 @@ public sealed class FontView
     private readonly int _maxAscent;
     private readonly Vector2 _size;
 
-    public FontView(Renderer renderer, Font font, Palette palette) : this(renderer, font, renderer.CreatePalette(palette.Rgba))
+    /// <summary>The fonts' names in <c>MDKFONT.FTI</c>, and in mods (their atlas, <see cref="Atlas"/>).</summary>
+    public const string Big = "FONTBIG";
+    public const string Small = "FONTSML";
+
+    /// <summary>A font through a palette; a mod's image of its atlas (<paramref name="name"/>) replaces it.</summary>
+    public FontView(Renderer renderer, Font font, Palette palette, ModImages? mods = null, string name = "")
+        : this(renderer, font, renderer.CreatePalette(palette.Rgba))
     {
+        CanvasImages.Replace(renderer, mods, name, Atlas(font, name), palette, _texture, _palette);
     }
 
     /// <summary>A font drawn through a palette the caller owns (the fall's, with its effects).</summary>
@@ -30,13 +38,24 @@ public sealed class FontView
     {
         _renderer = renderer;
         _font = font;
+        var atlas = Atlas(font, "", _x);
+        _maxAscent = font.Glyphs.Max(g => g?.Ascent ?? 0);
+        _size = new Vector2(atlas.Width, atlas.Height);
+        _texture = renderer.CreateIndexTexture(atlas.Width, atlas.Height, atlas.Indices);
+        _palette = palette;
+    }
+
+    /// <summary>The glyphs side by side, one column apart, tops at (max ascent - ascent); each
+    /// glyph's x into <paramref name="x"/> when given (a mod's image of it: any size, same layout).</summary>
+    public static Texture Atlas(Font font, string name, int[]? x = null)
+    {
         var glyphs = font.Glyphs;
-        _maxAscent = glyphs.Max(g => g?.Ascent ?? 0);
+        var maxAscent = glyphs.Max(g => g?.Ascent ?? 0);
         var maxDescent = glyphs.Max(g => g?.Descent ?? 0);
         var width = Math.Max(1, glyphs.Sum(g => g == null ? 0 : g.Width + 1));
-        var height = _maxAscent + maxDescent + 1;
+        var height = maxAscent + maxDescent + 1;
         var indices = new byte[width * height];
-        var x = 0;
+        var at = 0;
         for (var c = 0; c < glyphs.Length; c++)
         {
             if (glyphs[c] is not { } glyph)
@@ -44,19 +63,21 @@ public sealed class FontView
                 continue;
             }
 
-            var top = _maxAscent - glyph.Ascent;
+            var top = maxAscent - glyph.Ascent;
             for (var row = 0; row < glyph.Ascent + glyph.Descent + 1; row++)
             {
-                glyph.Indices.AsSpan(row * glyph.Width, glyph.Width).CopyTo(indices.AsSpan((top + row) * width + x));
+                glyph.Indices.AsSpan(row * glyph.Width, glyph.Width).CopyTo(indices.AsSpan((top + row) * width + at));
             }
 
-            _x[c] = x;
-            x += glyph.Width + 1;
+            if (x != null)
+            {
+                x[c] = at;
+            }
+
+            at += glyph.Width + 1;
         }
 
-        _size = new Vector2(width, height);
-        _texture = renderer.CreateIndexTexture(width, height, indices);
-        _palette = palette;
+        return new Texture { Name = name, Width = width, Height = height, Indices = indices };
     }
 
     public int Width(ReadOnlySpan<byte> text) => _font.Width(text);

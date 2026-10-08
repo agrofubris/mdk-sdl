@@ -2,6 +2,7 @@ using System.Numerics;
 using Mdk.Engine.Render;
 using Mdk.Game.Flow;
 using Mdk.Game.Kurt;
+using Mdk.Game.Mods;
 
 namespace Mdk.Game.DevTools;
 
@@ -42,11 +43,17 @@ public interface ICommandTarget
     void SetTimeScale(float scale);
     Switch ToggleOverlay();
     void Quit();
+
+    /// <summary>The mods found, in order, each on or off.</summary>
+    IReadOnlyList<string> ModList();
 }
 
 /// <summary>What the console's commands act on in the level being played.</summary>
 public interface ILevelTarget
 {
+    /// <summary>What the level took from the mods.</summary>
+    ModReport Mods { get; }
+
     Placement Where();
 
     /// <summary>Kurt to a point (in its arena, or the one given), or to a floor of an arena when

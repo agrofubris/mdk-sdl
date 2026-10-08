@@ -21,6 +21,8 @@
 #define MODE_LIT 1
 #define MODE_SPRITE 2
 #define MODE_CANVAS 3
+// The canvas's images replaced by mods: their colour texture, blended like the canvas.
+#define MODE_IMAGE 4
 #define GAMMA 2.2
 #define HALF_COVER 0.5
 
@@ -194,7 +196,7 @@ float4 ps_main(VertexOut input) : SV_Target
     }
 
     // The canvas blends its edges; the rest cut them where half covered (premultiplied -> straight).
-    if (mode == MODE_CANVAS)
+    if (mode == MODE_CANVAS || mode == MODE_IMAGE)
     {
         return float4(texel.a > 0.0 ? texel.rgb / texel.a : texel.rgb, texel.a) * colour;
     }

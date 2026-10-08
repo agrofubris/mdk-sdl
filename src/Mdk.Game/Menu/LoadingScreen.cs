@@ -35,8 +35,8 @@ public static class LoadingScreen
         {
             var rgb = bytes[..PaletteSize];
             var palette = Palette.FromRgb(rgb);
-            PalettedImage.Of(ui.Renderer, Texture.Parse("LOAD", bytes, PaletteSize), rgb).Draw(view, ImagePosition);
-            var font = new Fonts(ui.Renderer, ui.Fti, palette).Big;
+            PalettedImage.Of(ui.Renderer, Texture.Parse($"LOAD_{level}", bytes, PaletteSize), rgb, ui.CanvasMods()).Draw(view, ImagePosition);
+            var font = new Fonts(ui.Renderer, ui.Fti, palette, ui.CanvasMods()).Big;
             var text = ui.Fti.GetTextBytes("LOAD_MSG");
             view.Text(font, text, (ScreenView.Size.X - font.Width(text)) / 2f, TextY);
             view.Fill(new RectangleF(Bar.X, Bar.Y, Bar.Width * Math.Clamp(progress, 0f, 1f), Bar.Height), Colour(palette, BarFill));

@@ -1,6 +1,7 @@
 using System.Numerics;
 using Mdk.Engine.Render;
 using Mdk.Game.DevTools;
+using Mdk.Game.Mods;
 using Mdk.Game.Flow;
 using Mdk.Game.Kurt;
 
@@ -154,6 +155,16 @@ public class ConsoleCommandsTests
         Assert.Equal(Switch.Off, _level.OneHit);
     }
 
+    /// <summary>The mods found, then what the level replaced (outside a level: the list only).</summary>
+    [Fact]
+    public void ModsListsWhatTheLevelTook()
+    {
+        Assert.Equal("Clean walls (walls) on, priority 0\nmods 1: 1 images, 1 models\nimages: WALL\nmodels: GRUNT", Run("mods"));
+
+        _game.Level = null;
+        Assert.Equal("Clean walls (walls) on, priority 0", Run("mods"));
+    }
+
     /// <summary>The game: the session's switches reach the level, when there's one.</summary>
     private sealed class FakeGame(FakeLevel level) : ICommandTarget
     {
@@ -226,6 +237,8 @@ public class ConsoleCommandsTests
         }
 
         public void Quit() => Quitted = true;
+
+        public IReadOnlyList<string> ModList() => ["Clean walls (walls) on, priority 0"];
     }
 
     private sealed class FakeLevel : ILevelTarget
@@ -238,6 +251,8 @@ public class ConsoleCommandsTests
         public Switch OneHit;
         public string? Saved;
         public readonly List<string> Given = [];
+
+        public ModReport Mods { get; } = new(1, ["WALL"], ["GRUNT"]);
 
         public Placement Where() => new(3, "ARENA_1", new Vector3(-4f, 0.5f, 195f), 90f);
 

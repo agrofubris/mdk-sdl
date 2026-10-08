@@ -2,11 +2,14 @@ using Mdk.Engine.Render;
 using Mdk.Formats;
 using Mdk.Game.Kurt;
 using Mdk.Game.Level;
+using Mdk.Game.Mods;
 
 namespace Mdk.Game.HdTextures;
 
-/// <summary>A texture as a level shows it: through an arena's palette; its HD image's cover.</summary>
-public sealed record HdSource(int Level, string Name, string Key, Texture Texture, Palette Palette, HdAlpha Alpha = HdAlpha.Hard);
+/// <summary>A texture as a level shows it: through an arena's palette; its HD image's cover; a
+/// texture or a 2D image (<see cref="CanvasExport"/>; level 0: the menus').</summary>
+public sealed record HdSource(int Level, string Name, string Key, Texture Texture, Palette Palette, HdAlpha Alpha = HdAlpha.Hard,
+    ModImages.Kind Kind = ModImages.Kind.Textures);
 
 /// <summary>The textures the enhanced look draws lit, as the game resolves them (<see cref="MaterialResolver"/>):
 /// each arena's and corridor's surfaces and models through its palette, and the level's models
@@ -60,7 +63,7 @@ public static class TextureExport
             {
                 var texture = animation!.GetFrame(frame).Image;
                 var key = HdKey.Of(texture, palette);
-                sources.TryAdd(key, new HdSource(level.Number, $"{name}_{frame}", key, texture, palette, HdAlpha.Soft));
+                sources.TryAdd(key, new HdSource(level.Number, KurtSprite.FrameName(name, frame), key, texture, palette, HdAlpha.Soft));
             }
         }
 

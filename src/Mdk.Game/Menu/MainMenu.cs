@@ -76,7 +76,7 @@ public sealed class MainMenu : IScreen
         _ui = ui;
         _state = state;
         _saves = saves;
-        _fonts = new Fonts(ui.Renderer, ui.Fti);
+        _fonts = new Fonts(ui.Renderer, ui.Fti, mods: ui.CanvasMods());
         _items = new MenuItems(ui, _fonts);
         _video = new VideoPlayer(ui);
         _slideshow = new Slideshow(ui, _video);
@@ -88,7 +88,7 @@ public sealed class MainMenu : IScreen
         {
             var entry = options.Entries["MDKOPT"];
             var palette = options.Bytes.AsSpan(entry.Offset, PaletteSize).ToArray();
-            _background = PalettedImage.Of(ui.Renderer, Texture.Parse("MDKOPT", options.Bytes, entry.Offset + PaletteSize), palette);
+            _background = PalettedImage.Of(ui.Renderer, Texture.Parse("MDKOPT", options.Bytes, entry.Offset + PaletteSize), palette, ui.CanvasMods());
         }
 
         if (state.Splash)

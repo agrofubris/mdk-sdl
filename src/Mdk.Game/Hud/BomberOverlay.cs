@@ -4,6 +4,7 @@ using System.Numerics;
 using System.Text;
 using Mdk.Engine.Render;
 using Mdk.Formats;
+using Mdk.Game.Mods;
 
 namespace Mdk.Game.Hud;
 
@@ -30,18 +31,30 @@ public sealed class BomberOverlay
     private readonly Image _target;
     private readonly Image _cross;
 
-    public BomberOverlay(Renderer renderer, Bni sprites, int palette, FontView font)
+    /// <summary>The bomber's HUD; <paramref name="mods"/>' images (through <paramref name="colours"/>) replace its own.</summary>
+    public BomberOverlay(Renderer renderer, Bni sprites, int palette, FontView font, Palette? colours = null, ModImages? mods = null)
     {
         _renderer = renderer;
         _palette = palette;
         _font = font;
-        _target = Load(sprites.GetAnimation(Target).GetFrame(0));
-        _cross = Load(sprites.GetAnimation(Cross).GetFrame(0));
+        _target = Load(Target, sprites.GetAnimation(Target).GetFrame(0), colours, mods);
+        _cross = Load(Cross, sprites.GetAnimation(Cross).GetFrame(0), colours, mods);
     }
 
-    private Image Load(SpriteAnimation.Frame frame) =>
-        new(_renderer.CreateIndexTexture(frame.Image.Width, frame.Image.Height, frame.Image.Indices),
-            new Vector2(frame.Image.Width, frame.Image.Height), new Vector2(frame.HotspotX, frame.HotspotY));
+    /// <summary>The HUD's 2D images by their names in mods (<see cref="CanvasImages"/>; the exports).</summary>
+    public static IEnumerable<(string Name, Texture Texture)> Images(Bni sprites) =>
+        [.. new[] { Target, Cross }.Select(a => (CanvasImages.FrameName(a, 0), sprites.GetAnimation(a).GetFrame(0).Image))];
+
+    private Image Load(string animation, SpriteAnimation.Frame frame, Palette? colours, ModImages? mods)
+    {
+        var texture = _renderer.CreateIndexTexture(frame.Image.Width, frame.Image.Height, frame.Image.Indices);
+        if (colours != null)
+        {
+            CanvasImages.Replace(_renderer, mods, CanvasImages.FrameName(animation, 0), frame.Image, colours, texture, _palette);
+        }
+
+        return new(texture, new Vector2(frame.Image.Width, frame.Image.Height), new Vector2(frame.HotspotX, frame.HotspotY));
+    }
 
     public void Draw(float canvasWidth, BomberSight sight)
     {

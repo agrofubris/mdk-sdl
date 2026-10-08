@@ -70,7 +70,7 @@ public sealed unsafe partial class Renderer
     private const int LightVectors = 2;
 
     /// <summary>The enhanced shader's modes (shaders/enhanced.hlsl).</summary>
-    private enum Mode { Lit = 1, Sprite = 2, Canvas = 3 }
+    private enum Mode { Lit = 1, Sprite = 2, Canvas = 3, Image = 4 }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct EnhancedVertexUniforms
@@ -267,7 +267,13 @@ public sealed unsafe partial class Renderer
         var material = command.Material;
         if (material.Pass == Pass.Overlay)
         {
-            return CanvasSampling == Sampling.Linear ? Mode.Canvas : null;
+            // The original look's canvas keeps its index textures, replaced or not.
+            if (CanvasSampling != Sampling.Linear)
+            {
+                return null;
+            }
+
+            return _images.Contains(KeyOf(material)) ? Mode.Image : Mode.Canvas;
         }
 
         if (material.Pass == Pass.Mirror)
@@ -423,7 +429,12 @@ public sealed unsafe partial class Renderer
         samplers[0] = new SDL_GPUTextureSamplerBinding { texture = (SDL_GPUTexture*)_textures[textured ? material.Texture : 0], sampler = _clampSampler };
         samplers[1] = new SDL_GPUTextureSamplerBinding { texture = (SDL_GPUTexture*)_textures[textured ? material.Palette : 0], sampler = _clampSampler };
         samplers[2] = new SDL_GPUTextureSamplerBinding { texture = shadowed ? _shadowMap : (SDL_GPUTexture*)_textures[0], sampler = _clampSampler };
-        samplers[3] = new SDL_GPUTextureSamplerBinding { texture = textured && mode != Mode.Canvas ? ColoursOf(material) : _blankColours, sampler = _colourSampler };
+        // Canvas images aren't tiled: clamped, no anisotropy.
+        samplers[3] = new SDL_GPUTextureSamplerBinding
+        {
+            texture = textured && mode != Mode.Canvas ? ColoursOf(material) : _blankColours,
+            sampler = mode == Mode.Image ? _mipSampler : _colourSampler,
+        };
         SDL_BindGPUFragmentSamplers(pass, 0, samplers, EnhancedSamplers);
 
         // Without lighting: unlit (white light all around), no haze.

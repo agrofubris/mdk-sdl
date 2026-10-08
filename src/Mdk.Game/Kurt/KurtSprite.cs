@@ -2,12 +2,13 @@ using System.Numerics;
 using Mdk.Engine.Render;
 using Mdk.Formats;
 using Mdk.Game.HdTextures;
+using Mdk.Game.Mods;
 
 namespace Mdk.Game.Kurt;
 
 /// <summary>Draws Kurt like the original: a sprite frame at a fixed size on screen (one pixel is
 /// 1/360 of the view's height), its hotspot 101 pixels above his projected feet, depth-tested at
-/// the feet's depth. The enhanced look takes its frames' HD images when made (<see cref="HdCache"/>).
+/// the feet's depth. The enhanced look takes mods' images of its frames (<see cref="ModImages"/>).
 /// <code>
 ///      ┌──────┐  frame
 ///      │  ☺   │
@@ -80,20 +81,20 @@ public sealed class KurtSprite
     private readonly int _palette;
     private readonly Shading _shading;
     private readonly Palette _colours;
-    private readonly HdCache? _hd;
+    private readonly ModImages? _mods;
     private readonly int _mesh;
     private readonly int _muzzleMesh;
     private readonly Dictionary<(string, int), int> _textures = [];
     /// <summary>Frames from the level's archives (the board's K_SURF and K_SURFJ).</summary>
     private readonly Dictionary<string, SpriteAnimation> _extra = [];
 
-    public KurtSprite(Renderer renderer, Bni sprites, Palette palette, Shading shading, HdCache? hd = null)
+    public KurtSprite(Renderer renderer, Bni sprites, Palette palette, Shading shading, ModImages? mods = null)
     {
         _renderer = renderer;
         _sprites = sprites;
         _shading = shading;
         _colours = palette;
-        _hd = hd;
+        _mods = mods;
         _palette = renderer.CreatePalette(palette.Rgba);
         _mesh = renderer.CreateDynamicMesh(QuadVertices);
         _muzzleMesh = renderer.CreateDynamicMesh(QuadVertices);
@@ -113,16 +114,19 @@ public sealed class KurtSprite
         {
             var image = animation.GetFrame(frame).Image;
             var material = MaterialOf(animation.Name, frame, image);
-            if (Upscaled(_hd, _shading, image, _colours) is { } hd)
+            if (Upscaled(_mods, _shading, FrameName(animation.Name, frame), image, _colours) is { } hd)
             {
                 _renderer.Replace(material, hd.Width, hd.Height, hd.Rgba);
             }
         }
     }
 
-    /// <summary>A frame's HD image: the enhanced look's sprites only, when the cache has it.</summary>
-    public static HdImage? Upscaled(HdCache? hd, Shading shading, Texture image, Palette palette) =>
-        shading == Shading.Sprite ? hd?.Find(image, palette) : null;
+    /// <summary>A frame's mod image (HD textures too): the enhanced look's sprites only.</summary>
+    public static HdImage? Upscaled(ModImages? mods, Shading shading, string name, Texture image, Palette palette) =>
+        shading == Shading.Sprite ? mods?.Texture(name, image, palette) : null;
+
+    /// <summary>A frame's name in mods: the animation's, then its number (K_RUN_0).</summary>
+    public static string FrameName(string animation, int frame) => $"{animation}_{frame}";
 
     private Material MaterialOf(string name, int frame, Texture image)
     {

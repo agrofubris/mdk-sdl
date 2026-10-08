@@ -2,6 +2,7 @@ using System.Drawing;
 using System.Numerics;
 using Mdk.Engine.Render;
 using Mdk.Formats;
+using Mdk.Game.Mods;
 using Mdk.Game.Scripts;
 
 namespace Mdk.Game.Hud;
@@ -89,6 +90,7 @@ public sealed class SniperOverlay
     private readonly Renderer _renderer;
     private readonly int _palette;
     private readonly Palette _colours;
+    private readonly ModImages? _mods;
     private readonly Image _frame;
     private readonly Image _mask;
     private readonly Image _cross;
@@ -106,37 +108,75 @@ public sealed class SniperOverlay
     private float _pulse = 1f;
     private bool _target;
 
-    public SniperOverlay(Renderer renderer, Bni sprites, Palette palette, int paletteTexture)
+    /// <summary>Sniper mode's screen; <paramref name="mods"/>' images replace its own (<see cref="CanvasImages"/>).</summary>
+    public SniperOverlay(Renderer renderer, Bni sprites, Palette palette, int paletteTexture, ModImages? mods = null)
     {
         _renderer = renderer;
         _colours = palette;
         _palette = paletteTexture;
+        _mods = mods;
         var mask = SniperScreen.Mask(sprites);
-        _frame = Load(CutView(SniperScreen.Frame(sprites), mask), Vector2.Zero);
-        _mask = Load(mask, Vector2.Zero);
-        var cross = sprites.GetAnimation("CROSS").GetFrame(0);
-        _cross = Load(cross.Image, new Vector2(cross.HotspotX, cross.HotspotY));
-        _gauge = Load(sprites.GetImage("SNIP_RNG"), Vector2.Zero);
-        _weapon = Load(sprites.GetImage("SNIP_WEP"), Vector2.Zero);
-        _digits = Load(sprites.GetImage("SNIP_TXT"), Vector2.Zero);
+        _frame = Load(FrameImage, CutView(SniperScreen.Frame(sprites), mask), Vector2.Zero);
+        _mask = Load(MaskImage, mask, Vector2.Zero);
+        var cross = sprites.GetAnimation(Cross).GetFrame(0);
+        _cross = Load(CanvasImages.FrameName(Cross, 0), cross.Image, new Vector2(cross.HotspotX, cross.HotspotY));
+        _gauge = Load(GaugeImage, sprites.GetImage(GaugeImage), Vector2.Zero);
+        _weapon = Load(WeaponImage, sprites.GetImage(WeaponImage), Vector2.Zero);
+        _digits = Load(Digits, sprites.GetImage(Digits), Vector2.Zero);
         for (var i = 1; i <= Types; i++)
         {
-            _icons.Add(Load(sprites.GetImage($"SNIP_W{i}"), Vector2.Zero));
-            _labels.Add(Load(sprites.GetImage($"SNIP_L{i}"), Vector2.Zero));
+            _icons.Add(Load($"{Icon}{i}", sprites.GetImage($"{Icon}{i}"), Vector2.Zero));
+            _labels.Add(Load($"{Label}{i}", sprites.GetImage($"{Label}{i}"), Vector2.Zero));
         }
 
-        var miss = sprites.GetAnimation("SNIPERGA");
+        var miss = sprites.GetAnimation(Miss);
         for (var i = 0; i < miss.FrameCount; i++)
         {
-            _miss.Add(Load(miss.GetFrame(i).Image, Vector2.Zero));
+            _miss.Add(Load(CanvasImages.FrameName(Miss, i), miss.GetFrame(i).Image, Vector2.Zero));
         }
     }
+
+    /// <summary>The screen's 2D images by their names in mods (<see cref="CanvasImages"/>; the exports).</summary>
+    public static IEnumerable<(string Name, Texture Texture)> Images(Bni sprites)
+    {
+        var mask = SniperScreen.Mask(sprites);
+        yield return (FrameImage, CutView(SniperScreen.Frame(sprites), mask));
+        yield return (MaskImage, mask);
+        yield return (CanvasImages.FrameName(Cross, 0), sprites.GetAnimation(Cross).GetFrame(0).Image);
+        foreach (var name in new[] { GaugeImage, WeaponImage, Digits })
+        {
+            yield return (name, sprites.GetImage(name));
+        }
+
+        for (var i = 1; i <= Types; i++)
+        {
+            yield return ($"{Icon}{i}", sprites.GetImage($"{Icon}{i}"));
+            yield return ($"{Label}{i}", sprites.GetImage($"{Label}{i}"));
+        }
+
+        var miss = sprites.GetAnimation(Miss);
+        for (var i = 0; i < miss.FrameCount; i++)
+        {
+            yield return (CanvasImages.FrameName(Miss, i), miss.GetFrame(i).Image);
+        }
+    }
+
+    /// <summary>The images' names in <c>TRAVSPRT.BNI</c> (the frame and mask: SniperScreen's).</summary>
+    private const string FrameImage = "SNIPERS1";
+    private const string MaskImage = "SNIPERS2";
+    private const string Cross = "CROSS";
+    private const string GaugeImage = "SNIP_RNG";
+    private const string WeaponImage = "SNIP_WEP";
+    private const string Digits = "SNIP_TXT";
+    private const string Icon = "SNIP_W";
+    private const string Label = "SNIP_L";
+    private const string Miss = "SNIPERGA";
 
     /// <summary>Whether sniper mode's screen replaces the HUD.</summary>
     public bool Visible => _shown != null;
 
-    private Image Load(Texture texture, Vector2 hotspot) =>
-        new(_renderer.CreateIndexTexture(texture.Width, texture.Height, texture.Indices), new Vector2(texture.Width, texture.Height), hotspot);
+    private Image Load(string name, Texture texture, Vector2 hotspot) =>
+        new(CanvasImages.Create(_renderer, _mods, name, texture, _colours, _palette), new Vector2(texture.Width, texture.Height), hotspot);
 
     /// <summary>The frame without the view's rectangle, but for its edge under the mask: filtered (the
     /// enhanced look), the frame's and the mask's edges both fade there and would let the scene through

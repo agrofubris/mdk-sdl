@@ -2,6 +2,7 @@ using System.Drawing;
 using System.Numerics;
 using Mdk.Engine.Render;
 using Mdk.Formats;
+using Mdk.Game.Mods;
 
 namespace Mdk.Game.Hud;
 
@@ -63,6 +64,8 @@ public sealed class HudView
 
     private readonly Renderer _renderer;
     private readonly int _palette;
+    private readonly Palette _colours;
+    private readonly ModImages? _mods;
     private readonly Image _panel;
     private readonly Image _skull;
     private readonly Image _digits;
@@ -76,18 +79,21 @@ public sealed class HudView
     public SniperOverlay Sniper { get; }
     private readonly BomberOverlay _bomber;
 
-    public HudView(Renderer renderer, Bni sprites, Palette palette, Fti fti)
+    /// <summary>The HUD; <paramref name="mods"/>' images replace its own (<see cref="CanvasImages"/>).</summary>
+    public HudView(Renderer renderer, Bni sprites, Palette palette, Fti fti, ModImages? mods = null)
     {
         _renderer = renderer;
         _palette = renderer.CreatePalette(palette.Rgba);
-        _panel = Load(sprites.GetImage("SC_STAT"), 0, 0);
-        _skull = Load(sprites.GetImage("SKULL"), 0, 0);
-        _digits = Load(sprites.GetImage("SNIP_TXT"), 0, 0);
-        var pickups = sprites.GetAnimation("PICKUPS");
+        _colours = palette;
+        _mods = mods;
+        _panel = Load(Panel, sprites.GetImage(Panel), 0, 0);
+        _skull = Load(Skull, sprites.GetImage(Skull), 0, 0);
+        _digits = Load(Digits, sprites.GetImage(Digits), 0, 0);
+        var pickups = sprites.GetAnimation(Pickups);
         for (var i = 0; i < pickups.FrameCount; i++)
         {
             var frame = pickups.GetFrame(i);
-            _icons.Add(Load(frame.Image, frame.HotspotX, frame.HotspotY));
+            _icons.Add(Load(CanvasImages.FrameName(Pickups, i), frame.Image, frame.HotspotX, frame.HotspotY));
         }
 
         _barFill = Colour(palette, BarFill);
@@ -95,11 +101,11 @@ public sealed class HudView
 
         // The fonts use the interface's colours (SYS_PAL, the first 64).
         var system = Palette.FromRgb(fti.GetBytes("SYS_PAL"));
-        var big = new FontView(renderer, Font.Parse(fti.GetBytes("FONTBIG"), FontSpace.Big), system);
-        var small = new FontView(renderer, Font.Parse(fti.GetBytes("FONTSML"), FontSpace.Small), system);
+        var big = new FontView(renderer, Font.Parse(fti.GetBytes(FontView.Big), FontSpace.Big), system, mods, FontView.Big);
+        var small = new FontView(renderer, Font.Parse(fti.GetBytes(FontView.Small), FontSpace.Small), system, mods, FontView.Small);
         Messages = new Messages(fti, big, small);
-        Sniper = new SniperOverlay(renderer, sprites, palette, _palette);
-        _bomber = new BomberOverlay(renderer, sprites, _palette, big);
+        Sniper = new SniperOverlay(renderer, sprites, palette, _palette, mods);
+        _bomber = new BomberOverlay(renderer, sprites, _palette, big, palette, mods);
     }
 
     /// <summary>Spaces of the fonts' missing characters.</summary>
@@ -109,8 +115,28 @@ public sealed class HudView
         public const int Small = 4;
     }
 
-    private Image Load(Texture texture, int hotspotX, int hotspotY) =>
-        new(_renderer.CreateIndexTexture(texture.Width, texture.Height, texture.Indices), new Vector2(texture.Width, texture.Height), hotspotX, hotspotY);
+    private Image Load(string name, Texture texture, int hotspotX, int hotspotY) =>
+        new(CanvasImages.Create(_renderer, _mods, name, texture, _colours, _palette), new Vector2(texture.Width, texture.Height), hotspotX, hotspotY);
+
+    /// <summary>The HUD's 2D images by their names in mods (<see cref="CanvasImages"/>; the exports).</summary>
+    public static IEnumerable<(string Name, Texture Texture)> Images(Bni sprites)
+    {
+        foreach (var name in new[] { Panel, Skull, Digits })
+        {
+            yield return (name, sprites.GetImage(name));
+        }
+
+        var pickups = sprites.GetAnimation(Pickups);
+        for (var i = 0; i < pickups.FrameCount; i++)
+        {
+            yield return (CanvasImages.FrameName(Pickups, i), pickups.GetFrame(i).Image);
+        }
+    }
+
+    private const string Panel = "SC_STAT";
+    private const string Skull = "SKULL";
+    private const string Digits = "SNIP_TXT";
+    private const string Pickups = "PICKUPS";
 
     private static Vector4 Colour(Palette palette, int index) =>
         new Vector4(palette.Rgba[index * 4], palette.Rgba[index * 4 + 1], palette.Rgba[index * 4 + 2], byte.MaxValue) / byte.MaxValue;

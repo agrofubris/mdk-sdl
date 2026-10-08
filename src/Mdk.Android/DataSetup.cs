@@ -2,13 +2,14 @@ using Android.App;
 using Android.Content;
 using Mdk.Formats;
 using Mdk.Game.HdTextures;
+using Mdk.Game.Mods;
 using Uri = Android.Net.Uri;
 
 namespace Mdk.Android;
 
 /// <summary>The game's files on first start: the user picks the MDK folder copied to the phone,
 /// its game folders are copied into the app's own folder once (Android's shared storage has no
-/// paths the game could read), and its <c>textures-hd</c> (made on a PC) into the user folder.
+/// paths the game could read), and its <c>mods</c> (HD textures made on a PC among them) into the user folder.
 /// Options, "Import from folder" picks it again and copies what's new or changed. Runs on SDL's
 /// thread; dialogs show on the UI thread.
 /// <code>
@@ -25,7 +26,7 @@ internal sealed class DataSetup(Activity activity, string dir, string userFolder
     private const string Intro = "Copy your MDK installation (GOG, Steam or CD: the folder with TRAVERSE, MISC, FALL3D, STREAM) to this device, then pick that folder. Its game files (about 170 MB) are copied into the app once.";
     private const string NotMdk = "That folder has no MDK game files (TRAVERSE/TRAVSPRT.BNI). Pick the MDK folder.";
     private const string CopyFailed = "Copying failed: ";
-    private const string Again = "Pick your MDK folder again: new or changed game files are copied, and textures-hd (HD textures made on a PC) if it's in it.";
+    private const string Again = "Pick your MDK folder again: new or changed game files are copied, and mods (HD textures made on a PC among them) if it has them.";
 
     private TaskCompletionSource<Uri?>? _picked;
 
@@ -106,7 +107,8 @@ internal sealed class DataSetup(Activity activity, string dir, string userFolder
         return _picked.Task.Result;
     }
 
-    /// <summary>Copies the installation and its HD textures, showing the progress.</summary>
+    /// <summary>Copies the installation and its mods (HD textures made on a PC among them; an older
+    /// build's textures-hd moved into its mod), showing the progress.</summary>
     private MdkData Copy(DocumentTree tree, string root)
     {
         var dialog = Dialogs.Show(activity, "Copying the game files...");
@@ -121,7 +123,9 @@ internal sealed class DataSetup(Activity activity, string dir, string userFolder
         try
         {
             var data = MdkData.Import(tree, root, dir, Progress("the game files"));
-            MdkData.CopyFolder(tree, root, HdCache.FolderName, HdCache.FolderIn(userFolder), Progress("the HD textures"));
+            MdkData.CopyFolder(tree, root, ModCatalog.FolderName, ModCatalog.FolderIn(userFolder), Progress("the mods"));
+            MdkData.CopyFolder(tree, root, HdGenerator.OldFolder, Path.Combine(userFolder, HdGenerator.OldFolder), Progress("the HD textures"));
+            HdGenerator.Migrate(userFolder);
             return data;
         }
         finally

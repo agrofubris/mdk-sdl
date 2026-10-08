@@ -2,28 +2,29 @@ using System.Globalization;
 using Mdk.Engine.Audio;
 using Mdk.Engine.Platform;
 using Mdk.Engine.Render;
+using Mdk.Game.HdTextures;
 using Mdk.Game.Kurt;
+using Mdk.Game.Mods;
 
 namespace Mdk.Game.Flow;
 
 /// <summary>The look of the levels: the original's, or enhanced (lit, filtered, shadows, haze).</summary>
 public enum Graphics { Original, Enhanced }
 
-/// <summary>The enhanced look's textures: the original's, or their HD images when made (<see cref="HdTextures.HdCache"/>).</summary>
-public enum TextureSet { Original, Hd }
-
 /// <summary>The player's settings (settings.gd): volumes, the music filter, the mouse, the window,
-/// anti-aliasing, the difficulty, gore, the graphics and the key bindings (one key or mouse button per action, by name). Saved as
+/// anti-aliasing, the difficulty, gore, the graphics, the mods switched off and the key bindings (one key or mouse button per action, by name). Saved as
 /// <c>name=value</c> lines in the user's folder; applied at start and whenever they change.
 /// <code>
 ///   master_volume=80
 ///   bind.Forward=W
+///   mod.hd-textures=Off
 /// </code></summary>
 public sealed class Settings
 {
     public const int MaxVolume = 100;
     private const string FileName = "settings.cfg";
     private const string BindPrefix = "bind.";
+    private const string ModPrefix = "mod.";
 
     /// <summary>The game's actions in the order the controls screen lists them, with their names.</summary>
     public static readonly IReadOnlyList<(Key Key, string Name)> Actions =
@@ -50,10 +51,12 @@ public sealed class Settings
     /// <summary>The levels' look, from the next level on; the 2D screens are filtered at once.</summary>
     public Graphics Graphics = Graphics.Original;
     public AntiAliasing AntiAliasing = AntiAliasing.Off;
-    /// <summary>HD textures in the enhanced look, from the next level on.</summary>
-    public TextureSet Textures = TextureSet.Original;
     /// <summary>Rebound actions: action → key or mouse button name (see <see cref="Input.Bind"/>).</summary>
     public readonly Dictionary<Key, string> Bindings = [];
+    /// <summary>Mods by folder; those not listed are on (<see cref="ModCatalog"/>).</summary>
+    public readonly Dictionary<string, ModState> Mods = new(StringComparer.OrdinalIgnoreCase);
+
+    public ModState StateOf(string mod) => Mods.GetValueOrDefault(mod, ModState.On);
 
     /// <summary>The settings file in a user folder.</summary>
     public static string PathIn(string folder) => Path.Combine(folder, FileName);
@@ -106,9 +109,9 @@ public sealed class Settings
             $"gore={Gore}",
             $"graphics={Graphics}",
             $"antialiasing={AntiAliasing}",
-            $"textures={Textures}",
         };
         lines.AddRange(Bindings.Select(b => $"{BindPrefix}{b.Key}={b.Value}"));
+        lines.AddRange(Mods.OrderBy(m => m.Key, StringComparer.OrdinalIgnoreCase).Select(m => $"{ModPrefix}{m.Key}={m.Value}"));
         return string.Join('\n', lines) + "\n";
     }
 
@@ -119,6 +122,16 @@ public sealed class Settings
             if (Enum.TryParse<Key>(name[BindPrefix.Length..], out var key))
             {
                 Bindings[key] = value;
+            }
+
+            return;
+        }
+
+        if (name.StartsWith(ModPrefix, StringComparison.Ordinal))
+        {
+            if (Enum.TryParse<ModState>(value, out var state) && Enum.IsDefined(state))
+            {
+                Mods[name[ModPrefix.Length..]] = state;
             }
 
             return;
@@ -159,8 +172,9 @@ public sealed class Settings
             case "antialiasing":
                 AntiAliasing = Enum.TryParse<AntiAliasing>(value, out var antiAliasing) && Enum.IsDefined(antiAliasing) ? antiAliasing : AntiAliasing;
                 break;
-            case "textures":
-                Textures = Enum.TryParse<TextureSet>(value, out var textures) && Enum.IsDefined(textures) ? textures : Textures;
+            // Older settings' HD switch: now the HD textures mod's.
+            case "textures" when value is "Hd" or "Original":
+                Mods.TryAdd(HdGenerator.ModFolder, value == "Hd" ? ModState.On : ModState.Off);
                 break;
         }
     }

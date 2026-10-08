@@ -5,6 +5,7 @@ using Mdk.Engine.Render;
 using Mdk.Formats;
 using Mdk.Game.Kurt;
 using Mdk.Game.Level;
+using Mdk.Game.Mods;
 
 namespace Mdk.Game.Stream;
 
@@ -63,7 +64,7 @@ public sealed class StreamView
     private readonly List<TubeVertex> _tubeVertices = [];
     private readonly List<Vertex> _vertices = [];
 
-    public StreamView(Renderer renderer, Bni bni, Palette palette, TextureArchive archive)
+    public StreamView(Renderer renderer, Bni bni, Palette palette, TextureArchive archive, ModImages? mods = null)
     {
         _renderer = renderer;
         _bni = bni;
@@ -71,6 +72,7 @@ public sealed class StreamView
         _archives = [archive];
         _resolver = new MaterialResolver(renderer, new Dti());
         _paletteId = renderer.CreatePalette(palette.Rgba);
+        _mods = mods;
         _background = Load("BG");
         _light = Load("LIGHT");
         _planet = Load("PLANET");
@@ -81,11 +83,14 @@ public sealed class StreamView
         _backMesh = renderer.CreateDynamicMesh(QuadVertices);
     }
 
+    /// <summary>An image of the archive; a mod's of its name replaces it on the canvas (the panel, the digits).</summary>
     private Image Load(string name)
     {
         var texture = _bni.GetImage(name);
-        return new Image(_renderer.CreateIndexTexture(texture.Width, texture.Height, texture.Indices), new Vector2(texture.Width, texture.Height));
+        return new Image(CanvasImages.Create(_renderer, _mods, name, texture, _palette, _paletteId), new Vector2(texture.Width, texture.Height));
     }
+
+    private readonly ModImages? _mods;
 
     /// <summary>The camera's view for the window's aspect: 250-pixel focal length on the 360-high view.</summary>
     public View ViewOf(Flight flight)

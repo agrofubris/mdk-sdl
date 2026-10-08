@@ -7,6 +7,7 @@ using Mdk.Formats;
 using Mdk.Game.DevTools;
 using Mdk.Game.Flow;
 using Mdk.Game.Hud;
+using Mdk.Game.Mods;
 
 namespace Mdk.Game.Menu;
 
@@ -30,6 +31,36 @@ public sealed class Ui(MdkData data, Window window, Renderer renderer, AudioDevi
     public DevSession Dev { get; } = new();
     /// <summary>Imports the game files again (Android); null elsewhere.</summary>
     public Action? Import { get; init; }
+    /// <summary>The mods found in the user folder (<see cref="ModCatalog"/>); the Mods page scans again.</summary>
+    public ModCatalog Mods { get; private set; } = ModCatalog.Scan(ModCatalog.FolderIn(userFolder));
+
+    public void ScanMods() => Mods = ModCatalog.Scan(ModCatalog.FolderIn(userFolder));
+
+    /// <summary>The enabled mods' images for a level (null: the menus).</summary>
+    public ModImages ModImages(int? level) => Mods.ModImages(settings, level);
+
+    /// <summary>The menus' mod images (2D: drawn by the enhanced look only), kept while the same mods are on.</summary>
+    public ModImages MenuImages
+    {
+        get
+        {
+            var folders = string.Join(FolderSeparator, Mods.Folders(settings));
+            if (_menuImages == null || folders != _menuFolders)
+            {
+                (_menuImages, _menuFolders) = (ModImages(null), folders);
+            }
+
+            return _menuImages;
+        }
+    }
+
+    /// <summary>Mods' 2D images for a screen (null: the menus'): none in the original look, which draws the originals.</summary>
+    public ModImages? CanvasMods(int? level = null) =>
+        settings.Graphics != Graphics.Enhanced ? null : level is { } number ? ModImages(number) : MenuImages;
+
+    private const char FolderSeparator = '|';
+    private ModImages? _menuImages;
+    private string _menuFolders = "";
 
     /// <summary>The settings changed: applied, and saved.</summary>
     public void ApplySettings()
@@ -124,11 +155,12 @@ public sealed class Fonts
     public FontView Big { get; }
     public FontView Small { get; }
 
-    public Fonts(Renderer renderer, Fti fti, Palette? palette = null)
+    /// <summary>The fonts; <paramref name="mods"/>' images of their atlases replace them.</summary>
+    public Fonts(Renderer renderer, Fti fti, Palette? palette = null, ModImages? mods = null)
     {
         var colours = palette ?? Palette.FromRgb(fti.GetBytes("SYS_PAL"));
-        Big = new FontView(renderer, Font.Parse(fti.GetBytes("FONTBIG"), BigSpace), colours);
-        Small = new FontView(renderer, Font.Parse(fti.GetBytes("FONTSML"), SmallSpace), colours);
+        Big = new FontView(renderer, Font.Parse(fti.GetBytes(FontView.Big), BigSpace), colours, mods, FontView.Big);
+        Small = new FontView(renderer, Font.Parse(fti.GetBytes(FontView.Small), SmallSpace), colours, mods, FontView.Small);
     }
 }
 
@@ -155,9 +187,14 @@ public sealed class PalettedImage
         _palette = renderer.CreatePalette(Palette.FromRgb(paletteRgb).Rgba);
     }
 
-    /// <summary>An image of a texture (BNI, LBB) with a palette of 768 RGB bytes.</summary>
-    public static PalettedImage Of(Renderer renderer, Texture texture, byte[] paletteRgb) =>
-        new(renderer, texture.Width, texture.Height, texture.Indices, paletteRgb);
+    /// <summary>An image of a texture (BNI, LBB) with a palette of 768 RGB bytes; a mod's image of
+    /// its name replaces it (<see cref="CanvasImages"/>).</summary>
+    public static PalettedImage Of(Renderer renderer, Texture texture, byte[] paletteRgb, ModImages? mods = null)
+    {
+        var image = new PalettedImage(renderer, texture.Width, texture.Height, texture.Indices, paletteRgb);
+        CanvasImages.Replace(renderer, mods, texture.Name, texture, Palette.FromRgb(paletteRgb), image._texture, image._palette);
+        return image;
+    }
 
     public void SetIndices(byte[] indices) => _renderer.UpdateTexture(_texture, Width, Height, indices);
 

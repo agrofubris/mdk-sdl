@@ -63,6 +63,9 @@ using Mdk.Game.Scripts;
 //                           the frames' costs at the end: sections, allocations, collections (tests)
 //   --soak[=seed]           random seeded keys on every screen, 6 steps a frame, checks in a level
 //                           (tests; --tour: every arena in turn during --wait; tests/soak_test.sh)
+//   --mod=a,b               only these mods (folders of mods/) on, for this run (tests)
+//   --export-assets=dir     write the game's textures, 2D images (PNG) and models (glTF .glb) for
+//                           modding into dir, then quit (docs/modding.md)
 //   --upscale-textures[=3,7] make the enhanced look's HD textures (all levels, or these), then quit:
 //                           --hd-model=general|anime (Real-ESRGAN x4plus or animevideov3), --hd-scale=2|4
 
@@ -94,6 +97,11 @@ if (options.TryGetValue("upscale-textures", out var upscale))
     }
 
     return Game.UpscaleTextures(data, new HdOptions(levels, model, scale));
+}
+
+if (options.TryGetValue("export-assets", out var exportTo))
+{
+    return Game.ExportAssets(data, exportTo);
 }
 
 Vector3? position = null;
@@ -179,6 +187,7 @@ using var game = new Game(data, new GameOptions(start, viewer)
     Graphics = options.ContainsKey("enhanced") ? Graphics.Enhanced : options.ContainsKey("original") ? Graphics.Original : null,
     Gore = options.ContainsKey("bloodyes") ? true : options.ContainsKey("nobloodno") ? false : null,
     Presses = options.TryGetValue("press", out var presses) ? TestPresses.Parse(presses) : null,
+    Mods = options.TryGetValue("mod", out var mods) ? mods.Split(',', StringSplitOptions.RemoveEmptyEntries) : null,
     Perf = options.TryGetValue("perf", out var perf) ? (perf.Length != 0 ? float.Parse(perf, CultureInfo.InvariantCulture) : DefaultWarmup) : null,
 });
 game.Run();

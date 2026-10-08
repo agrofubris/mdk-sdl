@@ -5,12 +5,16 @@ using Mdk.Game.Kurt;
 using Mdk.Game.Level;
 using Mdk.Game.Scripts;
 
+using Mdk.Game.Mods;
+
 namespace Mdk.Game.DevTools;
 
 /// <summary>The console's commands on the level being played (<see cref="Viewer"/>).</summary>
 public sealed class LevelCommands(LevelData level, Kurt.Kurt kurt, ScriptRuntime scripts, ArenaSpace space,
     Func<string, bool> save) : ILevelTarget
 {
+    public ModReport Mods { get; init; } = ModReport.None;
+
     public Placement Where() => new(level.Number, scripts.CurrentArena, kurt.Feet, kurt.Yaw);
 
     public bool Teleport(string arena, Vector3? point)

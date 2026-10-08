@@ -47,6 +47,7 @@ public static class ConsoleCommands
         registry.Add(new Command("aa", "aa <off|2x|4x>", args => AntiAlias(target, args)));
         registry.Add(new Command("timescale", "timescale <x>", args => TimeScale(target, args)));
         registry.Add(new Command("fps", "fps", _ => $"overlay {Name(target.ToggleOverlay())}"));
+        registry.Add(new Command("mods", "mods", _ => Mods(target)));
         registry.Add(new Command("quit", "quit", _ => Quit(target)));
     }
 
@@ -192,6 +193,25 @@ public static class ConsoleCommands
 
         target.SetTimeScale(scale);
         return $"timescale {scale.ToString(CultureInfo.InvariantCulture)}";
+    }
+
+    /// <summary>The mods found (on or off), then what the level took from them.
+    /// <code>
+    ///   Clean walls (clean-walls) on, priority 0
+    ///   HD textures (Real-ESRGAN) (hd-textures) off, priority -100
+    ///   mods 1: 14 images, 1 models
+    ///   images: WALL1 WALL2 ...
+    /// </code></summary>
+    private static string Mods(ICommandTarget target)
+    {
+        var list = target.ModList();
+        IEnumerable<string> lines = list.Count > 0 ? list : ["No mods in mods/"];
+        if (target.Level is { } level)
+        {
+            lines = lines.Concat(level.Mods.Lines());
+        }
+
+        return string.Join('\n', lines);
     }
 
     private static string Quit(ICommandTarget target)

@@ -9,6 +9,7 @@ using Mdk.Formats;
 using Mdk.Game.Flow;
 using Mdk.Game.HdTextures;
 using Mdk.Game.Kurt;
+using Mdk.Game.Mods;
 
 namespace Mdk.Game.Menu;
 
@@ -54,6 +55,8 @@ public sealed class MenuItems
     private const int VolumeIncrement = 10;
     private static readonly float[] Sensitivities = [0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f, 2.5f, 3f];
     private const int DefaultSensitivity = 3;
+    /// <summary>Longer mod names are cut (the row's width).</summary>
+    private const int MaxModName = 24;
     private static readonly string[] DifficultyNames = ["Easy", "Normal", "Hard"];
     private static readonly string[] AntiAliasingNames = ["Off", "2x", "4x"];
     private static readonly int GraphicsCount = Enum.GetValues<Graphics>().Length;
@@ -346,15 +349,9 @@ public sealed class MenuItems
             step => s.AntiAliasing = (AntiAliasing)Wrap((int)s.AntiAliasing + step, AntiAliasingNames.Length));
         AddOption(() => $"Difficulty: {DifficultyNames[(int)s.Difficulty]}", step => s.Difficulty = (Difficulty)Wrap((int)s.Difficulty + step, DifficultyNames.Length));
         AddOption(() => $"Graphics: {s.Graphics}", step => s.Graphics = (Graphics)Wrap((int)s.Graphics + step, GraphicsCount));
-        // Android shows the switch only for a cache copied from a PC, and never makes one.
-        var hd = HdMenu.Items(HdMenu.Current, _ui.UserFolder);
-        if (hd.Contains(HdItem.Switch))
-        {
-            AddOption(() => $"HD textures: {OnOff(s.Textures == TextureSet.Hd)}",
-                _ => s.Textures = s.Textures == TextureSet.Hd ? TextureSet.Original : TextureSet.Hd);
-        }
-
-        if (hd.Contains(HdItem.Make))
+        // HD textures are a mod (switched on the Mods page); Android never makes them.
+        AddItem("Mods", () => ShowMods(() => ShowOptions(back)));
+        if (HdMenu.Items(HdMenu.Current).Contains(HdItem.Make))
         {
             AddItem("Make HD textures", () => ShowHdTextures(() => ShowOptions(back)));
         }
@@ -372,6 +369,29 @@ public sealed class MenuItems
         AddItem("Controls", () => ShowControls(() => ShowOptions(back)));
         AddItem("Back", back);
         _songVoice = _ui.Play(_song, Bus.Music);
+    }
+
+    /// <summary>The mods found (<see cref="ModCatalog"/>), each switched on or off; the enhanced look
+    /// takes them from the next level (2D images at once).</summary>
+    private void ShowMods(Action back)
+    {
+        Clear();
+        _ui.ScanMods();
+        var s = _ui.Settings;
+        AddTitle("Mods: enhanced look");
+        foreach (var mod in _ui.Mods.Mods)
+        {
+            var name = mod.Name.Length > MaxModName ? mod.Name[..MaxModName] : mod.Name;
+            AddOption(() => $"{name}: {OnOff(s.StateOf(mod.Folder) == ModState.On)}",
+                _ => s.Mods[mod.Folder] = s.StateOf(mod.Folder) == ModState.On ? ModState.Off : ModState.On);
+        }
+
+        if (_ui.Mods.Mods.Count == 0)
+        {
+            AddDisabled("No mods in mods/");
+        }
+
+        AddItem("Back", back);
     }
 
     /// <summary>Makes the HD textures (<see cref="HdGenerator"/>, minutes on a GPU) while showing

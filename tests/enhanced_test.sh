@@ -46,13 +46,12 @@ for LEVEL in 3 6 7; do
 	fi
 done
 
-# With MDK_HD_DIR=<a user folder with textures-hd/ (mdk --upscale-textures=3)>, HD textures change
-# the enhanced look.
+# With MDK_HD_DIR=<a user folder with mods/hd-textures/ (mdk --upscale-textures=3)>, HD textures
+# change the enhanced look.
 if [ -n "$MDK_HD_DIR" ]; then
 	echo "HD textures"
-	mkdir -p "$OUT/hd"
-	cp -r "$MDK_HD_DIR/textures-hd" "$OUT/hd/"
-	echo "textures=Hd" > "$OUT/hd/settings.cfg"
+	mkdir -p "$OUT/hd/mods"
+	cp -r "$MDK_HD_DIR/mods/hd-textures" "$OUT/hd/mods/"
 	shot "$MDK" "$OUT/hd" "$OUT/hd_3.bmp" --level=3 --enhanced; check "HD screenshot" $?
 	! cmp -s "$OUT/hd_3.bmp" "$OUT/enhanced_3.bmp"; check "HD textures differ" $?
 	shot "$MDK" "$OUT/hd" "$OUT/hd_original_3.bmp" --level=3 --original; check "original screenshot" $?

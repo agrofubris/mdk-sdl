@@ -28,7 +28,7 @@ public sealed class PauseMenu
     public PauseMenu(Ui ui)
     {
         _ui = ui;
-        _fonts = new Fonts(ui.Renderer, ui.Fti);
+        _fonts = new Fonts(ui.Renderer, ui.Fti, mods: ui.CanvasMods());
         _items = new MenuItems(ui, _fonts, ClickGain);
     }
 
