@@ -2,7 +2,8 @@
 // sample their colour texture (RGBA8 premultiplied, mipmapped, a layer per frame: Renderer.Colours.cs)
 // trilinear and anisotropic; the canvas filters its index texture (palette_filtered.hlsli).
 //
-//   mode 1 lit:    albedo x (ambient + sun x N.L x shadow), then the haze; edges cut at half cover
+//   mode 1 lit:    albedo x exposure x (hemisphere + sun x N.L x shadow), then the haze; edges cut
+//                  at half cover. The hemisphere: the sky's light from above, the ground's from below.
 //   mode 2 sprite: albedo, then the haze; edges cut at half cover; no light
 //   mode 3 canvas: the 2D canvas: albedo, its edges blended by their cover
 //
@@ -66,9 +67,14 @@ cbuffer FragmentUniforms : register(b0, space3)
     int mode;
     // World to the shadow map's clip space.
     float4x4 sun_matrix;
-    // xyz: the way the sunlight goes; w: its strength.
+    // xyz: the way the sunlight goes; w: the exposure.
     float4 sun;
-    // xyz: the camera; w: the light all around.
+    // rgb: the sunlight (linear).
+    float4 sun_colour;
+    // rgb: the light from the sky above and from the ground below (linear).
+    float4 sky;
+    float4 ground;
+    // xyz: the camera.
     float4 camera;
     // rgb: the haze's colour (sRGB); a: its density per unit.
     float4 haze;
@@ -154,7 +160,8 @@ float4 ps_main(VertexOut input) : SV_Target
     if (mode == MODE_LIT)
     {
         float facing = max(dot(normal, -sun.xyz), 0.0);
-        lit = albedo * (camera.w + sun.w * facing * sunlight(position, normal));
+        float3 hemisphere = lerp(ground.rgb, sky.rgb, normal.z * 0.5 + 0.5);
+        lit = albedo * sun.w * (hemisphere + sun_colour.rgb * facing * sunlight(position, normal));
     }
 
     float fog = 1.0 - exp(-haze.a * length(position - camera.xyz));

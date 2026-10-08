@@ -146,6 +146,8 @@ public sealed class Viewer : IScreen
     /// <summary>The level ended: the event that follows once the delay is over.</summary>
     private (Event Event, float Delay)? _ending;
     private readonly LevelCommands _commands;
+    /// <summary>The enhanced look's light; null in the original look.</summary>
+    private readonly LevelLight? _light;
 
     public Viewer(Ui ui, ViewerOptions options, GameState state)
     {
@@ -177,7 +179,8 @@ public sealed class Viewer : IScreen
             : Cmi.Load(data.PathOf($"TRAVERSE/LEVEL{level.Number}/LEVEL{level.Number}.CMI"));
         _music = new LevelMusic(_mixer, cmi.ArenaMusic) { Ambience = cmi.ArenaAmbience };
         renderer.Panorama = CreatePanorama(renderer, level.Dti) with { Sampling = EnhancedLook.Sky(graphics) };
-        renderer.Lighting = graphics == Graphics.Enhanced ? EnhancedLook.Lighting(level.Dti) : null;
+        renderer.Lighting = null;
+        _light = graphics == Graphics.Enhanced ? new LevelLight(renderer, level) : null;
 
         _space = new ArenaSpace();
         foreach (var arena in level.Arenas.Where(a => level.IsReachable(a.Name)))
@@ -605,6 +608,7 @@ public sealed class Viewer : IScreen
         }
 
         _scripts.Eye = camera.Position;
+        _light?.Update(_scripts.CurrentArena);
         using var render = _ui.Dev.Profiler.Measure(Section.Scene);
         _view.Draw(_scripts.DrawnArenas, _scripts.AnimatedTextures);
         _view.DrawEnd(_scripts.EndLevel);

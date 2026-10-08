@@ -24,10 +24,15 @@ public enum Sampling { Nearest, Linear }
 /// <summary>Multisample anti-aliasing of the frame.</summary>
 public enum AntiAliasing { Off, X2, X4 }
 
-/// <summary>The enhanced look's light: the sun (the way its light goes, its strength), the white
-/// light all around, how far shadows reach, the glow, and the haze (its colour, its density per unit).</summary>
-public sealed record Lighting(Vector3 SunDirection, float SunEnergy, float AmbientEnergy, float ShadowDistance, float Glow,
-    Vector4 HazeColour, float HazeDensity);
+/// <summary>Whether the sun casts shadows.</summary>
+public enum Shadows { Off, On }
+
+/// <summary>The enhanced look's light: the sun (the way its light goes, its linear colour), the
+/// light from the sky above and from the ground below (linear colours, blended by a face's
+/// up component), the exposure scaling it all, the sun's shadows and how far they reach, the glow,
+/// and the haze (its colour, its density per unit).</summary>
+public sealed record Lighting(Vector3 SunDirection, Vector3 Sun, Vector3 Sky, Vector3 Ground, float Exposure,
+    Shadows Shadows, float ShadowDistance, float Glow, Vector4 HazeColour, float HazeDensity);
 
 /// <summary>The enhanced look's frame (with <see cref="Renderer.Lighting"/>).
 /// <code>
@@ -77,6 +82,9 @@ public sealed unsafe partial class Renderer
         public Mode Mode;
         public Matrix4x4 SunMatrix;
         public Vector4 Sun;
+        public Vector4 SunColour;
+        public Vector4 Sky;
+        public Vector4 Ground;
         public Vector4 Camera;
         public Vector4 Haze;
         public Vector4 Shadow;
@@ -265,8 +273,12 @@ public sealed unsafe partial class Renderer
     private void RenderEnhanced(SDL_GPUCommandBuffer* commands, View view, Vector4 clearColour, Lighting lighting)
     {
         EnsureEnhanced();
-        _sunMatrix = SunShadow.Matrix(lighting.SunDirection, view.Position, lighting.ShadowDistance, ShadowSize);
-        RenderDepth(commands, _shadowMap, _sunMatrix.Value, Output.Shadow);
+        if (lighting.Shadows == Shadows.On)
+        {
+            _sunMatrix = SunShadow.Matrix(lighting.SunDirection, view.Position, lighting.ShadowDistance, ShadowSize);
+            RenderDepth(commands, _shadowMap, _sunMatrix.Value, Output.Shadow);
+        }
+
         RenderDepth(commands, _viewDepth, view.ViewProjection, Output.Depth);
 
         // The scene without the canvas, into the scene texture.
@@ -370,8 +382,10 @@ public sealed unsafe partial class Renderer
         samplers[3] = new SDL_GPUTextureSamplerBinding { texture = textured && mode != Mode.Canvas ? ColoursOf(material) : _blankColours, sampler = _colourSampler };
         SDL_BindGPUFragmentSamplers(pass, 0, samplers, EnhancedSamplers);
 
-        // Without lighting: unlit, no haze.
+        // Without lighting: unlit (white light all around), no haze.
         var lighting = Lighting;
+        var sky = lighting?.Sky ?? Vector3.One;
+        var ground = lighting?.Ground ?? Vector3.One;
         var uniforms = new EnhancedUniforms
         {
             Colour = material.Colour,
@@ -380,8 +394,11 @@ public sealed unsafe partial class Renderer
             Frame = command.Frame,
             Mode = mode,
             SunMatrix = _sunMatrix ?? Matrix4x4.Identity,
-            Sun = lighting == null ? Vector4.Zero : new Vector4(Vector3.Normalize(lighting.SunDirection), lighting.SunEnergy),
-            Camera = new Vector4(view.Position, lighting?.AmbientEnergy ?? 1f),
+            Sun = lighting == null ? Vector4.UnitW : new Vector4(Vector3.Normalize(lighting.SunDirection), lighting.Exposure),
+            SunColour = new Vector4(lighting?.Sun ?? Vector3.Zero, 0f),
+            Sky = new Vector4(sky, 0f),
+            Ground = new Vector4(ground, 0f),
+            Camera = new Vector4(view.Position, 0f),
             Haze = lighting == null ? Vector4.Zero : lighting.HazeColour with { W = lighting.HazeDensity },
             Shadow = new Vector4(ShadowSize, ShadowDepthBias / (2f * SunShadow.Reach), ShadowNormalOffset, shadowed ? 1f : 0f),
         };
