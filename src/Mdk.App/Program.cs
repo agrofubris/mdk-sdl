@@ -58,6 +58,7 @@ using Mdk.Game.Scripts;
 //   --roll=left|right       hold a roll of the 1996 demo's levels after the delay (tests)
 //   --console="pos;god"     open the console after the delay and run these commands (tests)
 //   --press=QuickSave@1,Menu.Accept@1.5  press game or menu keys once at these times (tests)
+//   --frames=dir,count[,every] after --wait, save every Nth frame (4: 15 a second) of a level, then quit
 //   --perf[=warmup]         after warmup seconds (2) of game time, wait for the GPU each frame and print
 //                           the frames' costs at the end: sections, allocations, collections (tests)
 //   --soak[=seed]           random seeded keys on every screen, 6 steps a frame, checks in a level
@@ -145,6 +146,7 @@ var viewer = new ViewerOptions(level, position, yaw, pitch, sound)
     BetaTeleport = Number("beta-teleport"),
     Roll = options.TryGetValue("roll", out var roll) ? (roll == "left" ? BetaRoll.Left : BetaRoll.Right) : null,
     Console = options.GetValueOrDefault("console"),
+    Frames = options.TryGetValue("frames", out var frames) ? FrameDump.Parse(frames) : null,
 };
 
 // Test options of a level (and --screenshot without --menu) skip the menu, as in the Godot port.

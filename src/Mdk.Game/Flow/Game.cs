@@ -163,7 +163,7 @@ public sealed class Game : IDisposable
         }
 
         Handle(first);
-        var test = _options.Screenshot != null;
+        var test = _options.Screenshot != null || _options.Level.Frames != null;
         var step = _soak != null ? Viewer.Step * SoakSteps : Viewer.Step;
         var clock = Stopwatch.StartNew();
         var time = 0f;

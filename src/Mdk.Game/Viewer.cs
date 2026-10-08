@@ -70,6 +70,8 @@ public sealed record ViewerOptions(int Level, Vector3? Position, float? Yaw, flo
     public BetaRoll? Roll { get; init; }
     /// <summary>After the delay: the console opens and runs these commands ("pos;god").</summary>
     public string? Console { get; init; }
+    /// <summary>After the wait: frames saved, then the game quits (--frames).</summary>
+    public FrameDump? Frames { get; init; }
 }
 
 /// <summary>A roll of the 1996 demo's levels.</summary>
@@ -142,6 +144,8 @@ public sealed class Viewer : IScreen
     private float _time;
     private float _pending;
     private float _strikeTime;
+    /// <summary>Frames drawn since --frames' wait.</summary>
+    private int _frameStep;
     private readonly Cheats _cheats;
     private Event _next = Event.None;
     /// <summary>The level ended: the event that follows once the delay is over.</summary>
@@ -262,7 +266,7 @@ public sealed class Viewer : IScreen
             Console.WriteLine($"HD textures: {surfaces.HdFound} of {surfaces.HdLooked} (cache {hd.Count}), colour textures {renderer.ColourBytes >> 20} MB");
         }
 
-        _test = options.Screenshot != null;
+        _test = options.Screenshot != null || options.Frames != null;
         ui.Window.CaptureMouse(_test ? Capture.Off : Capture.On);
         _commands = new LevelCommands(level, _kurt, _scripts, _space, SaveSlot);
 
@@ -434,7 +438,7 @@ public sealed class Viewer : IScreen
             Trace(camera.Position);
         }
 
-        var save = SavePath(_options, input, _time) ?? screenshot;
+        var save = SavePath(_options, input, _time) ?? FramePath() ?? screenshot;
         using (_ui.Dev.Profiler.Measure(Section.Render))
         {
             _renderer.Present(camera, Background(), save);
@@ -446,7 +450,7 @@ public sealed class Viewer : IScreen
         }
 
         Console.WriteLine($"Saved {save}");
-        if (!_test)
+        if (!_test || _options.Frames is { } frames && !frames.IsLast(_frameStep - 1))
         {
             return _next;
         }
@@ -982,6 +986,17 @@ public sealed class Viewer : IScreen
         }
 
         return input.WasPressed(Key.Screenshot) ? $"mdk-{DateTime.Now:yyyyMMdd-HHmmss}.bmp" : null;
+    }
+
+    /// <summary>--frames' file for this frame, once the wait is over.</summary>
+    private string? FramePath()
+    {
+        if (_options.Frames is not { } frames || _time < _options.Wait)
+        {
+            return null;
+        }
+
+        return frames.PathOf(_frameStep++);
     }
 
     /// <summary>For tests: where Kurt is and what he does.</summary>

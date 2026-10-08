@@ -21,6 +21,16 @@ for LEVEL in 3 4 5 6 7 8; do
 		echo "level $LEVEL: ok"
 	fi
 done
+# --frames: 3 frames, every 2nd, then the game quits.
+FRAMES="$(mktemp -d)"
+timeout 60 "$MDK" --level=3 --mute --wait=1 --frames="$FRAMES,3,2" > /dev/null 2>&1
+if [ "$(ls "$FRAMES" | wc -l)" -ne 3 ] || [ ! -s "$FRAMES/frame002.bmp" ]; then
+	echo "frames: FAILED"
+	FAILED=1
+else
+	echo "frames: ok"
+fi
+rm -rf "$FRAMES"
 [ $FAILED = 0 ] && echo PASSED && exit 0
 echo FAILED
 exit 1
