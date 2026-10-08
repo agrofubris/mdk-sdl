@@ -86,8 +86,20 @@ for its runtime next to it (`SDL3.dll`, `libSDL3.so`, `libSDL3.dylib`).
 The game picks the look (`Settings.Graphics`, `Level/EnhancedLook.cs`, the Godot port's
 `Level._enhance`): materials carry a `Shading` (arenas and objects `Lit`, Kurt and effects
 `Sprite`, glass and mirrors `Original`), the sky a `Sampling`, and the renderer gets a `Lighting`
-(sun, ambient, shadow distance, glow, haze in the colour below the sky panorama). The 2D canvas is
-filtered too (`Renderer.CanvasSampling`).
+per arena (`Level/LevelLight.cs`, switched as the camera's arena changes: sun, sky and ground
+light, exposure, shadows, glow, haze in the colour below the sky panorama) and the frame's
+`PointLights`. The 2D canvas is filtered too (`Renderer.CanvasSampling`).
+
+```
+ sky panorama (SkyLight) ─► mean colour above / below the horizon ─► sun, sky, ground ─┐
+ arena faces (ArenaShape) ─► covered? (ceilings ≥ ½ floors) mean up, mean sun facing ──┴─► Lighting
+ Kurt's muzzle, sniper rounds, explosions, FIRE boxes (LightSources) ─► PointLights (64 ─► nearest 16)
+```
+
+- Per arena (`EnhancedLook.Lighting`): open arenas get a sun (tinted by the sky, stronger under
+  a brighter one) with shadows, the sky's light from above and the ground's from below; covered
+  ones no sun, no shadow map, more light all around. The exposure evens the arena's mean light
+  (faces by area, sun on 70% of them) to 1.15: the original's unlit textures, plus the roll-off.
 
 ```
  sun's depth (Lit casters) ──► shadow map 2048² ─────────┐
@@ -105,14 +117,17 @@ filtered too (`Renderer.CanvasSampling`).
 - `palette_filtered.hlsli` (the canvas): bilinear by hand, each of the four texels through the
   palette; index 0 transparent; animated textures keep to their frame.
 - `enhanced.hlsl`: flat normals from the world position's screen derivatives (the triangle's
-  plane, turned to the camera); light in linear colour: albedo × (ambient + sun × N·L × shadow),
-  then the haze (1 − e^(−density × distance)). Sprites: filtered, unlit, edges cut at half cover.
+  plane, turned to the camera); light in linear colour: albedo × exposure × (hemisphere + sun ×
+  N·L × shadow + point lights), tone mapped (`Tonemap`: kept up to linear 0.6, then rolled off
+  towards white), then the haze (1 − e^(−density × distance)), dithered (`dither.hlsli`).
+  Point lights come in a second uniform buffer pushed once per frame; they fade as (1 − d²/r²)².
+  Sprites and explosions: filtered, unlit, edges cut at half cover.
 - Shadows (`SunShadow`): an orthographic view along the sunlight, centred on the camera and
   snapped to whole texels; 2 × 2 compared texels, slope and normal offsets against acne.
 - `occlusion.hlsl`: Alchemy ambient occlusion from the camera's depth, fading in the haze, 12
   samples turned in a 4 x 4 ordered pattern, into its own target (`screen.hlsli` shared).
 - `post.hlsl`: the occlusion blurred over 4 x 4 pixels of the same plane (no grain, no shade
-  across edges); glow from the scene's blurred mips, screen-blended.
+  across edges); glow from the scene's blurred mips, screen-blended; dithered.
 
 ## Loading and frames
 
@@ -298,7 +313,8 @@ None open. Answered (Ghidra): which objects Kurt walks into or stands on
     tested under their chute, as the original (0x41275c, as fall.gd).
     Approximations: the radar's colours, the smoke trails.
 11. ✅ Enhanced look (`Renderer.Enhanced.cs`, `shaders/enhanced.hlsl`, `post.hlsl`, `depth.hlsl`):
-    filtered textures, sky, sprites and 2D screens, a sun with shadows, white ambient light,
-    ambient occlusion, glow, haze; mipmapped, anisotropic textures; anti-aliasing in both looks.
-    Still to do: a sun per level, lights for muzzle flashes and explosions, occlusion and haze in the
-    insets (sniper mode).
+    filtered textures, sky, sprites and 2D screens, each arena lit from its level's sky (sun with
+    shadows outdoors, hemisphere light, exposure, tone curve), point lights (muzzle flashes,
+    explosions, fires), ambient occlusion, glow, haze, dithering; mipmapped, anisotropic textures;
+    anti-aliasing in both looks. Still to do: level lamps, upscaled textures, occlusion and haze in
+    the insets (sniper mode).
