@@ -71,6 +71,30 @@ profile "$OUT" 11 "SW_KEY_[0-9]*"
 [ "$(profile "$OUT" 1 "XG_[0-9]*" | wc -l)" = 3 ] && [ -z "$(profile "$OUT" 11 "XG_[0-9]*")" ]
 check "a mortar through the opening drops the grunts" $?
 
+# The enhanced look's filtered frame and mask meet at the view's edge (20, 60, 600x360 of 640x480)
+# without a seam: the line there is no lighter than the frame beside it (a seam let the scene through).
+run "$SPOT" --enhanced --wait=1 > /dev/null
+python - "$SHOT" <<'EOF'
+import sys
+from PIL import Image
+image = Image.open(sys.argv[1]).convert("L")
+w, h = image.size
+scale = h / 480
+left = (w - 640 * scale) / 2
+x0, x1 = round(left + 20 * scale), round(left + 620 * scale) - 1
+y0, y1 = round(60 * scale), round(420 * scale) - 1
+# The edge's lines, each pixel's lightness less the lighter of its neighbours 3 pixels across.
+lines = [((x, y), (0, 3)) for y in (y0, y1) for x in range(x0 + 4, x1 - 4)]
+lines += [((x, y), (3, 0)) for x in (x0, x1) for y in range(y0 + 4, y1 - 4)]
+def across(p, d):
+    return image.getpixel(p) - max(image.getpixel((p[0] - d[0], p[1] - d[1])), image.getpixel((p[0] + d[0], p[1] + d[1])))
+mean = sum(across(p, d) for p, d in lines) / len(lines)
+# Seamless about -8 (as the original look), with the seam about -1.
+print("  edge lighter than beside it by %.1f" % mean)
+sys.exit(0 if mean < -4 else 1)
+EOF
+check "no seam around the enhanced view" $?
+
 [ $FAILED = 0 ] && echo PASSED && exit 0
 echo FAILED
 exit 1
