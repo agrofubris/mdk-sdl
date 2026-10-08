@@ -41,4 +41,20 @@ public sealed class Palette
 
         return palette;
     }
+
+    /// <summary>A copy with the system colours (<c>SYS_PAL</c>) at indices 1–63; 0 stays black.</summary>
+    public Palette WithSystemColors(ReadOnlySpan<byte> systemRgb)
+    {
+        var palette = new Palette();
+        Rgba.CopyTo(palette.Rgba, 0);
+        var count = Math.Min(ArenaFirstIndex, systemRgb.Length / 3);
+        for (var i = 1; i < count; i++)
+        {
+            palette.Rgba[i * 4] = systemRgb[i * 3];
+            palette.Rgba[i * 4 + 1] = systemRgb[i * 3 + 1];
+            palette.Rgba[i * 4 + 2] = systemRgb[i * 3 + 2];
+        }
+
+        return palette;
+    }
 }
