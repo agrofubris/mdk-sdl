@@ -706,7 +706,7 @@ public sealed class Items(ScriptRuntime runtime, Bni sprites)
                 result = (amount, distance, box.Center(), result.Event);
             }
 
-            obj.PartHealth[i] -= BlastHit(amount, obj.PartHealth[i], kills);
+            obj.PartHealth[i] -= BlastHit(obj, amount, obj.PartHealth[i], kills);
             if (obj.PartHealth[i] < 1)
             {
                 obj.PartHealth[i] = 0;
@@ -773,14 +773,15 @@ public sealed class Items(ScriptRuntime runtime, Bni sprites)
                 }
 
                 var distance = Vector3.Distance(origin, point);
-                runtime.HitGroup(arena, i + 1, BlastHit(Round(damage * (radius - distance) / radius), ScriptRuntime.Indestructible, kills), kind, hitType);
+                runtime.HitGroup(arena, i + 1, Round(damage * (radius - distance) / radius), kind, hitType);
                 break;
             }
         }
     }
 
-    /// <summary>A blast's damage on a target: Kurt's blasts (counted kills) follow onehit.</summary>
-    private int BlastHit(int damage, int health, Kills kills) => kills == Kills.Counted ? runtime.KurtDamage(damage, health) : damage;
+    /// <summary>A blast's damage on a weak part: Kurt's blasts (counted kills) follow onehit.</summary>
+    private int BlastHit(MdkObject obj, int damage, int health, Kills kills) =>
+        kills == Kills.Counted ? runtime.KurtDamage(obj, damage, health) : damage;
 
     /// <summary>Damage of a blast on a box (0x463958) and its distance: to the box's centre, less half
     /// the box's size; 0 beyond the radius or behind a wall.</summary>

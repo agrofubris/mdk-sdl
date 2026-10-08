@@ -949,7 +949,6 @@ public sealed partial class ScriptRuntime
         UpdateSniperTarget();
 
         // Only the objects of Kurt's arena and of the active second arena are updated (0x43c7dc).
-        HoldOneHits();
         using var objects = ListCopy<MdkObject>.Of(Objects);
         foreach (var obj in objects)
         {
@@ -976,8 +975,6 @@ public sealed partial class ScriptRuntime
                 Kurt.Carry(position, obj.Position, obj.Yaw - yaw);
             }
         }
-
-        EndOneHits();
 
         // Then the arenas' own scripts (game_frame: 0x43c7dc, then 0x440bc8). E.g. MEAT_5's
         // arena_show NONE drops CMEAT_4 only after the ridden board there followed Kurt in.
@@ -1888,7 +1885,7 @@ public sealed partial class ScriptRuntime
             return;
         }
 
-        var reacted = (HitGroupAt(hit, KurtDamage(damage, Indestructible), HitChainGun, superGun ? -2 : -1) & 1) != 0;
+        var reacted = (HitGroupAt(hit, damage, HitChainGun, superGun ? -2 : -1) & 1) != 0;
         SparkAt(hit.Point - Vector3.Normalize(shot), 1, "", reacted ? Spark.Group : Spark.Hard);
     }
 
@@ -2079,7 +2076,7 @@ public sealed partial class ScriptRuntime
 
         if (part >= 0 && part < obj.PartHealth.Length)
         {
-            obj.PartHealth[part] -= KurtDamage(damage, obj.PartHealth[part]);
+            obj.PartHealth[part] -= KurtDamage(obj, damage, obj.PartHealth[part]);
             if (obj.PartHealth[part] <= 0)
             {
                 obj.PartHealth[part] = 0;

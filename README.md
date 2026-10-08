@@ -169,7 +169,7 @@ scroll, Esc closes). The screen runs on, without the keys. Outside a level `tp`,
 | `teleport`, `tp <x y z \| arena [x y z]>` | move Kurt (`tp HMO_4`, `tp 1 2 3`, `tp HMO_4,1,2,3`) |
 | `pos` | where Kurt is, as `--level`, `--at`, `--teleport` and `--console` options |
 | `noclip`, `god` | fly through everything (Space up, Q down); no damage |
-| `onehit` | Kurt's hits (guns, sniper rounds, blasts, items, air strike) kill, unless the target's script gives its health back (LEVEL8's forklift) |
+| `onehit` | Enemies die in one hit (guns, sniper rounds, blasts, items, air strike); puzzle objects (LEVEL8's forklift and XEARTH), scenery and shatterable walls take normal damage |
 | `give all`, `give <SW_...>` | pickups (`give SW_HBOMB`) |
 | `health <n>`, `kill` | Kurt's health; kill the enemies of his arena |
 | `save <slot>`, `load <slot>` | a full save (as F2), a saved game |
