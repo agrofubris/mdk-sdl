@@ -10,8 +10,7 @@ namespace Mdk.Engine.Render;
 
 /// <summary>A corner of a triangle: position (MDK coordinates, Z up), texture coordinates (0-1
 /// over one frame) and a colour (RGBA8, R in the low byte; white unless given) multiplying the
-/// material's, interpolated across the triangle (Gouraud); the enhanced look's lit surfaces also
-/// take a normal (8-bit signed components; zero: the triangle's plane).</summary>
+/// material's, interpolated across the triangle (Gouraud).</summary>
 [StructLayout(LayoutKind.Sequential)]
 public struct Vertex(Vector3 position, Vector2 uv)
 {
@@ -19,24 +18,16 @@ public struct Vertex(Vector3 position, Vector2 uv)
     private const int GreenShift = 8;
     private const int BlueShift = 16;
     private const int AlphaShift = 24;
-    private const float NormalScale = sbyte.MaxValue;
 
     public Vector3 Position = position;
     public Vector2 Uv = uv;
     public uint Colour = White;
-    public uint Normal;
 
     public Vertex(Vector3 position, Vector2 uv, uint colour) : this(position, uv) => Colour = colour;
 
     /// <summary>A colour packed for <see cref="Colour"/>.</summary>
     public static uint Rgba(byte r, byte g, byte b, byte a) =>
         r | (uint)g << GreenShift | (uint)b << BlueShift | (uint)a << AlphaShift;
-
-    /// <summary>A unit normal packed for <see cref="Normal"/> (zero stays zero: flat).</summary>
-    public static uint PackNormal(Vector3 normal) =>
-        Signed(normal.X) | Signed(normal.Y) << GreenShift | Signed(normal.Z) << BlueShift;
-
-    private static uint Signed(float value) => (byte)(sbyte)MathF.Round(Math.Clamp(value, -1f, 1f) * NormalScale);
 }
 
 /// <summary>How a batch is drawn.</summary>
@@ -142,8 +133,8 @@ public sealed unsafe partial class Renderer : IDisposable
     /// look's ambient occlusion) or the sun's (its shadows, biased).</summary>
     private enum Output { Colour, Depth, Shadow }
 
-    /// <summary>A vertex's position, texture coordinates, colour and normal.</summary>
-    private const uint VertexAttributes = 4;
+    /// <summary>A vertex's position, texture coordinates and colour.</summary>
+    private const uint VertexAttributes = 3;
 
     private readonly record struct PipelineKey(string Program, Pass Pass, Primitive Primitive, Geometry Geometry, uint Samples, Output Output,
         Blend Blend = Blend.Alpha);
@@ -441,7 +432,6 @@ public sealed unsafe partial class Renderer : IDisposable
         attributes[0] = new SDL_GPUVertexAttribute { location = 0, format = SDL_GPUVertexElementFormat.SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3, offset = 0 };
         attributes[1] = new SDL_GPUVertexAttribute { location = 1, format = SDL_GPUVertexElementFormat.SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2, offset = (uint)sizeof(Vector3) };
         attributes[2] = new SDL_GPUVertexAttribute { location = 2, format = SDL_GPUVertexElementFormat.SDL_GPU_VERTEXELEMENTFORMAT_UBYTE4_NORM, offset = (uint)(sizeof(Vector3) + sizeof(Vector2)) };
-        attributes[3] = new SDL_GPUVertexAttribute { location = 3, format = SDL_GPUVertexElementFormat.SDL_GPU_VERTEXELEMENTFORMAT_BYTE4_NORM, offset = (uint)(sizeof(Vector3) + sizeof(Vector2) + sizeof(uint)) };
 
         var blended = pass is Pass.Blended or Pass.Overlay;
         var colourTarget = new SDL_GPUColorTargetDescription

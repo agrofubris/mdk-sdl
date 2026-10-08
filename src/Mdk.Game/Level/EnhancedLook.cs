@@ -2,7 +2,6 @@ using System.Numerics;
 using Mdk.Engine.Render;
 using Mdk.Formats;
 using Mdk.Game.Flow;
-using Mdk.Game.Objects;
 
 namespace Mdk.Game.Level;
 
@@ -102,10 +101,6 @@ public static class EnhancedLook
 
     /// <summary>How sprites (Kurt, effects) are shaded in a look.</summary>
     public static Shading Sprites(Graphics graphics) => graphics == Graphics.Enhanced ? Shading.Sprite : Shading.Original;
-
-    /// <summary>How models are shaped in a look: flat in the original, smooth or subdivided in the enhanced.</summary>
-    public static ModelShape Models(Graphics graphics, SmoothModels smooth) => graphics != Graphics.Enhanced ? ModelShape.Flat
-        : smooth == SmoothModels.On ? ModelShape.Subdivided : ModelShape.Smooth;
 
     /// <summary>How the sky is sampled in a look.</summary>
     public static Sampling Sky(Graphics graphics) => graphics == Graphics.Enhanced ? Sampling.Linear : Sampling.Nearest;

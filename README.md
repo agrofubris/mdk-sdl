@@ -31,7 +31,7 @@ original's box sweeps.
   copy of the game. Nothing upscaled is distributed. [Details](#hd-textures).
 - **Enhanced look (optional)**: filtered textures, each level lit from its sky (sun and shadows
   outdoors), dynamic lights of muzzle flashes, explosions and fires, ambient occlusion, glow, haze,
-  smooth models, anti-aliasing. The original look stays pixel-exact.
+  anti-aliasing. The original look stays pixel-exact.
 - **Windows, Linux, macOS and Android** (touch controls; [notes](#android)).
 - Quick save and load (F2, F9), a developer console and overlay, cheats.
 
@@ -41,7 +41,7 @@ original's box sweeps.
 
 ## Screenshots
 
-Original | enhanced | enhanced with HD textures and smooth models (click for full size).
+Original | enhanced | enhanced with HD textures (click for full size).
 
 ![Level 3, the canyon](docs/media/level3-canyon.jpg)
 ![Level 4, the snow](docs/media/level4-snow.jpg)
@@ -73,8 +73,7 @@ the original's fades, scripts animate textures, switch the sky and film cutscene
 leave bullet holes, and ropes, twisters' ribbons and the glass panes' outlines are drawn. An
 enhanced look (Options, Graphics) filters the textures, lights each arena from its level's sky
 (a sun and its shadows outdoors), lights muzzle flashes, explosions and fires, and adds ambient
-occlusion, a little glow and a haze, shades the models smoothly (hard edges kept; Options, "Smooth
-models" also rounds them), and can draw AI-upscaled textures made from your copy of the
+occlusion, a little glow and a haze, and can draw AI-upscaled textures made from your copy of the
 game ([HD textures](#hd-textures)); anti-aliasing smooths the edges. The three
 levels of the 1996 beta demo play as extras ([below](#the-1996-beta-demo)). The game can be played
 through. The [Godot port](https://github.com/nemo22/mdk-godot) is no longer developed.
@@ -85,7 +84,7 @@ through. The [Godot port](https://github.com/nemo22/mdk-godot) is no longer deve
 | --- | --- |
 | Data formats: levels, textures, models, sprites, sounds, fonts, scripts, videos | █████████░ 95% |
 | Rendering: arenas, glass, sky, mirrors, Kurt's sprite, effects | █████████░ 95% |
-| Enhanced look: filtering, mipmaps, sky light and shadows, point lights, occlusion, glow, haze, smooth models, HD textures; anti-aliasing | █████████░ 90% |
+| Enhanced look: filtering, mipmaps, sky light and shadows, point lights, occlusion, glow, haze, HD textures; anti-aliasing | █████████░ 85% |
 | Collisions: the original's BSP | █████████░ 95% |
 | Kurt: walking, turning, jumping, chute, ledges, slides, camera, damage, death | █████████░ 95% |
 | Sound mixer (the original's laws) and music | █████████░ 90% |
@@ -101,7 +100,7 @@ through. The [Godot port](https://github.com/nemo22/mdk-godot) is no longer deve
 | **Overall** | **about 92%** |
 
 Recently added: the Android app, HD textures, per-level sky light and shadows, dynamic lights,
-smooth models, the icon.
+the icon.
 
 The plan is in [docs/architecture.md](docs/architecture.md#roadmap).
 

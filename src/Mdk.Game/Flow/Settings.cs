@@ -12,9 +12,6 @@ public enum Graphics { Original, Enhanced }
 /// <summary>The enhanced look's textures: the original's, or their HD images when made (<see cref="HdTextures.HdCache"/>).</summary>
 public enum TextureSet { Original, Hd }
 
-/// <summary>The enhanced look's models: as made, or subdivided (<see cref="Objects.ModelShapes"/>).</summary>
-public enum SmoothModels { Off, On }
-
 /// <summary>The player's settings (settings.gd): volumes, the music filter, the mouse, the window,
 /// anti-aliasing, the difficulty, gore, the graphics and the key bindings (one key or mouse button per action, by name). Saved as
 /// <c>name=value</c> lines in the user's folder; applied at start and whenever they change.
@@ -55,8 +52,6 @@ public sealed class Settings
     public AntiAliasing AntiAliasing = AntiAliasing.Off;
     /// <summary>HD textures in the enhanced look, from the next level on.</summary>
     public TextureSet Textures = TextureSet.Original;
-    /// <summary>Subdivided models in the enhanced look, from the next level on.</summary>
-    public SmoothModels SmoothModels = SmoothModels.Off;
     /// <summary>Rebound actions: action → key or mouse button name (see <see cref="Input.Bind"/>).</summary>
     public readonly Dictionary<Key, string> Bindings = [];
 
@@ -112,7 +107,6 @@ public sealed class Settings
             $"graphics={Graphics}",
             $"antialiasing={AntiAliasing}",
             $"textures={Textures}",
-            $"smooth_models={SmoothModels}",
         };
         lines.AddRange(Bindings.Select(b => $"{BindPrefix}{b.Key}={b.Value}"));
         return string.Join('\n', lines) + "\n";
@@ -167,9 +161,6 @@ public sealed class Settings
                 break;
             case "textures":
                 Textures = Enum.TryParse<TextureSet>(value, out var textures) && Enum.IsDefined(textures) ? textures : Textures;
-                break;
-            case "smooth_models":
-                SmoothModels = Enum.TryParse<SmoothModels>(value, out var smooth) && Enum.IsDefined(smooth) ? smooth : SmoothModels;
                 break;
         }
     }

@@ -368,9 +368,6 @@ public sealed class MenuItems
                 ShowOptions(back);
             });
         }
-
-        AddOption(() => $"Smooth models: {OnOff(s.SmoothModels == SmoothModels.On)}",
-            _ => s.SmoothModels = s.SmoothModels == SmoothModels.On ? SmoothModels.Off : SmoothModels.On);
         AddOption(() => $"Gore: {OnOff(s.Gore)}", _ => s.Gore = !s.Gore);
         AddItem("Controls", () => ShowControls(() => ShowOptions(back)));
         AddItem("Back", back);

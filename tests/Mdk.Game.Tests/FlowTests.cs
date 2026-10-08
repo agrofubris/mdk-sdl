@@ -89,6 +89,16 @@ public class FlowTests
     }
 
     [Fact]
+    public void OldSmoothModelsKeyIgnored()
+    {
+        // settings.cfg saved while "Smooth models" existed.
+        var read = Settings.Parse("smooth_models=On\ntextures=Hd\n");
+
+        Assert.Equal(TextureSet.Hd, read.Textures);
+        Assert.DoesNotContain("smooth_models", read.Format());
+    }
+
+    [Fact]
     public void GunterStreamCarriesHealthOnly()
     {
         var state = new GameState { Level = 8 };
