@@ -1114,7 +1114,8 @@ public sealed class ObjectMotion(ScriptRuntime runtime)
     /// sliding along what it hits. Returns the plane normal of the first hit, or null.
     /// <code>
     ///   box: half extents = world bounds × 0.25 across, half the origin-to-top height,
-    ///        bottom 0.05 above the origin when moving vertically (0.5 otherwise)
+    ///        bottom 0.05 above the origin when moving vertically (0.5 otherwise),
+    ///        lowered by the height offset when moving vertically
     /// </code></summary>
     private Vector3? Sweep(MdkObject obj, Vector3 motion)
     {
@@ -1137,6 +1138,16 @@ public sealed class ObjectMotion(ScriptRuntime runtime)
             MathF.Max(bounds.Max.Z * obj.Scale + obj.Lift, MinHeight) * 0.5f);
         var center = RotatedZ(bounds.Center(), obj.Yaw) * obj.Scale;
         center.Z = half.Z + (motion.Z != 0f ? VerticalLift : Lift);
+
+        // A vertical move reaches down to z − height offset, so the object stops that high above
+        // the floor (0x45e810), e.g. LEVEL8's centred XT 8 above. Rolling objects are drawn lifted instead.
+        if (motion.Z != 0f)
+        {
+            var drop = obj.HeightOffset - obj.Lift;
+            half.Z += drop * 0.5f;
+            center.Z -= drop * 0.5f;
+        }
+
         var a = obj.Position + center;
 
         // The first contact counts, even if the box slid off it and ended free.
