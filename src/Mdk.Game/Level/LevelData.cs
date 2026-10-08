@@ -8,6 +8,8 @@ public sealed class LevelData
 {
     /// <summary>DTI record type of a link to another arena: arenas without one start hidden.</summary>
     public const uint Connection = 6;
+    private const string SystemFile = "MISC/MDKFONT.FTI";
+    private const string SystemPalette = "SYS_PAL";
 
     public int Number { get; }
     public Dti Dti { get; }
@@ -21,6 +23,12 @@ public sealed class LevelData
         Number = number;
         var dir = $"TRAVERSE/LEVEL{number}/LEVEL{number}";
         Dti = Dti.Load(data.PathOf(dir + ".DTI"));
+
+        // Colours 0-63 stay the system's (0x41ba68 copies only the DTI's 64-255): LEVEL8's DTI has
+        // magenta and purple at 10-12, for its aliens' glow, its shots and the grenade's icon.
+        var system = Fti.Load(data.PathOf(SystemFile)).GetBytes(SystemPalette);
+        Dti.Palette = Dti.Palette.WithSystemColors(system);
+
         Mto = Mto.Load(data.PathOf(dir + "O.MTO"));
         LevelTextures = TextureArchive.Load(data.PathOf(dir + "S.MTI"), TextureArchive.Zero.ByKind);
 
