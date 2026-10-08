@@ -1,16 +1,19 @@
 using Mdk.Engine.Render;
 using Mdk.Formats;
+using Mdk.Game.Kurt;
 using Mdk.Game.Level;
 
 namespace Mdk.Game.HdTextures;
 
-/// <summary>A texture as a level shows it: through an arena's palette.</summary>
-public sealed record HdSource(int Level, string Name, string Key, Texture Texture, Palette Palette);
+/// <summary>A texture as a level shows it: through an arena's palette; its HD image's cover.</summary>
+public sealed record HdSource(int Level, string Name, string Key, Texture Texture, Palette Palette, HdAlpha Alpha = HdAlpha.Hard);
 
 /// <summary>The textures the enhanced look draws lit, as the game resolves them (<see cref="MaterialResolver"/>):
 /// each arena's and corridor's surfaces and models through its palette, and the level's models
-/// (the scripts' objects) through every arena's palette, each distinct image once (<see cref="HdKey"/>).
-/// Not exported: the sky, Kurt, the HUD, the fonts, the 2D screens.
+/// (the scripts' objects) through every arena's palette, each distinct image once (<see cref="HdKey"/>);
+/// and Kurt's sprite frames through the level's palette (<see cref="Kurt"/>; cut-outs: index 0 clear).
+/// Not exported: the sky, the HUD, the fonts, the 2D screens, the fall's and the stream's Kurt (the
+/// original look only).
 /// <code>
 ///   arena ─► its materials, its models' ─┐
 ///   level models (CMI) ──────────────────┴─► names ─► archives (arena, level, other arenas) ─► texture × palette
@@ -37,6 +40,27 @@ public static class TextureExport
 
                 var key = HdKey.Of(texture, palette);
                 sources.TryAdd(key, new HdSource(level.Number, name, key, texture, palette));
+            }
+        }
+
+        return [.. sources.Values];
+    }
+
+    /// <summary>Kurt's frames as a level draws them (<see cref="KurtSprite"/>): the level's own first
+    /// (<paramref name="levelAnimation"/>: the snowboard's, the slide's), else TRAVSPRT.BNI's; each distinct image once.</summary>
+    public static List<HdSource> Kurt(LevelData level, Bni sprites, Func<string, SpriteAnimation?> levelAnimation)
+    {
+        var sources = new Dictionary<string, HdSource>();
+        var palette = level.Dti.Palette;
+        foreach (var name in KurtSprite.Drawn)
+        {
+            var own = KurtSprite.LevelAnimations.Contains(name) ? levelAnimation(name) : null;
+            var animation = own ?? (sprites.Has(name) ? sprites.GetAnimation(name) : null);
+            for (var frame = 0; frame < (animation?.FrameCount ?? 0); frame++)
+            {
+                var texture = animation!.GetFrame(frame).Image;
+                var key = HdKey.Of(texture, palette);
+                sources.TryAdd(key, new HdSource(level.Number, $"{name}_{frame}", key, texture, palette, HdAlpha.Soft));
             }
         }
 

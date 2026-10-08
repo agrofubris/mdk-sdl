@@ -194,7 +194,7 @@ public sealed class Viewer : IScreen
         // The 1996 demo's levels show its Kurt and its health display.
         var sprites = Bni.Load(data.PathOf("TRAVERSE/TRAVSPRT.BNI"));
         _beta?.AddSprites(sprites);
-        _sprite = new KurtSprite(renderer, sprites, level.Dti.Palette, EnhancedLook.Sprites(graphics));
+        _sprite = new KurtSprite(renderer, sprites, level.Dti.Palette, EnhancedLook.Sprites(graphics), hd);
         foreach (var name in KurtSprite.LevelAnimations)
         {
             _sprite.Add(bank.Animation(name));
@@ -238,9 +238,13 @@ public sealed class Viewer : IScreen
             _kurt.Collect(pickup);
         }
         _scripts.ArenaEntered += _view.Enter;
-        _objects = new ObjectView(renderer, surfaces);
+        _objects = new ObjectView(renderer, surfaces, EnhancedLook.Models(graphics, ui.Settings.SmoothModels));
         _scripts.PreparePoses();
         PreloadModels(level);
+        if (_objects.Shapes is { } shapes)
+        {
+            Console.WriteLine($"Model shapes ({shapes.Shape}): {shapes.ModelCount} models, {shapes.TriangleCount} triangles");
+        }
 
         _effects = new EffectsView(renderer, surfaces, level, EnhancedLook.Sprites(graphics));
         _scripts.TextureStamped += surfaces.Refresh;
@@ -851,6 +855,12 @@ public sealed class Viewer : IScreen
             {
                 _objects.Preload(obj.Model, ObjectLook(level, _looks, obj.Arena));
             }
+        }
+
+        // The enhanced look's shapes of every level model: the shots and aliens made later too.
+        foreach (var model in _scripts.LevelModels())
+        {
+            _objects.Shape(model, ObjectLook(level, _looks, ""));
         }
     }
 

@@ -19,6 +19,7 @@ Each layer talks only to the one below it.
     │         Viewer (a level): level, camera, collision (BSP), sound mixer, scripts and objects, Kurt
     │         DevTools: the console, its commands, the debug overlay
     │         HdTextures: the enhanced look's upscaled textures (export, cache, generator)
+    │         Smoothing: the enhanced look's smooth normals (creases) and subdivision of models
     │   └──────────────► Mdk.Formats  (parsers: DTI, MTO, MTI, SNI, FTI, BNI, models, PNG; the 1996 demo's)
  Mdk.Engine   Render (Renderer: meshes, index textures, palettes, panorama)
     │         Audio (AudioDevice: software mixer of voices, music and effects buses, streamed voices, master limiter)
@@ -144,8 +145,9 @@ light, exposure, shadows, glow, haze in the colour below the sky panorama) and t
   indices or palette change (bullet holes).
 - `palette_filtered.hlsli` (the canvas): bilinear by hand, each of the four texels through the
   palette; index 0 transparent; animated textures keep to their frame.
-- `enhanced.hlsl`: flat normals from the world position's screen derivatives (the triangle's
-  plane, turned to the camera); light in linear colour: albedo × exposure × (hemisphere + sun ×
+- `enhanced.hlsl`: the vertices' normals (models, below; a vertex's `Normal`, 8-bit signed
+  components), else flat ones from the world position's screen derivatives (the triangle's plane),
+  turned to the camera; shadows are offset along the flat one; light in linear colour: albedo × exposure × (hemisphere + sun ×
   N·L × shadow + point lights), tone mapped (`Tonemap`: kept up to linear 0.6, then rolled off
   towards white), then the haze (1 − e^(−density × distance)), dithered (`dither.hlsli`).
   Point lights come in a second uniform buffer pushed once per frame; they fade as (1 − d²/r²)².
@@ -157,6 +159,26 @@ light, exposure, shadows, glow, haze in the colour below the sky panorama) and t
 - `post.hlsl`: the occlusion blurred over 4 x 4 pixels of the same plane (no grain, no shade
   across edges); glow from the scene's blurred mips, screen-blended; dithered.
 
+### Smooth models
+
+The enhanced look's models (`Objects/ModelShapes.cs`, `Smoothing/`): per part, from its rest pose
+at the load, `SmoothMesh` welds vertices by position and groups each vertex's corners across edges
+whose faces are at most 45° apart (either winding: models show both faces); a corner's normal is
+its group's (faces weighted by area: a big face keeps its light next to a small bevel). Options,
+"Smooth models" (`smooth_models=On`) also subdivides them (`Subdivision`, PN triangles, one level):
+
+```
+ part (rest pose) ──load──► creases, corner groups ──► corners drawn (×4 when subdivided), UVs, source triangles
+ draw: baked pose ──► group normals ──► subdivided: smooth edges' midpoints on the normals' curve
+                                        (hard edges, glass and mirrors straight: boxes stay boxes)
+                  ──► the part's buffers (kept; refilled only for another pose) ──► stream vertices
+```
+
+- Shapes follow every baked pose but keep nothing per pose: normals (and midpoints) are made as a
+  pose is drawn, skipped when the part's last pose is drawn again (no allocation).
+- Collisions, the scripts and sniper hits keep the original triangles; arenas stay flat (smoothing
+  them changed nearly nothing and would shade big walls next to shallow bevels).
+
 ## HD textures
 
 The enhanced look's textures upscaled by Real-ESRGAN, made on the player's computer from the game's
@@ -167,8 +189,9 @@ download, SHA-256, process); the game decides what and how.
  make (HdGenerator: --upscale-textures, Options "Make HD textures" via HdJob)
  ───────────────────────────────────────────────────────────────────────────
  LevelData, CMI ─► TextureExport (arenas, corridors, models × arena palettes) ─► HdSource (key = HdKey)
+ TRAVSPRT.BNI, level SNI ─► TextureExport.Kurt (Kurt's frames × the level's palette, soft alpha) ─┘
    ─► UpscaleImages.Input (bleed, wrap 8) ─► PNG ─► realesrgan-ncnn-vulkan (x4plus 4x | animevideov3 2x)
-   ─► UpscaleImages.Output (crop, box to 2x, the source's alpha hard) ─► textures-hd/LEVELn/*.png + manifest.txt
+   ─► UpscaleImages.Output (crop, box to 2x, the source's alpha: hard, soft for sprites) ─► textures-hd/LEVELn/*.png + manifest.txt
 
  use (Viewer, enhanced look, settings textures=Hd)
  ─────────────────────────────────────────────────

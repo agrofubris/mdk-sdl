@@ -2,8 +2,8 @@
 # Allocations while playing: a level is loaded once (everything on the GPU and in memory), then its
 # frames allocate (almost) nothing. Each run measures the frames after a warm-up (--perf) and fails
 # when they allocate more than MDK_ALLOC_MAX bytes a frame on average (512) or collect gen 1 or 2.
-# The scenes: LEVEL4 MEAT_5 standing (both looks, the enhanced one with 4x anti-aliasing), LEVEL7
-# walking and firing, sniper mode.
+# The scenes: LEVEL4 MEAT_5 standing (both looks, the enhanced one with 4x anti-aliasing, then with
+# smooth models), LEVEL7 walking and firing, sniper mode.
 # Run from the project folder after `dotnet build`: sh tests/alloc_test.sh
 # No window: the game draws off screen and never takes the focus.
 export MDK_HIDDEN=1
@@ -38,6 +38,8 @@ run() {
 run "LEVEL4 MEAT_5, original" $MEAT5 --original --perf=5 --wait=25
 echo "antialiasing=X4" > "$MDK_USER_DIR/settings.cfg"
 run "LEVEL4 MEAT_5, enhanced 4x" $MEAT5 --enhanced --perf=5 --wait=25
+echo "smooth_models=On" > "$MDK_USER_DIR/settings.cfg"
+run "LEVEL4 MEAT_5, enhanced smooth models" $MEAT5 --enhanced --perf=5 --wait=25
 rm -f "$MDK_USER_DIR/settings.cfg"
 run "LEVEL7 walking, firing" --level=7 --walk=4 --fire --perf=10 --wait=40
 run "LEVEL7 sniper mode" --level=7 --sniper=0.5,5 --perf=5 --wait=20

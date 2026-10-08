@@ -3,6 +3,7 @@ using System.Globalization;
 using Mdk.Engine.Render;
 using Mdk.Engine.Upscale;
 using Mdk.Formats;
+using Mdk.Game.Audio;
 using Mdk.Game.Level;
 
 namespace Mdk.Game.HdTextures;
@@ -114,11 +115,13 @@ public static class HdGenerator
         var todo = new List<HdSource>();
         var keys = new HashSet<string>();
         var sizes = new List<string>();
+        var sprites = Bni.Load(data.PathOf("TRAVERSE/TRAVSPRT.BNI"));
         foreach (var number in options.Levels)
         {
             progress.Set(HdProgress.Stage.Read, number, 0);
             var level = new LevelData(data, number);
             var sources = TextureExport.Collect(level, Cmi.Load(data.PathOf($"TRAVERSE/LEVEL{number}/LEVEL{number}.CMI")));
+            sources = [.. sources.Concat(TextureExport.Kurt(level, sprites, SoundBank.ForLevel(data, number).Animation)).DistinctBy(s => s.Key)];
             Prune(folder, manifest, number, sources);
             // Levels share some images: each is made once.
             todo.AddRange(sources.Where(s => !manifest.Entries.TryGetValue(s.Key, out var e) || !File.Exists(Path.Combine(folder, e.File)))
@@ -258,7 +261,7 @@ public static class HdGenerator
                 throw new InvalidDataException($"{source.Name}: the upscaler made {upscaled.Width} x {upscaled.Height}");
             }
 
-            var frame = UpscaleImages.Output(upscaled.Rgba, factor, TextureExport.Frame(t, source.Palette, f), t.Width, t.Height, Margin, scale);
+            var frame = UpscaleImages.Output(upscaled.Rgba, factor, TextureExport.Frame(t, source.Palette, f), t.Width, t.Height, Margin, scale, source.Alpha);
             frame.CopyTo(image, f * frameBytes);
         }
 

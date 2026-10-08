@@ -40,7 +40,8 @@ the original's fades, scripts animate textures, switch the sky and film cutscene
 leave bullet holes, and ropes, twisters' ribbons and the glass panes' outlines are drawn. An
 enhanced look (Options, Graphics) filters the textures, lights each arena from its level's sky
 (a sun and its shadows outdoors), lights muzzle flashes, explosions and fires, and adds ambient
-occlusion, a little glow and a haze, and can draw AI-upscaled textures made from your copy of the
+occlusion, a little glow and a haze, shades the models smoothly (hard edges kept; Options, "Smooth
+models" also rounds them), and can draw AI-upscaled textures made from your copy of the
 game ([HD textures](#hd-textures)); anti-aliasing smooths the edges. The three
 levels of the 1996 beta demo play as extras ([below](#the-1996-beta-demo)). The game can be played
 through; the [Godot port](https://github.com/nemo22/mdk-godot) gets the same fixes.
@@ -51,7 +52,7 @@ through; the [Godot port](https://github.com/nemo22/mdk-godot) gets the same fix
 | --- | --- |
 | Data formats: levels, textures, models, sprites, sounds, fonts, scripts, videos | █████████░ 95% |
 | Rendering: arenas, glass, sky, mirrors, Kurt's sprite, effects | █████████░ 95% |
-| Enhanced look: filtering, mipmaps, sky light and shadows, point lights, occlusion, glow, haze, HD textures; anti-aliasing | █████████░ 85% |
+| Enhanced look: filtering, mipmaps, sky light and shadows, point lights, occlusion, glow, haze, smooth models, HD textures; anti-aliasing | █████████░ 85% |
 | Collisions: the original's BSP | █████████░ 95% |
 | Kurt: walking, turning, jumping, chute, ledges, slides, camera, damage, death | █████████░ 95% |
 | Sound mixer (the original's laws) and music | █████████░ 90% |
@@ -171,12 +172,15 @@ only; the original look is unchanged).
   Each image is the texture as an arena's palette shows it, its key a hash of that (size, indices,
   colours): a changed or other game file never gets a stale image. Run again, it keeps what is
   still current and makes the rest.
-- Upscaled: arenas, corridors, the objects' models (each texture once per distinct palette).
-  Kept original: the sky, Kurt, effects' sprites, the HUD, fonts and 2D screens; a texture a
-  sniper round marks with a bullet hole goes back to the original.
+- Upscaled: arenas, corridors, the objects' models (each texture once per distinct palette), and
+  Kurt's sprite in the levels (407 frames, shared by all levels: 50 s, 27 MB on disk). Kept
+  original: the sky, effects' sprites, the HUD, fonts, 2D screens, the fall's and the stream's
+  Kurt (drawn in the original look); a texture a sniper round marks with a bullet hole goes back
+  to the original.
 - Cut-outs keep hard edges: the upscaler gets the colour only (clear texels filled with their
   neighbours' colour, the frame wrapped around by 8 texels so tiling textures stay seamless); the
-  alpha is the original's, upscaled bilinear and cut at half cover.
+  alpha is the original's, upscaled bilinear and cut at half cover. Kurt's frames keep that alpha
+  soft: the shader cuts their outline at half cover as smoothly as the original's.
 - Cost (default: x4plus, 2x): all six levels in about 4 minutes on an RTX 3060 (the anime
   model: seconds), 243 MB on disk; a level's upscaled textures take 4 times the GPU memory
   (LEVEL3: 40 MB to 160 MB; 195 MB with Kurt, sprites and effects); 4x would be 16 times (about

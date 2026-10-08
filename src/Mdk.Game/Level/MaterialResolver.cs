@@ -102,6 +102,31 @@ public sealed class MaterialResolver(Renderer renderer, Dti dti, Shading shading
         return name.StartsWith(PenPrefix) && int.TryParse(name.AsSpan(PenPrefix.Length), out var pen) && IsDrawnColour(pen);
     }
 
+    /// <summary>Whether a material value is a special colour (glass, mirrors, those not drawn): never lit.</summary>
+    public static bool IsSpecial(int value, IReadOnlyList<string> names, IReadOnlyList<TextureArchive> archives)
+    {
+        if (value < 0)
+        {
+            return -value >= SpecialFirst;
+        }
+
+        var name = names[value];
+        if (archives.Any(a => a.Textures.ContainsKey(name)))
+        {
+            return false;
+        }
+
+        foreach (var archive in archives)
+        {
+            if (archive.Colors.TryGetValue(name, out var index))
+            {
+                return index >= SpecialFirst;
+            }
+        }
+
+        return name.StartsWith(PenPrefix) && int.TryParse(name.AsSpan(PenPrefix.Length), out var pen) && pen >= SpecialFirst;
+    }
+
     /// <summary>Palette colours, glass and mirrors are drawn; other specials aren't.</summary>
     private static bool IsDrawnColour(int index) =>
         index < SpecialFirst || index is >= GlassFirst and <= GlassLast or >= MirrorFirst and <= MirrorLast;
