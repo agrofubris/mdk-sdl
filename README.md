@@ -257,7 +257,8 @@ From the main menu or the pause menu; a page per kind, each change applied and s
   the newest frame shown; falls back to what the display supports), frame limit (60, 120, 144 a
   second with VSync off or adaptive) and GPU backend (Auto, Direct3D 12 or Vulkan on Windows,
   Vulkan on Linux, Metal on macOS; after a restart; a backend that fails falls back to Auto).
-  Android has render scale, VSync and frame limit (always fullscreen, Vulkan).
+  Gamma (0.5-2: above 1 brighter, the HUD and menus too). Android has render scale, VSync,
+  frame limit and gamma (always fullscreen, Vulkan).
 - **Graphics**: the original or the enhanced look, anti-aliasing, gore.
 - **3D Stereo**: the stereo layout, the eyes' separation and convergence ([above](#stereo-3d)).
 - **Audio**: master, music and effects volumes, the music filter.

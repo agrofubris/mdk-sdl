@@ -153,6 +153,7 @@ public sealed unsafe partial class Renderer
         "depth" => DepthSamplers,
         "post" => PostSamplers,
         "stereo" => StereoEyes,
+        "gamma" => GammaSamplers,
         _ => DefaultSamplers,
     };
 
@@ -220,6 +221,7 @@ public sealed unsafe partial class Renderer
 
         _msaaColour = _msaaDepth = _scene = _viewDepth = _occlusion = null;
         ReleaseEyes();
+        ReleaseGraded();
     }
 
     private void ReleaseShadowMap()

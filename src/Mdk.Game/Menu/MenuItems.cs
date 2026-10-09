@@ -474,6 +474,10 @@ public sealed class MenuItems
                 case DisplayItem.Backend:
                     AddOption(BackendText, BackendStep);
                     break;
+                case DisplayItem.Gamma:
+                    AddOption(() => string.Create(CultureInfo.InvariantCulture, $"Gamma: {s.Gamma:0.0}"),
+                        step => s.Gamma = GammaStep(s.Gamma, step));
+                    break;
             }
         }
 
@@ -799,6 +803,16 @@ public sealed class MenuItems
         var index = Array.IndexOf(Sensitivities, value);
         return Sensitivities[Wrap((index >= 0 ? index : DefaultSensitivity) + step, Sensitivities.Length)];
     }
+
+    /// <summary>The next gamma of the list (wrapping; from 1 when it isn't in it).</summary>
+    public static float GammaStep(float value, int step)
+    {
+        var index = Array.IndexOf(Gammas, value);
+        return Gammas[Wrap((index >= 0 ? index : Array.IndexOf(Gammas, Renderer.DefaultGamma)) + step, Gammas.Length)];
+    }
+
+    /// <summary>The gammas by 0.1, <see cref="Renderer.MinGamma"/> to <see cref="Renderer.MaxGamma"/>.</summary>
+    private static readonly float[] Gammas = [0.5f, 0.6f, 0.7f, 0.8f, 0.9f, 1f, 1.1f, 1.2f, 1.3f, 1.4f, 1.5f, 1.6f, 1.7f, 1.8f, 1.9f, 2f];
 
     private static int Wrap(int value, int count) => ((value % count) + count) % count;
 

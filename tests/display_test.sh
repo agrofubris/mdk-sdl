@@ -78,7 +78,7 @@ mkdir -p "$MDK_USER_DIR"
 printf 'fullscreen=Exclusive\nwindow_size=1600x1200\nrender_scale=200\nvsync=Adaptive\nframe_limit=60\ngpu_backend=Auto\n' > "$MDK_USER_DIR/settings.cfg"
 OUT=$(run "$OUT_DIR/mdk_display.bmp" --menu --options --press=Menu.Accept@0.3 --wait=1)
 echo "$OUT" | grep -q "^Display: .*, window 1280x960 (hidden), render target 1280x960,"; check "hidden: 1280 x 960" $?
-echo "$OUT" | grep -q "^Menu: Display mode: Exclusive | Resolution: [0-9]*x[0-9]* | Render scale: 200% | VSync: Adaptive.* | Frame limit: 60 | GPU: Auto (.*) | Back$"; check "display page" $?
+echo "$OUT" | grep -q "^Menu: Display mode: Exclusive | Resolution: [0-9]*x[0-9]* | Render scale: 200% | VSync: Adaptive.* | Frame limit: 60 | GPU: Auto (.*) | Gamma: 1.0 | Back$"; check "display page" $?
 
 # Older settings: fullscreen=True is the desktop's fullscreen.
 printf 'fullscreen=True\nmaster_volume=30\n' > "$MDK_USER_DIR/settings.cfg"

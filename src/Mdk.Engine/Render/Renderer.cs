@@ -835,6 +835,7 @@ public sealed unsafe partial class Renderer : IDisposable
             RenderScene(commands, view, clearColour);
         }
 
+        ApplyGamma(commands);
         if (swapchain != null)
         {
             Blit(commands, swapchain, width, height);
@@ -1118,7 +1119,7 @@ public sealed unsafe partial class Renderer : IDisposable
     {
         var blit = new SDL_GPUBlitInfo
         {
-            source = new SDL_GPUBlitRegion { texture = _target, w = _targetWidth, h = _targetHeight },
+            source = new SDL_GPUBlitRegion { texture = _shown, w = _targetWidth, h = _targetHeight },
             destination = new SDL_GPUBlitRegion { texture = swapchain, w = width, h = height },
             load_op = SDL_GPULoadOp.SDL_GPU_LOADOP_DONT_CARE,
             // A scaled frame is smoothed; at 100 % pixels copy as they are.
@@ -1133,7 +1134,7 @@ public sealed unsafe partial class Renderer : IDisposable
         var size = _targetWidth * _targetHeight * BytesPerPixel;
         var transfer = CreateTransfer(size, SDL_GPUTransferBufferUsage.SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD);
         var copy = SDL_BeginGPUCopyPass(commands);
-        var source = new SDL_GPUTextureRegion { texture = _target, w = _targetWidth, h = _targetHeight, d = 1 };
+        var source = new SDL_GPUTextureRegion { texture = _shown, w = _targetWidth, h = _targetHeight, d = 1 };
         var destination = new SDL_GPUTextureTransferInfo { transfer_buffer = transfer };
         SDL_DownloadFromGPUTexture(copy, &source, &destination);
         SDL_EndGPUCopyPass(copy);

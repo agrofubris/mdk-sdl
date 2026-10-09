@@ -186,8 +186,8 @@ public class DisplayTests
     [Fact]
     public void AndroidHidesWindowAndBackend()
     {
-        Assert.Equal([DisplayItem.Mode, DisplayItem.Resolution, DisplayItem.Scale, DisplayItem.VSync, DisplayItem.FrameLimit, DisplayItem.Backend],
+        Assert.Equal([DisplayItem.Mode, DisplayItem.Resolution, DisplayItem.Scale, DisplayItem.VSync, DisplayItem.FrameLimit, DisplayItem.Backend, DisplayItem.Gamma],
             DisplayMenu.Items(Host.Desktop));
-        Assert.Equal([DisplayItem.Scale, DisplayItem.VSync, DisplayItem.FrameLimit], DisplayMenu.Items(Host.Android));
+        Assert.Equal([DisplayItem.Scale, DisplayItem.VSync, DisplayItem.FrameLimit, DisplayItem.Gamma], DisplayMenu.Items(Host.Android));
     }
 }

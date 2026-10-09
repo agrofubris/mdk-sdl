@@ -68,6 +68,8 @@ public sealed class Settings
     public int FrameLimit = FrameLimiter.Off;
     /// <summary>SDL_GPU's driver, from the next start.</summary>
     public GpuBackend Backend = GpuBackend.Auto;
+    /// <summary>The display's gamma (<see cref="Renderer.Gamma"/>): above 1 brighter.</summary>
+    public float Gamma = Renderer.DefaultGamma;
     public Difficulty Difficulty = Difficulty.Normal;
     /// <summary>Gore (0x5742dc, on by default): green sparks, slime, blown off parts, the head shots row.</summary>
     public bool Gore = true;
@@ -153,6 +155,7 @@ public sealed class Settings
             $"vsync={VSync}",
             $"frame_limit={FrameLimit}",
             $"gpu_backend={Backend}",
+            $"gamma={Gamma.ToString(CultureInfo.InvariantCulture)}",
             $"difficulty={Difficulty}",
             $"gore={Gore}",
             $"graphics={Graphics}",
@@ -256,6 +259,10 @@ public sealed class Settings
             case "gpu_backend":
                 Backend = Enum.TryParse<GpuBackend>(value, out var backend) && Enum.IsDefined(backend) ? backend : Backend;
                 break;
+            case "gamma":
+                Gamma = float.TryParse(value, CultureInfo.InvariantCulture, out var gamma)
+                    ? Math.Clamp(gamma, Renderer.MinGamma, Renderer.MaxGamma) : Gamma;
+                break;
             case "difficulty":
                 Difficulty = Enum.TryParse<Difficulty>(value, out var difficulty) ? difficulty : Difficulty;
                 break;
@@ -315,6 +322,7 @@ public sealed class Settings
         window.Apply(new DisplaySetup(Fullscreen, WindowSize, ExclusiveSize));
         renderer.RenderScale = RenderScale;
         renderer.VSync = VSync;
+        renderer.Gamma = Gamma;
         input.MouseScale = MouseSensitivity;
         input.InvertMouse = InvertMouse;
         input.PadSensitivity = PadSensitivity;

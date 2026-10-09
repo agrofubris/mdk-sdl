@@ -51,6 +51,8 @@ public sealed record GameOptions(Start Start, ViewerOptions Level)
     public Stereo? Stereo { get; init; }
     public float? StereoSeparation { get; init; }
     public float? StereoConvergence { get; init; }
+    /// <summary>The display's gamma instead of the settings' (--gamma; tests).</summary>
+    public float? Gamma { get; init; }
     /// <summary>Keys pressed once at given times (--press; tests).</summary>
     public TestPresses? Presses { get; init; }
     /// <summary>Only these mods on, by folder (--mod; tests; saved only if the options change).</summary>
@@ -217,6 +219,11 @@ public sealed class Game : IDisposable
         if (options.StereoConvergence is { } convergence)
         {
             settings.StereoConvergence = convergence;
+        }
+
+        if (options.Gamma is { } gamma)
+        {
+            settings.Gamma = gamma;
         }
 
         settings.Apply(_audio, _window, _renderer, _input);

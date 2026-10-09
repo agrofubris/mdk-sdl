@@ -35,6 +35,7 @@ using Mdk.Game.Scripts;
 //   --stereo=MODE           the stereo layout instead of the settings': off, sbs, sbsfull, crossview, int,
 //                           intr, tab, tabr, vr (--stereo-separation=, --stereo-convergence=; tests)
 //   --bloodyes, --nobloodno gore on or off instead of the settings' (the original's -bloodyes, -nobloodno)
+//   --gamma=0.5-2           the display's gamma instead of the settings' (tests)
 //   --gpu=d3d12|vulkan|metal the GPU backend instead of the settings' (tests; not saved)
 //   --hidden                no window, frames drawn off screen (tests; also MDK_HIDDEN=1)
 //   --screenshot=file.bmp   save a frame after --wait seconds of game time, print Kurt, quit (tests)
@@ -245,6 +246,7 @@ using var game = new Game(data, new GameOptions(start, viewer)
     Stereo = stereo,
     StereoSeparation = stereoSeparation,
     StereoConvergence = stereoConvergence,
+    Gamma = options.TryGetValue("gamma", out var gammaText) ? float.Parse(gammaText, CultureInfo.InvariantCulture) : null,
     Presses = options.TryGetValue("press", out var presses) ? TestPresses.Parse(presses) : null,
     Mods = options.TryGetValue("mod", out var mods) ? mods.Split(',', StringSplitOptions.RemoveEmptyEntries) : null,
     Gpu = options.GetValueOrDefault("gpu"),

@@ -193,6 +193,21 @@ public class FlowTests
     [InlineData(1.1f, -1, 0.75f)]
     public void SensitivitySteps(float value, int step, float expected) => Assert.Equal(expected, MenuItems.SensitivityStep(value, step));
 
+    [Theory]
+    [InlineData(1f, 1, 1.1f)]
+    [InlineData(2f, 1, 0.5f)]
+    [InlineData(0.5f, -1, 2f)]
+    [InlineData(1.05f, 1, 1.1f)]
+    public void GammaSteps(float value, int step, float expected) => Assert.Equal(expected, MenuItems.GammaStep(value, step));
+
+    [Fact]
+    public void GammaRoundTripsAndStaysInRange()
+    {
+        Assert.Equal(1.3f, Settings.Parse(new Settings { Gamma = 1.3f }.Format()).Gamma);
+        Assert.Equal(Renderer.MaxGamma, Settings.Parse("gamma=9").Gamma);
+        Assert.Equal(1f, Settings.Parse("gamma=bright").Gamma);
+    }
+
     [Fact]
     public void ScoreValues()
     {
