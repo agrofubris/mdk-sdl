@@ -20,8 +20,16 @@ public sealed unsafe class Window : IDisposable
     /// <summary>The mouse looks around (play): touches are the on-screen controls, not clicks.</summary>
     private Capture _capture;
 
-    /// <summary>The on-screen controls while they're used (play), or null.</summary>
-    public TouchControls? Touch => _capture == Capture.On ? _touch : null;
+    /// <summary>When the on-screen controls show, and what played last (Auto).</summary>
+    private TouchButtons _touchMode;
+    private InputSource _lastSource = InputSource.Touch;
+
+    /// <summary>The on-screen controls while they're used (play, shown), or null.</summary>
+    public TouchControls? Touch =>
+        _capture == Capture.On && TouchControls.Shown(_touchMode, _lastSource) ? _touch : null;
+
+    /// <summary>A touch screen (Android): the on-screen controls' setting applies.</summary>
+    public bool HasTouchScreen => _touch != null;
 
     /// <summary>The gamepads (none in a hidden window: tests aren't steered by a pad left plugged in).</summary>
     private readonly Gamepads? _gamepads;
@@ -265,6 +273,9 @@ public sealed unsafe class Window : IDisposable
     /// <summary>The gyroscope turns the view in play (a phone in a VR viewer).</summary>
     public void TrackHead(HeadTracking tracking) => _head.Set(tracking);
 
+    /// <summary>When the on-screen controls show (<see cref="TouchButtons"/>).</summary>
+    public void ShowTouch(TouchButtons mode) => _touchMode = mode;
+
     /// <summary>Handles pending events. Returns false when the window closes.</summary>
     public bool PumpEvents(Input input)
     {
@@ -279,9 +290,21 @@ public sealed unsafe class Window : IDisposable
         SDL_Event e;
         while (SDL_PollEvent(&e))
         {
-            if (Touch != null && TouchEvent(e, input))
+            // In play, touches are the on-screen controls (dropped while they're hidden), not clicks.
+            if (_touch != null && _capture == Capture.On && IsTouch(e))
             {
+                PlayedBy(InputSource.Touch, input);
+                if (Touch != null)
+                {
+                    TouchEvent(e, input);
+                }
+
                 continue;
+            }
+
+            if (_touch != null && IsDevice(e))
+            {
+                PlayedBy(InputSource.Device, input);
             }
 
             if ((_gamepads?.Event(e, input) ?? false) || _head.Event(e, input, _capture == Capture.On, Handle))
@@ -322,9 +345,40 @@ public sealed unsafe class Window : IDisposable
         return true;
     }
 
+    /// <summary>A finger, or a mouse event SDL makes of one.</summary>
+    private static bool IsTouch(in SDL_Event e) => (SDL_EventType)e.type switch
+    {
+        SDL_EventType.SDL_EVENT_FINGER_DOWN or SDL_EventType.SDL_EVENT_FINGER_MOTION
+            or SDL_EventType.SDL_EVENT_FINGER_UP or SDL_EventType.SDL_EVENT_FINGER_CANCELED => true,
+        SDL_EventType.SDL_EVENT_MOUSE_BUTTON_DOWN or SDL_EventType.SDL_EVENT_MOUSE_BUTTON_UP => e.button.which == SDL_TOUCH_MOUSEID,
+        SDL_EventType.SDL_EVENT_MOUSE_MOTION => e.motion.which == SDL_TOUCH_MOUSEID,
+        _ => false,
+    };
+
+    /// <summary>A gamepad's, a keyboard's or a real mouse's press (not Android's back button, which
+    /// touch players use too).</summary>
+    private static bool IsDevice(in SDL_Event e) => (SDL_EventType)e.type switch
+    {
+        SDL_EventType.SDL_EVENT_GAMEPAD_ADDED or SDL_EventType.SDL_EVENT_GAMEPAD_BUTTON_DOWN => true,
+        SDL_EventType.SDL_EVENT_KEY_DOWN => e.key.scancode != SDL_Scancode.SDL_SCANCODE_AC_BACK,
+        SDL_EventType.SDL_EVENT_MOUSE_BUTTON_DOWN => e.button.which != SDL_TOUCH_MOUSEID,
+        _ => false,
+    };
+
+    /// <summary>What played last (Auto); controls going hidden let go of their keys.</summary>
+    private void PlayedBy(InputSource source, Input input)
+    {
+        var shown = Touch != null;
+        _lastSource = source;
+        if (shown && Touch == null)
+        {
+            _touch!.Release(input);
+        }
+    }
+
     /// <summary>In play on a touch screen, fingers drive the on-screen controls and the mouse events
-    /// SDL makes of them are dropped. Returns whether the event was a touch.</summary>
-    private bool TouchEvent(in SDL_Event e, Input input)
+    /// SDL makes of them are dropped.</summary>
+    private void TouchEvent(in SDL_Event e, Input input)
     {
         var size = Size;
         var screen = new Vector2(size.Width, size.Height);
@@ -334,21 +388,14 @@ public sealed unsafe class Window : IDisposable
         {
             case SDL_EventType.SDL_EVENT_FINGER_DOWN:
                 _touch!.Down(finger, at, screen, input);
-                return true;
+                break;
             case SDL_EventType.SDL_EVENT_FINGER_MOTION:
                 _touch!.Move(finger, at, screen, input);
-                return true;
+                break;
             case SDL_EventType.SDL_EVENT_FINGER_UP:
             case SDL_EventType.SDL_EVENT_FINGER_CANCELED:
                 _touch!.Up(finger, input);
-                return true;
-            case SDL_EventType.SDL_EVENT_MOUSE_BUTTON_DOWN:
-            case SDL_EventType.SDL_EVENT_MOUSE_BUTTON_UP:
-                return e.button.which == SDL_TOUCH_MOUSEID;
-            case SDL_EventType.SDL_EVENT_MOUSE_MOTION:
-                return e.motion.which == SDL_TOUCH_MOUSEID;
-            default:
-                return false;
+                break;
         }
     }
 

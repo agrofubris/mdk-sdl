@@ -3,6 +3,13 @@ using System.Numerics;
 
 namespace Mdk.Engine.Platform;
 
+/// <summary>When the on-screen controls show: Auto hides them while a gamepad, a keyboard or a
+/// mouse plays (a touch brings them back); Off never, On always.</summary>
+public enum TouchButtons { Auto, Off, On }
+
+/// <summary>What played last: a finger on the screen, or a gamepad, a keyboard or a mouse.</summary>
+public enum InputSource { Touch, Device }
+
 /// <summary>An on-screen button: its key and its area (window pixels).</summary>
 public readonly record struct TouchButton(Key Key, string Label, RectangleF Area);
 
@@ -52,6 +59,10 @@ public sealed class TouchControls
     private static readonly Key[] StickKeys = [Key.Forward, Key.Back, Key.StrafeLeft, Key.StrafeRight, Key.Turbo];
 
     private enum Role { Stick, Button, Look }
+
+    /// <summary>The controls show (and act) by the setting and what played last.</summary>
+    public static bool Shown(TouchButtons mode, InputSource last) =>
+        mode == TouchButtons.On || (mode == TouchButtons.Auto && last == InputSource.Touch);
 
     private sealed class Finger(Role role, Vector2 at, Key key = default)
     {

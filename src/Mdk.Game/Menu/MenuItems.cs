@@ -400,7 +400,7 @@ public sealed class MenuItems
     ///            ├─ Graphics  look, anti-aliasing, gore
     ///            ├─ Audio     volumes, music filter
     ///            ├─ Keyboard & mouse  mouse, key bindings
-    ///            ├─ Gamepad   look, button bindings
+    ///            ├─ Gamepad   look, button bindings, touch controls (Android)
     ///            ├─ Game      difficulty
     ///            └─ Mods      mods on/off, Make HD textures (desktop), Import from folder (Android)
     /// </code></summary>
@@ -694,11 +694,18 @@ public sealed class MenuItems
     }
 
     /// <summary>The gamepad's look, and its button bindings: choosing a binding waits for a button
-    /// (a key cancels: B and Start are buttons too). The sticks and Start (pause) are fixed.</summary>
+    /// (a key cancels: B and Start are buttons too). The sticks and Start (pause) are fixed. On a
+    /// touch screen, when its on-screen controls show (<see cref="TouchButtons"/>).</summary>
     public void ShowGamepad(Action back)
     {
         ClearPage();
         var s = _ui.Settings;
+        if (_ui.Window.HasTouchScreen)
+        {
+            AddOption(() => $"Touch controls: {s.Touch}",
+                step => s.Touch = (TouchButtons)Wrap((int)s.Touch + step, Enum.GetValues<TouchButtons>().Length));
+        }
+
         AddOption(() => string.Create(CultureInfo.InvariantCulture, $"Look sensitivity: {s.PadSensitivity:0.00}"),
             step => s.PadSensitivity = SensitivityStep(s.PadSensitivity, step));
         AddOption(() => $"Invert look: {OnOff(s.InvertPad)}", _ => s.InvertPad = !s.InvertPad);

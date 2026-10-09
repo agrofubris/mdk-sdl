@@ -70,6 +70,7 @@ public class FlowTests
         settings.PadBindings[Key.Fire] = "RB";
         settings.PadSensitivity = 1.5f;
         settings.InvertPad = true;
+        settings.Touch = TouchButtons.Off;
 
         var read = Settings.Parse(settings.Format());
 
@@ -84,6 +85,7 @@ public class FlowTests
         Assert.Equal("RB", read.PadBindings[Key.Fire]);
         Assert.Equal(1.5f, read.PadSensitivity);
         Assert.True(read.InvertPad);
+        Assert.Equal(TouchButtons.Off, read.Touch);
     }
 
     [Fact]

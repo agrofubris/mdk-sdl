@@ -263,6 +263,8 @@ From the main menu or the pause menu; a page per kind, each change applied and s
 - **Audio**: master, music and effects volumes, the music filter.
 - **Keyboard & mouse**: mouse sensitivity and inversion, key bindings.
 - **Gamepad**: look sensitivity and inversion, button bindings (Start stays pause; a key cancels).
+  On Android also the touch controls: Auto (hidden while a gamepad, keyboard or mouse plays; a
+  touch brings them back), Off or On.
 - **Game**: difficulty.
 - **Mods**: each mod on or off, "Make HD textures" (desktop), "Import from folder" (Android).
 

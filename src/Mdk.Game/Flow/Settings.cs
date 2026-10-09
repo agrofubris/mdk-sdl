@@ -81,6 +81,8 @@ public sealed class Settings
     public float StereoConvergence = 10f;
     /// <summary>The phone's gyroscope turns the view (a VR viewer).</summary>
     public HeadTracking HeadTracking = HeadTracking.Off;
+    /// <summary>When the touch screen's on-screen controls show (Android).</summary>
+    public TouchButtons Touch = TouchButtons.Auto;
     /// <summary>Rebound actions: action → key or mouse button name (see <see cref="Input.Bind"/>).</summary>
     public readonly Dictionary<Key, string> Bindings = [];
     /// <summary>Rebound actions: action → gamepad button name (see <see cref="Input.BindPad"/>).</summary>
@@ -143,6 +145,7 @@ public sealed class Settings
             $"invert_mouse={InvertMouse}",
             $"pad_sensitivity={PadSensitivity.ToString(CultureInfo.InvariantCulture)}",
             $"invert_pad={InvertPad}",
+            $"touch_controls={Touch}",
             $"fullscreen={Fullscreen}",
             $"window_size={WindowSize}",
             $"exclusive_size={ExclusiveSize}",
@@ -225,6 +228,9 @@ public sealed class Settings
             case "invert_pad":
                 InvertPad = bool.TryParse(value, out var invertPad) ? invertPad : InvertPad;
                 break;
+            case "touch_controls":
+                Touch = Enum.TryParse<TouchButtons>(value, out var touch) && Enum.IsDefined(touch) ? touch : Touch;
+                break;
             // Older settings: True or False.
             case "fullscreen" when bool.TryParse(value, out var on):
                 Fullscreen = on ? Fullscreen.Desktop : Fullscreen.Off;
@@ -300,6 +306,7 @@ public sealed class Settings
         renderer.StereoSeparation = StereoSeparation;
         renderer.StereoConvergence = StereoConvergence;
         window.TrackHead(HeadTracking);
+        window.ShowTouch(Touch);
         renderer.CanvasSampling = Graphics == Graphics.Enhanced ? Sampling.Linear : Sampling.Nearest;
         audio.MasterGain = Gain(MasterVolume);
         audio.SetBusGain(Bus.Music, Gain(MusicVolume));

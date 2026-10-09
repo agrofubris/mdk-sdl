@@ -129,4 +129,15 @@ public class TouchControlsTests
         Assert.False(input.IsDown(Key.Forward));
         Assert.Null(touch.Stick);
     }
+
+    [Theory]
+    [InlineData(TouchButtons.Auto, InputSource.Touch, true)]
+    [InlineData(TouchButtons.Auto, InputSource.Device, false)]
+    [InlineData(TouchButtons.Off, InputSource.Touch, false)]
+    [InlineData(TouchButtons.On, InputSource.Device, true)]
+    public void ShownByTheSettingAndTheLastInput(TouchButtons mode, InputSource last, bool shown)
+    {
+        // Auto: a gamepad, a keyboard or a mouse hides them; a touch shows them again.
+        Assert.Equal(shown, TouchControls.Shown(mode, last));
+    }
 }
