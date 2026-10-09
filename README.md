@@ -21,6 +21,14 @@ original's box sweeps.
 > copy of the original game (available for example on GOG). Without the original game data the
 > port won't run.
 
+> [!NOTE]
+> **Stereo fork** ([agrofubris](https://github.com/agrofubris)): the stereo 3D modes were merged
+> into [nemo22/mdk-sdl](https://github.com/nemo22/mdk-sdl)
+> ([#2](https://github.com/nemo22/mdk-sdl/pull/2), credited below) and this fork tracks upstream
+> `main`. **Download builds from the
+> [upstream releases](https://github.com/nemo22/mdk-sdl/releases)** — stereo is in **1.0.0**,
+> with the phone VR viewer mode.
+
 ## Features
 
 - **Stereo 3D (optional)**: side by side (half and full), crossview, row-interlaced, interlaced-reversed, top and
