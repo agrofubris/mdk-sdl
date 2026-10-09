@@ -575,6 +575,8 @@ public sealed class MenuItems
             step => s.StereoSeparation = Math.Clamp(s.StereoSeparation + step * SeparationStep, 0f, StereoModes.MaxSeparation));
         AddOption(() => $"Convergence: {ConvergenceText(s.StereoConvergence)}",
             step => s.StereoConvergence = ConvergenceStep(s.StereoConvergence, step));
+        AddOption(() => $"Head tracking: {OnOff(s.HeadTracking == HeadTracking.On)}",
+            _ => s.HeadTracking = s.HeadTracking == HeadTracking.On ? HeadTracking.Off : HeadTracking.On);
         EndPage(back);
     }
 

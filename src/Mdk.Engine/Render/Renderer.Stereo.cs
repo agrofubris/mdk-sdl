@@ -26,6 +26,9 @@ public enum Stereo
     Tab,
     /// <summary>Top and bottom with the halves exchanged: the right eye's image in the top half.</summary>
     TabReversed,
+    /// <summary>A phone in a VR viewer: full side by side, each half bent against the lens
+    /// (barrel), the HUD and the menus kept to the middle (<see cref="StereoModes.CanvasZoom"/>).</summary>
+    Vr,
 }
 
 /// <summary>The stereo modes and their names (the options page, the console, --stereo).</summary>
@@ -33,7 +36,7 @@ public static class StereoModes
 {
     /// <summary>The modes' names, by value (the options page's).</summary>
     public static readonly string[] Names =
-        ["Off", "Side by side (half)", "Side by side (full)", "Cross view", "Interlaced", "Interlaced reverse", "Top and bottom", "Top and bottom rev."];
+        ["Off", "Side by side (half)", "Side by side (full)", "Cross view", "Interlaced", "Interlaced reverse", "Top and bottom", "Top and bottom rev.", "VR viewer (phone)"];
 
     /// <summary>The most the eyes go apart and the farthest their images converge (the sliders).</summary>
     public const float MaxSeparation = 2f;
@@ -69,6 +72,9 @@ public static class StereoModes
             case "tabr" or "tabreversed" or "topandbottomreversed" or "topandbottomreverse" or "overunderreversed":
                 stereo = Stereo.TabReversed;
                 return true;
+            case "vr" or "vrviewer" or "vrviewerphone":
+                stereo = Stereo.Vr;
+                return true;
             default:
                 stereo = Stereo.Off;
                 return false;
@@ -78,7 +84,13 @@ public static class StereoModes
     /// <summary>An eye's camera aspect in a frame of <paramref name="aspect"/>: full side by side
     /// halves it (16:9 → 8:9 an eye); the others keep it (the TV stretches half side by side back).</summary>
     public static float EyeAspect(Stereo stereo, float aspect) =>
-        stereo is Stereo.SbsFull or Stereo.CrossView ? aspect / 2f : aspect;
+        stereo is Stereo.SbsFull or Stereo.CrossView or Stereo.Vr ? aspect / 2f : aspect;
+
+    /// <summary>The VR viewer's canvas: the share of an eye's view the HUD and the menus take.</summary>
+    private const float VrCanvas = 0.7f;
+
+    /// <summary>The canvas' size in an eye's view: smaller in the VR viewer, whose lenses blur the edges.</summary>
+    public static float CanvasZoom(Stereo stereo) => stereo == Stereo.Vr ? VrCanvas : 1f;
 }
 
 /// <summary>The frame's stereo state: the settings (<see cref="StereoMode"/>, the eyes' separation
@@ -92,8 +104,8 @@ public sealed unsafe partial class Renderer
     [StructLayout(LayoutKind.Sequential)]
     private struct StereoUniforms
     {
-        /// <summary>x: 0 side by side, 1 interlaced, 2 top and bottom; y: 1 the eyes exchanged
-        /// (crossview, the reversed interlaced and top and bottom).</summary>
+        /// <summary>x: 0 side by side, 1 interlaced, 2 top and bottom, 3 the VR viewer; y: 1 the eyes
+        /// exchanged (crossview, the reversed interlaced and top and bottom); z: an eye's aspect.</summary>
         public Vector4 Mode;
     }
 
@@ -162,10 +174,15 @@ public sealed unsafe partial class Renderer
     /// reversed: the odd ones).</summary>
     private void CompositeStereo(SDL_GPUCommandBuffer* commands)
     {
-        var layout = StereoMode is Stereo.Interlaced or Stereo.InterlacedReversed ? 1f
-            : StereoMode is Stereo.Tab or Stereo.TabReversed ? 2f : 0f;
+        var layout = StereoMode switch
+        {
+            Stereo.Interlaced or Stereo.InterlacedReversed => 1f,
+            Stereo.Tab or Stereo.TabReversed => 2f,
+            Stereo.Vr => 3f,
+            _ => 0f,
+        };
         var swapped = StereoMode is Stereo.CrossView or Stereo.InterlacedReversed or Stereo.TabReversed;
-        var uniforms = new StereoUniforms { Mode = new Vector4(layout, swapped ? 1f : 0f, 0f, 0f) };
+        var uniforms = new StereoUniforms { Mode = new Vector4(layout, swapped ? 1f : 0f, AspectRatio, 0f) };
 
         var samplers = stackalloc SDL_GPUTextureSamplerBinding[(int)StereoEyes];
         samplers[0] = new SDL_GPUTextureSamplerBinding { texture = _eyes[0], sampler = _mipSampler };

@@ -23,7 +23,8 @@ public sealed class TouchView(Renderer renderer, FontView font)
 
     public void Draw(Window window)
     {
-        if (window.Touch is not { } touch)
+        // In a VR viewer no finger reaches the screen: a gamepad plays.
+        if (window.Touch is not { } touch || renderer.StereoMode == Stereo.Vr)
         {
             return;
         }

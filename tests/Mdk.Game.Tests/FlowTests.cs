@@ -63,6 +63,7 @@ public class FlowTests
             Stereo = Stereo.InterlacedReversed,
             StereoSeparation = 0.4f,
             StereoConvergence = 12f,
+            HeadTracking = HeadTracking.On,
         };
         settings.Bindings[Key.Fire] = "Left mouse";
         settings.Bindings[Key.Jump] = "Right Ctrl";
@@ -75,6 +76,7 @@ public class FlowTests
         Assert.Equal(AntiAliasing.X4, read.AntiAliasing);
         Assert.Equal(Stereo.InterlacedReversed, read.Stereo);
         Assert.Equal(0.4f, read.StereoSeparation);
+        Assert.Equal(HeadTracking.On, read.HeadTracking);
         Assert.Equal("Right Ctrl", read.Bindings[Key.Jump]);
     }
 

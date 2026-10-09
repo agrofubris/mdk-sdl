@@ -103,6 +103,7 @@ public class StereoTests
     [InlineData(Stereo.Tab, Aspect)]
     [InlineData(Stereo.SbsFull, Aspect / 2f)]
     [InlineData(Stereo.CrossView, Aspect / 2f)]
+    [InlineData(Stereo.Vr, Aspect / 2f)]
     public void FullWidthHalvesTheEyesAspect(Stereo mode, float expected)
     {
         // Full side by side (VR viewers, PC glasses, crossview): each eye sees its half as it is,
@@ -116,5 +117,20 @@ public class StereoTests
         Assert.True(StereoModes.TryParse("sbsfull", out var stereo));
         Assert.Equal(Stereo.SbsFull, stereo);
         Assert.Equal(Enum.GetValues<Stereo>().Length, StereoModes.Names.Length);
+    }
+    [Fact]
+    public void TheVrViewerParses()
+    {
+        Assert.True(StereoModes.TryParse("vr", out var stereo));
+        Assert.Equal(Stereo.Vr, stereo);
+    }
+
+    [Fact]
+    public void TheVrViewerDrawsTheCanvasSmaller()
+    {
+        // The viewer's lenses blur the edges: the HUD and the menus keep to the middle.
+        Assert.InRange(StereoModes.CanvasZoom(Stereo.Vr), 0.5f, 0.9f);
+        Assert.Equal(1f, StereoModes.CanvasZoom(Stereo.SbsFull));
+        Assert.Equal(1f, StereoModes.CanvasZoom(Stereo.Off));
     }
 }

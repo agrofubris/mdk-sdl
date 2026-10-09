@@ -50,7 +50,7 @@ echo "$OUT" | grep "^Menu" | tail -n 1 | grep -q "^Menu: New Game"; check "Esc: 
 OUT=$(run --menu --options --press=Menu.Down@0.3,Menu.Down@0.4,Menu.Down@0.5,Menu.Down@0.6,Menu.Down@0.7,Menu.Accept@0.8 --wait=1)
 echo "$OUT" | grep -q "^Menu: Difficulty: Normal | Back$"; check "game page" $?
 OUT=$(run --menu --options --press=Menu.Down@0.3,Menu.Down@0.4,Menu.Accept@0.5 --wait=1)
-echo "$OUT" | grep -q "^Menu: Mode: Off | Separation: 0.25 | Convergence: 10 | Back$"; check "3D stereo page" $?
+echo "$OUT" | grep -q "^Menu: Mode: Off | Separation: 0.25 | Convergence: 10 | Head tracking: Off | Back$"; check "3D stereo page" $?
 OUT=$(run --menu --controls --wait=1)
 echo "$OUT" | grep -q "^Menu: Mouse sensitivity: 1.00 | Invert mouse: Off | Forward: W | .* | Quick load: F9 | Default keys | Back$"; check "controls page" $?
 

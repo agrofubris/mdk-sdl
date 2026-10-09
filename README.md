@@ -65,13 +65,16 @@ eye's own frustum, so it keeps the full eye separation's disparity).
     with the other eye).
   - `tab` — top and bottom (over-under): the left eye in the top half.
   - `tabr` — top and bottom with the halves exchanged: the right eye in the top half.
+  - `vr` — a phone in a VR viewer (Cardboard-like): full side by side, each half bent against the
+    lens, the HUD and the menus kept to the middle, no touch controls (play with a gamepad).
 - **Options, 3D Stereo** (main menu and pause menu): Mode, Separation (the eyes' distance apart,
   in the game's units) and Convergence (the distance their images meet at; at the most, `far`:
   parallel rays, meeting at infinity). Left/Right change them and, held, keep stepping; the
   settings apply at once and are saved (`settings.cfg`: `stereo`, `stereo_separation`,
-  `stereo_convergence`).
-- **Console**: `stereo off|sbs|sbsfull|crossview|int|intr|tab|tabr [separation] [convergence]` (saved).
-- **Command line** (tests, not saved): `--stereo=off|sbs|sbsfull|crossview|int|intr|tab|tabr`,
+  `stereo_convergence`). Head tracking (`head_tracking`): the phone's gyroscope turns the view
+  as the mouse does.
+- **Console**: `stereo off|sbs|sbsfull|crossview|int|intr|tab|tabr|vr [separation] [convergence]` (saved).
+- **Command line** (tests, not saved): `--stereo=off|sbs|sbsfull|crossview|int|intr|tab|tabr|vr`,
   `--stereo-separation=0.25`, `--stereo-convergence=10`.
 
 Notes: the scene is rasterized twice, so stereo costs more GPU time (fine on a discrete GPU even
@@ -239,6 +242,11 @@ From the main menu or the pause menu; a page per kind, each change applied and s
 - **3D Stereo**: the stereo layout, the eyes' separation and convergence ([above](#stereo-3d)).
 - **Audio**: master, music and effects volumes, the music filter.
 - **Controls**: mouse sensitivity and inversion, key bindings.
+
+Gamepads (Xbox, PlayStation, Switch, Android Bluetooth pads) play with a fixed layout: left stick
+walks, right stick looks, RT fires, LT toggles sniper mode, A jumps, B runs (turbo), X uses the
+item, Y / RB / d-pad right the next item, LB / d-pad left the previous one, d-pad up and down
+zoom, Start pauses. In the menus: d-pad or left stick, A accepts, B or Start goes back.
 - **Game**: difficulty.
 - **Mods**: each mod on or off, "Make HD textures" (desktop), "Import from folder" (Android).
 
@@ -373,7 +381,7 @@ strafe; far pushes run), dragging elsewhere looks around, buttons on the right f
 the item, pick the next item, toggle sniper mode and zoom (+ / -), and pause (top right). Menus
 take taps; Android's back button is Esc. A keyboard works as on the desktop.
 
-Not yet: game controllers, typing save names (no on-screen keyboard), the console. Tested on the
+Not yet: typing save names (no on-screen keyboard), the console. Tested on the
 Android emulator and one phone.
 
 The APK is signed with a debug key until a release key is set: to update, uninstall the old one

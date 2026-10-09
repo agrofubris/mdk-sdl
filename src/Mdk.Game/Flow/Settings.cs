@@ -71,6 +71,8 @@ public sealed class Settings
     public Stereo Stereo = Stereo.Off;
     public float StereoSeparation = 0.25f;
     public float StereoConvergence = 10f;
+    /// <summary>The phone's gyroscope turns the view (a VR viewer).</summary>
+    public HeadTracking HeadTracking = HeadTracking.Off;
     /// <summary>Rebound actions: action → key or mouse button name (see <see cref="Input.Bind"/>).</summary>
     public readonly Dictionary<Key, string> Bindings = [];
     /// <summary>Mods by folder; those not listed are on (<see cref="ModCatalog"/>).</summary>
@@ -143,6 +145,7 @@ public sealed class Settings
             $"stereo={Stereo}",
             $"stereo_separation={StereoSeparation.ToString(CultureInfo.InvariantCulture)}",
             $"stereo_convergence={StereoConvergence.ToString(CultureInfo.InvariantCulture)}",
+            $"head_tracking={HeadTracking}",
             $"upscaler_url={UpscalerUrl}",
             $"upscaler_sha256={UpscalerSha256}",
         };
@@ -241,6 +244,9 @@ public sealed class Settings
                 StereoConvergence = float.TryParse(value, CultureInfo.InvariantCulture, out var convergence)
                     ? Math.Clamp(convergence, 0f, StereoModes.MaxConvergence) : StereoConvergence;
                 break;
+            case "head_tracking":
+                HeadTracking = Enum.TryParse<HeadTracking>(value, out var tracking) && Enum.IsDefined(tracking) ? tracking : HeadTracking;
+                break;
             case "upscaler_url":
                 UpscalerUrl = value;
                 break;
@@ -264,6 +270,7 @@ public sealed class Settings
         renderer.StereoMode = Stereo;
         renderer.StereoSeparation = StereoSeparation;
         renderer.StereoConvergence = StereoConvergence;
+        window.TrackHead(HeadTracking);
         renderer.CanvasSampling = Graphics == Graphics.Enhanced ? Sampling.Linear : Sampling.Nearest;
         audio.MasterGain = Gain(MasterVolume);
         audio.SetBusGain(Bus.Music, Gain(MusicVolume));

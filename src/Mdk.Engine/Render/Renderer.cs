@@ -739,7 +739,9 @@ public sealed unsafe partial class Renderer : IDisposable
             UpdateMesh(_canvasMesh, CollectionsMarshal.AsSpan(_canvasVertices));
         }
 
-        var screen = Matrix4x4.CreateOrthographicOffCenter(0f, CanvasWidth, CanvasHeight, 0f, 0f, 1f);
+        // The canvas fills the view, or keeps to its middle (the VR viewer: a margin around it).
+        var margin = new Vector2(CanvasWidth, CanvasHeight) * ((1f / StereoModes.CanvasZoom(StereoMode) - 1f) / 2f);
+        var screen = Matrix4x4.CreateOrthographicOffCenter(-margin.X, CanvasWidth + margin.X, CanvasHeight + margin.Y, -margin.Y, 0f, 1f);
         foreach (var (first, count, material) in _canvasCommands)
         {
             _commands.Add(new DrawCommand(_canvasMesh, first, count, material, 0, screen));

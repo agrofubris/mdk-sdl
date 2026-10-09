@@ -178,6 +178,13 @@ public sealed class Input
     private readonly HashSet<Key> _held = [];
     /// <summary>Keys held by the on-screen controls of a touch screen (<see cref="TouchControls"/>).</summary>
     private readonly HashSet<Key> _touched = [];
+    /// <summary>Keys and menu keys held by a gamepad's buttons and left stick (<see cref="GamepadMap"/>).</summary>
+    private readonly HashSet<Key> _pad = [];
+    private readonly HashSet<MenuKey> _padMenu = [];
+
+    /// <summary>The game's degrees a mouse count turns (Kurt, the cameras): the gamepad's and the
+    /// gyroscope's look in degrees becomes mouse counts.</summary>
+    private const float LookDegrees = 0.15f;
 
     public float MouseX { get; private set; }
     public float MouseY { get; private set; }
@@ -203,7 +210,7 @@ public sealed class Input
     public int Digit { get; private set; } = NoDigit;
 
     public bool IsDown(Key key) =>
-        _down.Contains(key) || _buttons.Contains(key) || _fly.Contains(key) || _wheel.Contains(key) || _held.Contains(key) || _touched.Contains(key);
+        _down.Contains(key) || _buttons.Contains(key) || _fly.Contains(key) || _wheel.Contains(key) || _held.Contains(key) || _touched.Contains(key) || _pad.Contains(key);
 
     /// <summary>Holds or releases a key from the program (automated tests).</summary>
     public void Hold(Key key, State state)
@@ -237,7 +244,7 @@ public sealed class Input
     public bool WasPressed(MenuKey key) => _menuPressed.Contains(key);
 
     /// <summary>Held (the menus' sliders step again while a direction is held).</summary>
-    public bool IsDown(MenuKey key) => _menuDown.Contains(key);
+    public bool IsDown(MenuKey key) => _menuDown.Contains(key) || _padMenu.Contains(key);
 
     public bool WasPressed(RawKey key) => _rawPressed.Contains(key);
 
@@ -371,6 +378,8 @@ public sealed class Input
         _buttons.Clear();
         _fly.Clear();
         _menuDown.Clear();
+        _pad.Clear();
+        _padMenu.Clear();
     }
 
     internal void SetKey(SDL_Scancode scancode, State state, Repeat repeat)
@@ -493,6 +502,46 @@ public sealed class Input
     }
 
     internal void AddText(string text) => Typed += text;
+
+    /// <summary>A look in degrees (right, down; a gamepad's stick, the gyroscope): as the mouse's, but
+    /// neither scaled by its sensitivity nor inverted.</summary>
+    internal void AddLook(System.Numerics.Vector2 degrees)
+    {
+        MouseX += degrees.X / LookDegrees;
+        MouseY += degrees.Y / LookDegrees;
+    }
+
+    /// <summary>A gamepad holds or releases a key; holding presses it this frame.</summary>
+    internal void SetPad(Key key, State state)
+    {
+        if (state == State.Up)
+        {
+            _pad.Remove(key);
+            return;
+        }
+
+        if (_pad.Add(key))
+        {
+            _pressed.Add(key);
+            AnyPressed = true;
+        }
+    }
+
+    /// <summary>A gamepad holds or releases a menu key; holding presses it this frame.</summary>
+    internal void SetPadMenu(MenuKey key, State state)
+    {
+        if (state == State.Up)
+        {
+            _padMenu.Remove(key);
+            return;
+        }
+
+        if (_padMenu.Add(key))
+        {
+            _menuPressed.Add(key);
+            AnyPressed = true;
+        }
+    }
 
     /// <summary>An on-screen control holds or releases a key; holding presses it this frame.</summary>
     internal void Touch(Key key, State state)

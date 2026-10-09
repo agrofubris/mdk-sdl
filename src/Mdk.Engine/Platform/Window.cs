@@ -23,6 +23,10 @@ public sealed unsafe class Window : IDisposable
     /// <summary>The on-screen controls while they're used (play), or null.</summary>
     public TouchControls? Touch => _capture == Capture.On ? _touch : null;
 
+    /// <summary>The gamepads (none in a hidden window: tests aren't steered by a pad left plugged in).</summary>
+    private readonly Gamepads? _gamepads;
+    private readonly HeadTracker _head = new();
+
     public Window(string title, int width, int height, Visibility visibility = Visibility.Shown)
     {
         Visibility = visibility;
@@ -34,6 +38,12 @@ public sealed unsafe class Window : IDisposable
         if (!SDL_Init(SDL_InitFlags.SDL_INIT_VIDEO | SDL_InitFlags.SDL_INIT_EVENTS))
         {
             throw new InvalidOperationException($"SDL_Init: {SDL_GetError()}");
+        }
+
+        // Gamepads are optional: without SDL's gamepad support the keyboard and mouse still play.
+        if (visibility == Visibility.Shown && SDL_InitSubSystem(SDL_InitFlags.SDL_INIT_GAMEPAD))
+        {
+            _gamepads = new Gamepads();
         }
 
         var flags = SDL_WindowFlags.SDL_WINDOW_RESIZABLE;
@@ -252,6 +262,9 @@ public sealed unsafe class Window : IDisposable
         }
     }
 
+    /// <summary>The gyroscope turns the view in play (a phone in a VR viewer).</summary>
+    public void TrackHead(HeadTracking tracking) => _head.Set(tracking);
+
     /// <summary>Handles pending events. Returns false when the window closes.</summary>
     public bool PumpEvents(Input input)
     {
@@ -267,6 +280,11 @@ public sealed unsafe class Window : IDisposable
         while (SDL_PollEvent(&e))
         {
             if (Touch != null && TouchEvent(e, input))
+            {
+                continue;
+            }
+
+            if ((_gamepads?.Event(e, input) ?? false) || _head.Event(e, input, _capture == Capture.On, Handle))
             {
                 continue;
             }
@@ -300,6 +318,7 @@ public sealed unsafe class Window : IDisposable
             }
         }
 
+        _gamepads?.Update(input);
         return true;
     }
 
@@ -343,6 +362,8 @@ public sealed unsafe class Window : IDisposable
             SDL_DestroyCursor(_cursor);
         }
 
+        _gamepads?.Dispose();
+        _head.Dispose();
         SDL_DestroyWindow(Handle);
         SDL_Quit();
     }
