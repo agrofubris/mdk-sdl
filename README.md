@@ -23,7 +23,7 @@ original's box sweeps.
 
 ## Features
 
-- **Stereo 3D (optional)**: side by side, crossview, row-interlaced, interlaced-reversed, top and
+- **Stereo 3D (optional)**: side by side (half and full), crossview, row-interlaced, interlaced-reversed, top and
   bottom and reversed top and bottom, with real eye separation and convergence
   ([below](#stereo-3d)).
 - **The whole game**: every level, the fall before it and the stream after it, rides, menus,
@@ -55,8 +55,10 @@ there), nearer things come out of the screen and the sky stays at infinity (its 
 eye's own frustum, so it keeps the full eye separation's disparity).
 
 - **Modes**
-  - `sbs` — side by side: the left eye in the left half (3D TVs, VR cinema players).
-  - `crossview` — side by side with the halves exchanged, for crossed free viewing.
+  - `sbs` — half side by side: the left eye in the left half, squeezed (3D TVs stretch it back).
+  - `sbsfull` — full side by side: each half with its own aspect, seen as it is (phone VR
+    viewers, PC 3D glasses).
+  - `crossview` — full side by side with the halves exchanged, for crossed free viewing.
   - `int` — row-interlaced: even rows the left eye (row-interleaved/passive 3D displays and
     shutter glasses).
   - `intr` — row-interlaced the other way: even rows the right eye (displays whose rows start
@@ -68,8 +70,8 @@ eye's own frustum, so it keeps the full eye separation's disparity).
   parallel rays, meeting at infinity). Left/Right change them and, held, keep stepping; the
   settings apply at once and are saved (`settings.cfg`: `stereo`, `stereo_separation`,
   `stereo_convergence`).
-- **Console**: `stereo off|sbs|crossview|int|intr|tab|tabr [separation] [convergence]` (saved).
-- **Command line** (tests, not saved): `--stereo=off|sbs|crossview|int|intr|tab|tabr`,
+- **Console**: `stereo off|sbs|sbsfull|crossview|int|intr|tab|tabr [separation] [convergence]` (saved).
+- **Command line** (tests, not saved): `--stereo=off|sbs|sbsfull|crossview|int|intr|tab|tabr`,
   `--stereo-separation=0.25`, `--stereo-convergence=10`.
 
 Notes: the scene is rasterized twice, so stereo costs more GPU time (fine on a discrete GPU even

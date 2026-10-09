@@ -32,7 +32,7 @@ using Mdk.Game.Scripts;
 //   --fly                   start with the flying camera
 //   --mute                  no sound (tests)
 //   --enhanced, --original  the enhanced or the original look instead of the settings' (tests)
-//   --stereo=MODE           the stereo layout instead of the settings': off, sbs, crossview, int,
+//   --stereo=MODE           the stereo layout instead of the settings': off, sbs, sbsfull, crossview, int,
 //                           intr, tab, tabr (--stereo-separation=, --stereo-convergence=; tests)
 //   --bloodyes, --nobloodno gore on or off instead of the settings' (the original's -bloodyes, -nobloodno)
 //   --gpu=d3d12|vulkan|metal the GPU backend instead of the settings' (tests; not saved)
@@ -138,7 +138,7 @@ if (options.TryGetValue("stereo", out var stereoText))
 {
     if (!StereoModes.TryParse(stereoText, out var parsedStereo))
     {
-        Console.Error.WriteLine("--stereo: off, sbs, crossview, int, intr, tab or tabr");
+        Console.Error.WriteLine("--stereo: off, sbs, sbsfull, crossview, int, intr, tab or tabr");
         return 1;
     }
 

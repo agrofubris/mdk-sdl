@@ -96,4 +96,25 @@ public class StereoTests
 
         Assert.Equal(0f, NdcX(Center(), Forward, w: 0f), Tolerance);
     }
+    [Theory]
+    [InlineData(Stereo.Off, Aspect)]
+    [InlineData(Stereo.Sbs, Aspect)]
+    [InlineData(Stereo.Interlaced, Aspect)]
+    [InlineData(Stereo.Tab, Aspect)]
+    [InlineData(Stereo.SbsFull, Aspect / 2f)]
+    [InlineData(Stereo.CrossView, Aspect / 2f)]
+    public void FullWidthHalvesTheEyesAspect(Stereo mode, float expected)
+    {
+        // Full side by side (VR viewers, PC glasses, crossview): each eye sees its half as it is,
+        // so its camera has the half's aspect; half side by side is stretched back by the TV.
+        Assert.Equal(expected, StereoModes.EyeAspect(mode, Aspect), Tolerance);
+    }
+
+    [Fact]
+    public void FullSideBySideParses()
+    {
+        Assert.True(StereoModes.TryParse("sbsfull", out var stereo));
+        Assert.Equal(Stereo.SbsFull, stereo);
+        Assert.Equal(Enum.GetValues<Stereo>().Length, StereoModes.Names.Length);
+    }
 }

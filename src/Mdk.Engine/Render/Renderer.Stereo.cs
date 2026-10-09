@@ -12,7 +12,10 @@ public enum Stereo
     Off,
     /// <summary>Side by side: the left eye's image in the left half of the frame (3D TVs).</summary>
     Sbs,
-    /// <summary>Side by side with the halves exchanged, for crossed free viewing (the left eye's
+    /// <summary>Full side by side: each eye's half with its own aspect, seen as it is (VR viewers,
+    /// PC glasses).</summary>
+    SbsFull,
+    /// <summary>Full side by side with the halves exchanged, for crossed free viewing (the left eye's
     /// image in the right half).</summary>
     CrossView,
     /// <summary>Row-interleaved: even rows the left eye (row-interleaved displays, shutter glasses).</summary>
@@ -30,14 +33,14 @@ public static class StereoModes
 {
     /// <summary>The modes' names, by value (the options page's).</summary>
     public static readonly string[] Names =
-        ["Off", "Side by side", "Cross view", "Interlaced", "Interlaced reverse", "Top and bottom", "Top and bottom rev."];
+        ["Off", "Side by side (half)", "Side by side (full)", "Cross view", "Interlaced", "Interlaced reverse", "Top and bottom", "Top and bottom rev."];
 
     /// <summary>The most the eyes go apart and the farthest their images converge (the sliders).</summary>
     public const float MaxSeparation = 2f;
     public const float MinConvergence = 1f;
     public const float MaxConvergence = 4000f;
 
-    /// <summary>The mode of a name: the page's, or a short one (off, sbs, crossview, int, intr).</summary>
+    /// <summary>The mode of a name: the page's, or a short one (off, sbs, sbsfull, crossview, int, intr).</summary>
     public static bool TryParse(string name, out Stereo stereo)
     {
         switch (name.Trim().ToLowerInvariant().Replace("_", "").Replace(" ", ""))
@@ -47,6 +50,9 @@ public static class StereoModes
                 return true;
             case "sbs" or "sidebyside":
                 stereo = Stereo.Sbs;
+                return true;
+            case "sbsfull" or "sidebysidefull":
+                stereo = Stereo.SbsFull;
                 return true;
             case "cross" or "crossview":
                 stereo = Stereo.CrossView;
@@ -68,6 +74,11 @@ public static class StereoModes
                 return false;
         }
     }
+
+    /// <summary>An eye's camera aspect in a frame of <paramref name="aspect"/>: full side by side
+    /// halves it (16:9 → 8:9 an eye); the others keep it (the TV stretches half side by side back).</summary>
+    public static float EyeAspect(Stereo stereo, float aspect) =>
+        stereo is Stereo.SbsFull or Stereo.CrossView ? aspect / 2f : aspect;
 }
 
 /// <summary>The frame's stereo state: the settings (<see cref="StereoMode"/>, the eyes' separation

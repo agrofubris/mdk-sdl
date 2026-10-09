@@ -977,7 +977,8 @@ public sealed unsafe partial class Renderer : IDisposable
     private const uint HiddenWidth = 1280;
     private const uint HiddenHeight = 960;
 
-    public float AspectRatio => _targetHeight == 0 ? 4f / 3f : (float)_targetWidth / _targetHeight;
+    /// <summary>The cameras' and the canvas' aspect: the frame's, or an eye's half in full side by side.</summary>
+    public float AspectRatio => StereoModes.EyeAspect(StereoMode, _targetHeight == 0 ? 4f / 3f : (float)_targetWidth / _targetHeight);
 
     private void RenderScene(SDL_GPUCommandBuffer* commands, View view, Vector4 clearColour)
     {
