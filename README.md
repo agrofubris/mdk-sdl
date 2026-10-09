@@ -47,6 +47,7 @@ original's box sweeps.
 - Quick save and load (F2, F9), a developer console and overlay, cheats.
 
 [Downloads](https://github.com/nemo22/mdk-sdl/releases): `mdk-win-x64.zip`, `mdk-linux-x64.tar.gz`,
+`mdk-linux-arm64.tar.gz` (Raspberry Pi 5, ARM handhelds),
 `mdk-osx-arm64.zip`, `mdk-android.apk`. They need the original game's data (GOG, Steam or CD;
 [below](#running)).
 
@@ -157,7 +158,7 @@ The plan is in [docs/architecture.md](docs/architecture.md#roadmap).
 
 ## Running
 
-Windows x64, Linux x64 and macOS (Apple silicon): one executable each, `mdk.exe` or `mdk` (see
+Windows x64, Linux x64 and ARM64, and macOS (Apple silicon): one executable each, `mdk.exe` or `mdk` (see
 [Building](#building)). It is played on Windows; the Linux and macOS builds are only built and
 started on CI so far. Put the program (or this folder) inside the MDK installation folder (for
 example `C:\GOG Games\MDK\mdk-sdl`), install MDK in the default GOG or Steam location, or set the
@@ -438,7 +439,7 @@ src/Mdk.App/bin/Debug/net10.0/mdk --level=3
 ```
 
 One native executable (Native AOT; also needs the Visual Studio C++ tools on Windows, clang and
-zlib on Linux, Xcode on macOS): `sh tools/publish.sh [win-x64|linux-x64|osx-arm64|osx-x64]` (this
+zlib on Linux, Xcode on macOS): `sh tools/publish.sh [win-x64|linux-x64|linux-arm64|osx-arm64|osx-x64]` (this
 machine's by default; `publish.bat` on Windows) gives `publish/mdk` or `publish/mdk.exe` (about 5.5 MB) and SDL3's library next to
 it (`SDL3.dll`, `libSDL3.so`, `libSDL3.dylib`).
 
