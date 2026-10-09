@@ -40,6 +40,10 @@ public interface ICommandTarget
     bool SetLook(Graphics look);
 
     void SetAntiAliasing(AntiAliasing antiAliasing);
+
+    /// <summary>The stereo mode, and the eyes' separation and convergence when given; saved and
+    /// applied at once.</summary>
+    void SetStereo(Stereo stereo, float? separation = null, float? convergence = null);
     void SetTimeScale(float scale);
     Switch ToggleOverlay();
     void Quit();

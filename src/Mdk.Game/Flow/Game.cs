@@ -46,6 +46,11 @@ public sealed record GameOptions(Start Start, ViewerOptions Level)
     public Graphics? Graphics { get; init; }
     /// <summary>Gore instead of the settings' (the original's -bloodyes, -nobloodno).</summary>
     public bool? Gore { get; init; }
+    /// <summary>The stereo layout instead of the settings' (--stereo; tests), and its eyes'
+    /// separation and convergence (--stereo-separation, --stereo-convergence; not saved).</summary>
+    public Stereo? Stereo { get; init; }
+    public float? StereoSeparation { get; init; }
+    public float? StereoConvergence { get; init; }
     /// <summary>Keys pressed once at given times (--press; tests).</summary>
     public TestPresses? Presses { get; init; }
     /// <summary>Only these mods on, by folder (--mod; tests; saved only if the options change).</summary>
@@ -197,6 +202,21 @@ public sealed class Game : IDisposable
         if (options.Gore is { } gore)
         {
             settings.Gore = gore;
+        }
+
+        if (options.Stereo is { } stereo)
+        {
+            settings.Stereo = stereo;
+        }
+
+        if (options.StereoSeparation is { } separation)
+        {
+            settings.StereoSeparation = separation;
+        }
+
+        if (options.StereoConvergence is { } convergence)
+        {
+            settings.StereoConvergence = convergence;
         }
 
         settings.Apply(_audio, _window, _renderer, _input);

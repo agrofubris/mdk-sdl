@@ -45,6 +45,7 @@ public static class ConsoleCommands
         registry.Add(new Command("difficulty", "difficulty <easy|normal|hard>", args => SetDifficulty(target, args)));
         registry.Add(new Command("look", "look <original|enhanced>", args => Look(target, args)));
         registry.Add(new Command("aa", "aa <off|2x|4x>", args => AntiAlias(target, args)));
+        registry.Add(new Command("stereo", "stereo <off|sbs|crossview|int|intr|tab|tabr> [separation] [convergence]", args => Stereo(target, args)));
         registry.Add(new Command("timescale", "timescale <x>", args => TimeScale(target, args)));
         registry.Add(new Command("fps", "fps", _ => $"overlay {Name(target.ToggleOverlay())}"));
         registry.Add(new Command("mods", "mods", _ => Mods(target)));
@@ -182,6 +183,39 @@ public static class ConsoleCommands
 
         target.SetAntiAliasing(antiAliasing);
         return $"aa {args[0].ToLowerInvariant()}";
+    }
+
+    /// <summary>The stereo mode, and the eyes' separation and convergence when given.</summary>
+    private static string Stereo(ICommandTarget target, string[] args)
+    {
+        const string usage = "stereo <off|sbs|crossview|int|intr|tab|tabr> [separation] [convergence]";
+        if (args.Length is < 1 or > 3 || !StereoModes.TryParse(args[0], out var stereo))
+        {
+            return Usage(usage);
+        }
+
+        float? separation = null;
+        float? convergence = null;
+        if (args.Length > 1 && float.TryParse(args[1], CultureInfo.InvariantCulture, out var separationValue))
+        {
+            separation = separationValue;
+        }
+        else if (args.Length > 1)
+        {
+            return Usage(usage);
+        }
+
+        if (args.Length > 2 && float.TryParse(args[2], CultureInfo.InvariantCulture, out var convergenceValue))
+        {
+            convergence = convergenceValue;
+        }
+        else if (args.Length > 2)
+        {
+            return Usage(usage);
+        }
+
+        target.SetStereo(stereo, separation, convergence);
+        return $"stereo {args[0].ToLowerInvariant()}";
     }
 
     private static string TimeScale(ICommandTarget target, string[] args)

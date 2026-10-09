@@ -60,6 +60,9 @@ public class FlowTests
             Gore = false,
             Graphics = Graphics.Enhanced,
             AntiAliasing = AntiAliasing.X4,
+            Stereo = Stereo.InterlacedReversed,
+            StereoSeparation = 0.4f,
+            StereoConvergence = 12f,
         };
         settings.Bindings[Key.Fire] = "Left mouse";
         settings.Bindings[Key.Jump] = "Right Ctrl";
@@ -70,6 +73,8 @@ public class FlowTests
         Assert.Equal(Difficulty.Hard, read.Difficulty);
         Assert.Equal(Graphics.Enhanced, read.Graphics);
         Assert.Equal(AntiAliasing.X4, read.AntiAliasing);
+        Assert.Equal(Stereo.InterlacedReversed, read.Stereo);
+        Assert.Equal(0.4f, read.StereoSeparation);
         Assert.Equal("Right Ctrl", read.Bindings[Key.Jump]);
     }
 

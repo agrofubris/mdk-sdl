@@ -161,6 +161,8 @@ public sealed class Input
     private readonly Dictionary<SDL_Scancode, Key> _keys = new(DefaultKeys);
     private readonly Dictionary<MouseButton, Key> _buttonKeys = new(DefaultButtons);
     private readonly HashSet<MenuKey> _menuPressed = [];
+    /// <summary>The menu keys held (the sliders step again while one is held).</summary>
+    private readonly HashSet<MenuKey> _menuDown = [];
     private readonly HashSet<RawKey> _rawPressed = [];
     private readonly HashSet<Pointer> _clicked = [];
 
@@ -233,6 +235,9 @@ public sealed class Input
     public bool WasPressed(Key key) => _pressed.Contains(key);
 
     public bool WasPressed(MenuKey key) => _menuPressed.Contains(key);
+
+    /// <summary>Held (the menus' sliders step again while a direction is held).</summary>
+    public bool IsDown(MenuKey key) => _menuDown.Contains(key);
 
     public bool WasPressed(RawKey key) => _rawPressed.Contains(key);
 
@@ -365,13 +370,22 @@ public sealed class Input
         _down.Clear();
         _buttons.Clear();
         _fly.Clear();
+        _menuDown.Clear();
     }
 
     internal void SetKey(SDL_Scancode scancode, State state, Repeat repeat)
     {
-        if (state == State.Down && MenuKeys.TryGetValue(scancode, out var menuKey))
+        if (MenuKeys.TryGetValue(scancode, out var menuKey))
         {
-            _menuPressed.Add(menuKey);
+            if (state == State.Down)
+            {
+                _menuPressed.Add(menuKey);
+                _menuDown.Add(menuKey);
+            }
+            else
+            {
+                _menuDown.Remove(menuKey);
+            }
         }
 
         if (state == State.Down && RawKeys.TryGetValue(scancode, out var rawKey))

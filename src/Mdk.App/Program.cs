@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Numerics;
+using Mdk.Engine.Render;
 using Mdk.Formats;
 using Mdk.Game;
 using Mdk.Game.Flow;
@@ -31,6 +32,8 @@ using Mdk.Game.Scripts;
 //   --fly                   start with the flying camera
 //   --mute                  no sound (tests)
 //   --enhanced, --original  the enhanced or the original look instead of the settings' (tests)
+//   --stereo=MODE           the stereo layout instead of the settings': off, sbs, crossview, int,
+//                           intr, tab, tabr (--stereo-separation=, --stereo-convergence=; tests)
 //   --bloodyes, --nobloodno gore on or off instead of the settings' (the original's -bloodyes, -nobloodno)
 //   --gpu=d3d12|vulkan|metal the GPU backend instead of the settings' (tests; not saved)
 //   --hidden                no window, frames drawn off screen (tests; also MDK_HIDDEN=1)
@@ -130,6 +133,22 @@ if (BetaDemo.IsBeta(level) && BetaDemo.Find(data) == null)
 }
 
 var pitch = options.TryGetValue("pitch", out var pitchText) ? float.Parse(pitchText, CultureInfo.InvariantCulture) : 0f;
+Stereo? stereo = null;
+if (options.TryGetValue("stereo", out var stereoText))
+{
+    if (!StereoModes.TryParse(stereoText, out var parsedStereo))
+    {
+        Console.Error.WriteLine("--stereo: off, sbs, crossview, int, intr, tab or tabr");
+        return 1;
+    }
+
+    stereo = parsedStereo;
+}
+
+var stereoSeparation = options.TryGetValue("stereo-separation", out var separationText)
+    ? float.Parse(separationText, CultureInfo.InvariantCulture) : (float?)null;
+var stereoConvergence = options.TryGetValue("stereo-convergence", out var convergenceText)
+    ? float.Parse(convergenceText, CultureInfo.InvariantCulture) : (float?)null;
 options.TryGetValue("screenshot", out var screenshot);
 var sound = options.ContainsKey("mute") ? SoundMode.Muted : SoundMode.On;
 float Seconds(string name) => options.TryGetValue(name, out var text) ? float.Parse(text, CultureInfo.InvariantCulture) : 0f;
@@ -194,6 +213,9 @@ using var game = new Game(data, new GameOptions(start, viewer)
     Health = Number("health"),
     Graphics = options.ContainsKey("enhanced") ? Graphics.Enhanced : options.ContainsKey("original") ? Graphics.Original : null,
     Gore = options.ContainsKey("bloodyes") ? true : options.ContainsKey("nobloodno") ? false : null,
+    Stereo = stereo,
+    StereoSeparation = stereoSeparation,
+    StereoConvergence = stereoConvergence,
     Presses = options.TryGetValue("press", out var presses) ? TestPresses.Parse(presses) : null,
     Mods = options.TryGetValue("mod", out var mods) ? mods.Split(',', StringSplitOptions.RemoveEmptyEntries) : null,
     Gpu = options.GetValueOrDefault("gpu"),

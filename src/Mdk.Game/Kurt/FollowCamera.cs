@@ -338,7 +338,7 @@ public static class CameraMath
         // The sky only turns with the camera: its rotation alone, inverted.
         var rotation = Matrix4x4.CreateLookAt(Vector3.Zero, forward, up);
         Matrix4x4.Invert(rotation * projection, out var clipToDirection);
-        return new View(view * projection, clipToDirection, position);
+        return new View(view * projection, clipToDirection, position, new ViewCamera(forward, up, projection, near));
     }
 
     /// <summary>Sniper mode's view (0x57428c): the focal length is 384 / zoom pixels of the 480-high
@@ -356,7 +356,7 @@ public static class CameraMath
         var projection = ScopeProjection(zoom, aspect, near, far);
         var rotation = Matrix4x4.CreateLookAt(Vector3.Zero, forward, up);
         Matrix4x4.Invert(rotation * projection, out var clipToDirection);
-        return new View(view * projection, clipToDirection, eye);
+        return new View(view * projection, clipToDirection, eye, new ViewCamera(forward, up, projection, near));
     }
 
     /// <summary>The scope's off-centre projection for a window of <paramref name="aspect"/>.</summary>

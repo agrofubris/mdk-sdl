@@ -152,6 +152,7 @@ public sealed unsafe partial class Renderer
         "enhanced" => EnhancedSamplers,
         "depth" => DepthSamplers,
         "post" => PostSamplers,
+        "stereo" => StereoEyes,
         _ => DefaultSamplers,
     };
 
@@ -218,6 +219,7 @@ public sealed unsafe partial class Renderer
         }
 
         _msaaColour = _msaaDepth = _scene = _viewDepth = _occlusion = null;
+        ReleaseEyes();
     }
 
     private void ReleaseShadowMap()
@@ -480,7 +482,7 @@ public sealed unsafe partial class Renderer
         samplers[1] = new SDL_GPUTextureSamplerBinding { texture = _viewDepth, sampler = _clampSampler };
         samplers[2] = new SDL_GPUTextureSamplerBinding { texture = _occlusion, sampler = _clampSampler };
         ScreenPass(commands, _occlusion, "occlusion", samplers, DefaultSamplers, uniforms);
-        ScreenPass(commands, _target, "post", samplers, PostSamplers, uniforms);
+        ScreenPass(commands, _frame, "post", samplers, PostSamplers, uniforms);
     }
 
     /// <summary>A screen-filling triangle of <paramref name="program"/> into <paramref name="target"/>.</summary>

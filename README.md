@@ -23,6 +23,9 @@ original's box sweeps.
 
 ## Features
 
+- **Stereo 3D (optional)**: side by side, crossview, row-interlaced, interlaced-reversed, top and
+  bottom and reversed top and bottom, with real eye separation and convergence
+  ([below](#stereo-3d)).
 - **The whole game**: every level, the fall before it and the stream after it, rides, menus,
   briefings, statistics, saves, the end movies. Plays like the original (its BSP collisions,
   scripts and sound laws, reverse engineered).
@@ -41,6 +44,37 @@ original's box sweeps.
 [Downloads](https://github.com/nemo22/mdk-sdl/releases): `mdk-win-x64.zip`, `mdk-linux-x64.tar.gz`,
 `mdk-osx-arm64.zip`, `mdk-android.apk`. They need the original game's data (GOG, Steam or CD;
 [below](#running)).
+
+## Stereo 3D
+
+A stereo renderer draws each frame twice, once through each eye's camera, and composites for the
+display. The eyes are parallel; their images meet at the **convergence** distance (0 parallax
+there), nearer things come out of the screen and the sky stays at infinity (its panorama uses the
+eye's own frustum, so it keeps the full eye separation's disparity).
+
+- **Modes**
+  - `sbs` — side by side: the left eye in the left half (3D TVs, VR cinema players).
+  - `crossview` — side by side with the halves exchanged, for crossed free viewing.
+  - `int` — row-interlaced: even rows the left eye (row-interleaved/passive 3D displays and
+    shutter glasses).
+  - `intr` — row-interlaced the other way: even rows the right eye (displays whose rows start
+    with the other eye).
+  - `tab` — top and bottom (over-under): the left eye in the top half.
+  - `tabr` — top and bottom with the halves exchanged: the right eye in the top half.
+- **Options, 3D Stereo** (main menu and pause menu): Mode, Separation (the eyes' distance apart,
+  in the game's units) and Convergence (the distance their images meet at; at the most, `far`:
+  parallel rays, meeting at infinity). Left/Right change them and, held, keep stepping; the
+  settings apply at once and are saved (`settings.cfg`: `stereo`, `stereo_separation`,
+  `stereo_convergence`).
+- **Console**: `stereo off|sbs|crossview|int|intr|tab|tabr [separation] [convergence]` (saved).
+- **Command line** (tests, not saved): `--stereo=off|sbs|crossview|int|intr|tab|tabr`,
+  `--stereo-separation=0.25`, `--stereo-convergence=10`.
+
+Notes: the scene is rasterized twice, so stereo costs more GPU time (fine on a discrete GPU even
+with the enhanced look and the HD textures). Row-interlacing is drawn 1:1 with the window: keep
+the window at the display's native resolution (and 100% scaling) on a row-interleaved display.
+The menus, the HUD and the videos are drawn whole in both eyes (zero parallax), so they stay
+readable.
 
 ## Screenshots
 
@@ -198,6 +232,7 @@ From the main menu or the pause menu; a page per kind, each change applied and s
   Vulkan on Linux, Metal on macOS; after a restart; a backend that fails falls back to Auto).
   Android has render scale, VSync and frame limit (always fullscreen, Vulkan).
 - **Graphics**: the original or the enhanced look, anti-aliasing, gore.
+- **3D Stereo**: the stereo layout, the eyes' separation and convergence ([above](#stereo-3d)).
 - **Audio**: master, music and effects volumes, the music filter.
 - **Controls**: mouse sensitivity and inversion, key bindings.
 - **Game**: difficulty.
@@ -429,8 +464,8 @@ collections are printed) and fails above 512 bytes a frame or on a gen 1-2 colle
 ## Layout
 
 - `src/Mdk.Formats`: MDK's file formats, no dependencies.
-- `src/Mdk.Engine`: SDL3 behind a small API: the renderer (SDL_GPU), the audio mixer, the window
-  and input.
+- `src/Mdk.Engine`: SDL3 behind a small API: the renderer (SDL_GPU; stereo in
+  `Renderer.Stereo.cs` and `shaders/stereo.hlsl`), the audio mixer, the window and input.
 - `src/Mdk.Game`: the game: levels, collisions, Kurt, the camera, the sound mixer's laws, scripts,
   the game's flow (`Flow/`: screens, settings, saves), its menus (`Menu/`), the stream (`Stream/`)
   and the fall (`Fall/`).
