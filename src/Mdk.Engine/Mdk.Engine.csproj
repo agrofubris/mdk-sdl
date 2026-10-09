@@ -5,7 +5,9 @@
          DXIL (Direct3D 12): dxc of the Windows SDK or of the DirectXShaderCompiler release.
          SPIR-V (Vulkan): a dxc with SPIR-V (DirectXShaderCompiler release, Vulkan SDK).
          MSL (Metal): spirv-cross, from the SPIR-V.
-         RequiredShaders (e.g. "spirv msl", CI) fails the build without those formats. -->
+         RequiredShaders (e.g. "spirv msl", CI) fails the build without those formats.
+         PrecompiledShaders (e.g. "spirv", CI's ARM build) takes those formats as they are in
+         obj/shaders, compiled elsewhere (no dxc for that machine). -->
     <Dxc Condition="'$(Dxc)' == '' and $([MSBuild]::IsOSPlatform('Windows'))">C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\dxc.exe</Dxc>
     <DxcSpirv Condition="'$(DxcSpirv)' == '' and '$(VULKAN_SDK)' != ''">$(VULKAN_SDK)/bin/dxc</DxcSpirv>
     <DxcSpirv Condition="'$(DxcSpirv)' == ''">dxc</DxcSpirv>
@@ -61,7 +63,7 @@
       <BuildDxil>false</BuildDxil>
       <BuildDxil Condition="'$(DxilProbe)' == '0'">true</BuildDxil>
       <BuildSpirv>false</BuildSpirv>
-      <BuildSpirv Condition="'$(SpirvProbe)' == '0'">true</BuildSpirv>
+      <BuildSpirv Condition="'$(SpirvProbe)' == '0' or $(PrecompiledShaders.Contains('spirv'))">true</BuildSpirv>
       <BuildMsl>false</BuildMsl>
       <BuildMsl Condition="'$(MslProbe)' == '0'">true</BuildMsl>
     </PropertyGroup>
@@ -78,7 +80,7 @@
   </Target>
 
   <!-- SPIR-V: resources in SDL_GPU's sets (shaders/bindings.hlsli). -->
-  <Target Name="CompileSpirv" Condition="$(BuildSpirv)" Inputs="@(Shader);@(ShaderInclude)" Outputs="@(Shader->'$(ShaderOut)%(Filename).vs.spv');@(Shader->'$(ShaderOut)%(Filename).ps.spv')">
+  <Target Name="CompileSpirv" Condition="$(BuildSpirv) and !$(PrecompiledShaders.Contains('spirv'))" Inputs="@(Shader);@(ShaderInclude)" Outputs="@(Shader->'$(ShaderOut)%(Filename).vs.spv');@(Shader->'$(ShaderOut)%(Filename).ps.spv')">
     <Exec Command="&quot;$(DxcSpirv)&quot; -nologo -spirv -T vs_6_0 -E vs_main -Fo &quot;$(ShaderOut)%(Shader.Filename).vs.spv&quot; &quot;%(Shader.FullPath)&quot;" />
     <Exec Command="&quot;$(DxcSpirv)&quot; -nologo -spirv -T ps_6_0 -E ps_main -Fo &quot;$(ShaderOut)%(Shader.Filename).ps.spv&quot; &quot;%(Shader.FullPath)&quot;" />
   </Target>

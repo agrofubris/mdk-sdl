@@ -4,7 +4,7 @@
 #
 #   windows-latest ─► mdk-win-x64.zip      (DXIL + SPIR-V)
 #   ubuntu-latest  ─► mdk-linux-x64.tar.gz (SPIR-V)          ─► release (tags v*)
-#   ubuntu-24.04-arm ─► mdk-linux-arm64.tar.gz (SPIR-V; Raspberry Pi, ARM handhelds)
+#   ubuntu-24.04-arm ─► mdk-linux-arm64.tar.gz (linux-x64's SPIR-V: no dxc for ARM)
 #   macos-latest   ─► mdk-osx-arm64.zip    (SPIR-V + MSL)
 #   ubuntu-latest  ─► mdk-android.apk      (SPIR-V; Vulkan)
 name: build
@@ -35,9 +35,6 @@ jobs:
           - os: ubuntu-latest
             rid: linux-x64
             shaders: spirv
-          - os: ubuntu-24.04-arm
-            rid: linux-arm64
-            shaders: spirv
           - os: macos-latest
             rid: osx-arm64
             shaders: spirv msl
@@ -64,21 +61,12 @@ jobs:
           echo "SHADER_TOOLS=-p:Dxc=$DXC -p:DxcSpirv=$DXC" >> "$GITHUB_ENV"
 
       - name: Shader tools (Linux)
-        if: runner.os == 'Linux' && runner.arch == 'X64'
+        if: runner.os == 'Linux'
         run: |
           gh release download "$DXC_TAG" -R microsoft/DirectXShaderCompiler -p 'linux_dxc_*.tar.gz' -D "$RUNNER_TEMP"
           mkdir "$RUNNER_TEMP/dxc"
           tar -xzf "$RUNNER_TEMP"/linux_dxc_*.tar.gz -C "$RUNNER_TEMP/dxc"
           echo "SHADER_TOOLS=-p:DxcSpirv=$RUNNER_TEMP/dxc/bin/dxc" >> "$GITHUB_ENV"
-
-      # No ARM dxc release: Ubuntu's package.
-      - name: Shader tools (Linux ARM)
-        if: runner.os == 'Linux' && runner.arch == 'ARM64'
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq directx-shader-compiler clang zlib1g-dev
-          DXC=$(dpkg -L directx-shader-compiler | grep -E '/bin/dxc[^/]*$' | head -n 1)
-          echo "SHADER_TOOLS=-p:DxcSpirv=$DXC" >> "$GITHUB_ENV"
 
       # No dxc release for macOS: the Vulkan SDK has dxc and spirv-cross.
       - name: Shader tools (macOS)
@@ -104,6 +92,7 @@ jobs:
           OUT=$(./publish/mdk --mute 2>&1 || true)
           echo "$OUT"
           echo "$OUT" | grep -q "MDK data not found"
+          ./publish/mdk --help | grep -q "Usage: mdk"
 
       # The OS's HTTP library (WinHTTP, libcurl) fetches the upscaler's release: TLS, GitHub's
       # redirect, the expected SHA-256.
@@ -132,6 +121,63 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: mdk-${{ matrix.rid }}
+          path: dist/*
+          if-no-files-found: error
+
+      # SPIR-V is the same on any CPU: the ARM build takes these.
+      - uses: actions/upload-artifact@v7
+        if: matrix.rid == 'linux-x64'
+        with:
+          name: shaders-spirv
+          path: src/Mdk.Engine/obj/shaders/*.spv
+          if-no-files-found: error
+
+  # Linux on ARM64 (Raspberry Pi 5, ARM handhelds). No dxc release runs there: the shaders are
+  # linux-x64's (PrecompiledShaders, src/Mdk.Engine/Mdk.Engine.csproj).
+  linux-arm64:
+    needs: build
+    runs-on: ubuntu-24.04-arm
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: shaders-spirv
+          path: src/Mdk.Engine/obj/shaders
+
+      # Native AOT links with clang and zlib.
+      - name: Linker
+        run: sudo apt-get install -y -qq clang zlib1g-dev
+
+      - name: Test
+        run: dotnet test -p:PrecompiledShaders=spirv -p:RequiredShaders=spirv
+
+      - name: Publish
+        run: sh tools/publish.sh linux-arm64 -p:PrecompiledShaders=spirv -p:RequiredShaders=spirv
+
+      - name: Smoke test
+        run: |
+          OUT=$(./publish/mdk --mute 2>&1 || true)
+          echo "$OUT"
+          echo "$OUT" | grep -q "MDK data not found"
+          ./publish/mdk --help | grep -q "Usage: mdk"
+
+      - name: Archive
+        run: |
+          mkdir dist
+          tar -czf dist/mdk-linux-arm64.tar.gz -C publish mdk libSDL3.so -C ../assets icon.png
+          ls -la dist
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: mdk-linux-arm64
           path: dist/*
           if-no-files-found: error
 
@@ -191,7 +237,7 @@ jobs:
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build, android]
+    needs: [build, linux-arm64, android]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -201,6 +247,7 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           path: dist
+          pattern: mdk-*
           merge-multiple: true
 
       # A tag with a suffix (v0.9.0-alpha) is a prerelease.
