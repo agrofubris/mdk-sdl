@@ -17,7 +17,7 @@ using Mdk.Game.Scripts;
 //
 //   --level=N               play level 3-8 at once (no menu); 961, 963, 966: the 1996 demo's
 //   --menu                  the main menu without the splash (--splash: with it)
-//   --options, --controls   the menu's options or controls page (--beta-levels: the demo's levels)
+//   --options, --controls, --gamepad   the menu's options, controls or gamepad page (--beta-levels: the demo's levels)
 //   --stats=N               the screens after level N (--phase=1-4 starts at a page,
 //                           --counts=shots,hits,sniper,sniper hits,kills,enemies,heads, --towns=bits)
 //   --briefing=N            the briefing of level N
@@ -193,6 +193,7 @@ var start = options.ContainsKey("end") ? Start.EndMovie
     : options.ContainsKey("level") || (screenshot != null && !options.ContainsKey("menu")) ? Start.Level
     : Start.Menu;
 var page = options.ContainsKey("controls") ? MenuPage.Controls
+    : options.ContainsKey("gamepad") ? MenuPage.Gamepad
     : options.ContainsKey("options") ? MenuPage.Options
     : options.ContainsKey("beta-levels") ? MenuPage.BetaLevels
     : MenuPage.Main;

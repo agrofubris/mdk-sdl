@@ -241,14 +241,15 @@ From the main menu or the pause menu; a page per kind, each change applied and s
 - **Graphics**: the original or the enhanced look, anti-aliasing, gore.
 - **3D Stereo**: the stereo layout, the eyes' separation and convergence ([above](#stereo-3d)).
 - **Audio**: master, music and effects volumes, the music filter.
-- **Controls**: mouse sensitivity and inversion, key bindings.
-
-Gamepads (Xbox, PlayStation, Switch, Android Bluetooth pads) play with a fixed layout: left stick
-walks, right stick looks, RT fires, LT toggles sniper mode, A jumps, B runs (turbo), X uses the
-item, Y / RB / d-pad right the next item, LB / d-pad left the previous one, d-pad up and down
-zoom, Start pauses. In the menus: d-pad or left stick, A accepts, B or Start goes back.
+- **Keyboard & mouse**: mouse sensitivity and inversion, key bindings.
+- **Gamepad**: look sensitivity and inversion, button bindings (Start stays pause; a key cancels).
 - **Game**: difficulty.
 - **Mods**: each mod on or off, "Make HD textures" (desktop), "Import from folder" (Android).
+
+Gamepads (Xbox, PlayStation, Switch, Android Bluetooth pads), by default: left stick walks, right
+stick looks, RT fires, LT toggles sniper mode, A jumps, B runs (turbo), X uses the item, Y / RB /
+d-pad right the next item, LB / d-pad left the previous one, d-pad up and down zoom, Start
+pauses. In the menus: d-pad or left stick, A accepts, B or Start goes back.
 
 At start the log (and the console) names the build, the GPU and its backend, the display and the
 frame (sizes, formats, MSAA, present mode; again when they change) and the look; F3 shows them too:

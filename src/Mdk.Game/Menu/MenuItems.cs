@@ -29,6 +29,9 @@ public sealed class MenuItems
 
     private enum Kind { Item, Title }
 
+    /// <summary>What a binding waits for: a key or mouse button, or a gamepad button.</summary>
+    private enum Device { Keyboard, Gamepad }
+
     private sealed class Entry(string text, Kind kind, Action? press, Action<int>? change)
     {
         public string Text = text;
@@ -80,8 +83,10 @@ public sealed class MenuItems
     private readonly Sound? _change;
     private int _songVoice;
     private int _selected = -1;
-    /// <summary>The controls page waits for a key for this action (from the next frame on).</summary>
+    /// <summary>The controls page waits for a key, or a gamepad button, for this action (from the next
+    /// frame on).</summary>
     private Key? _waiting;
+    private Device _waitingDevice;
     private Entry? _waitingEntry;
     private bool _armed;
     /// <summary>The time to the next step of an option whose Left/Right is held.</summary>
@@ -394,7 +399,8 @@ public sealed class MenuItems
     ///   Options ─┬─ Display   mode, resolution, render scale, VSync, frame limit, GPU backend
     ///            ├─ Graphics  look, anti-aliasing, gore
     ///            ├─ Audio     volumes, music filter
-    ///            ├─ Controls  mouse, key bindings
+    ///            ├─ Keyboard & mouse  mouse, key bindings
+    ///            ├─ Gamepad   look, button bindings
     ///            ├─ Game      difficulty
     ///            └─ Mods      mods on/off, Make HD textures (desktop), Import from folder (Android)
     /// </code></summary>
@@ -405,7 +411,7 @@ public sealed class MenuItems
         var pages = new (string Name, Action<Action> Show)[]
         {
             ("Display", ShowDisplay), ("Graphics", ShowGraphics), ("3D Stereo", ShowStereo), ("Audio", ShowAudio),
-            ("Controls", ShowControls), ("Game", ShowGame), ("Mods", ShowMods),
+            ("Keyboard & mouse", ShowControls), ("Gamepad", ShowGamepad), ("Game", ShowGame), ("Mods", ShowMods),
         };
         for (var i = 0; i < pages.Length; i++)
         {
@@ -670,6 +676,7 @@ public sealed class MenuItems
             entry = new Entry(BindingText(key, name), Kind.Item, () =>
             {
                 _waiting = key;
+                _waitingDevice = Device.Keyboard;
                 _waitingEntry = entry;
                 _armed = false;
                 entry!.Text = $"{name}: press a key...";
@@ -686,6 +693,38 @@ public sealed class MenuItems
         EndPage(back);
     }
 
+    /// <summary>The gamepad's look, and its button bindings: choosing a binding waits for a button
+    /// (a key cancels: B and Start are buttons too). The sticks and Start (pause) are fixed.</summary>
+    public void ShowGamepad(Action back)
+    {
+        ClearPage();
+        var s = _ui.Settings;
+        AddOption(() => string.Create(CultureInfo.InvariantCulture, $"Look sensitivity: {s.PadSensitivity:0.00}"),
+            step => s.PadSensitivity = SensitivityStep(s.PadSensitivity, step));
+        AddOption(() => $"Invert look: {OnOff(s.InvertPad)}", _ => s.InvertPad = !s.InvertPad);
+        foreach (var (key, name) in Settings.PadActions)
+        {
+            Entry? entry = null;
+            entry = new Entry(PadBindingText(key, name), Kind.Item, () =>
+            {
+                _waiting = key;
+                _waitingDevice = Device.Gamepad;
+                _waitingEntry = entry;
+                _armed = false;
+                entry!.Text = $"{name}: press a button...";
+            }, null);
+            Add(entry);
+        }
+
+        AddItem("Default buttons", () =>
+        {
+            _ui.Settings.PadBindings.Clear();
+            _ui.ApplySettings();
+            ShowGamepad(back);
+        });
+        EndPage(back);
+    }
+
     /// <summary>The key or button pressed after the item was chosen becomes the binding.</summary>
     private void WaitForControl(Input input)
     {
@@ -695,7 +734,18 @@ public sealed class MenuItems
             return;
         }
 
-        if (input.LastControl.Length == 0 || _waiting is not { } key)
+        if (_waiting is not { } key)
+        {
+            return;
+        }
+
+        if (_waitingDevice == Device.Gamepad)
+        {
+            WaitForButton(input, key);
+            return;
+        }
+
+        if (input.LastControl.Length == 0)
         {
             return;
         }
@@ -710,7 +760,28 @@ public sealed class MenuItems
         _waiting = null;
     }
 
+    /// <summary>A gamepad button binds (not Start: it stays pause); a key or mouse button cancels.</summary>
+    private void WaitForButton(Input input, Key key)
+    {
+        var button = input.LastPadControl;
+        if (button.Length == 0 && input.LastControl.Length == 0)
+        {
+            return;
+        }
+
+        if (button.Length != 0 && input.BindPad(key, button))
+        {
+            _ui.Settings.PadBindings[key] = button;
+            _ui.ApplySettings();
+        }
+
+        _waitingEntry!.Text = PadBindingText(key, Settings.PadActions.First(a => a.Key == key).Name);
+        _waiting = null;
+    }
+
     private string BindingText(Key key, string name) => $"{name}: {_ui.Input.Describe(key)}";
+
+    private string PadBindingText(Key key, string name) => $"{name}: {_ui.Input.DescribePad(key)}";
 
     /// <summary>Volumes go by 10 and wrap (0-100).</summary>
     public static int VolumeStep(int value, int step) => Wrap(value + step * VolumeIncrement, Settings.MaxVolume + VolumeIncrement);

@@ -181,6 +181,10 @@ public sealed class Input
     /// <summary>Keys and menu keys held by a gamepad's buttons and left stick (<see cref="GamepadMap"/>).</summary>
     private readonly HashSet<Key> _pad = [];
     private readonly HashSet<MenuKey> _padMenu = [];
+    /// <summary>The gamepad's bindings: <see cref="GamepadMap"/>'s defaults, changed by <see cref="BindPad"/>.</summary>
+    private readonly Dictionary<PadButton, Key> _padKeys = [];
+    /// <summary>The buttons held: a trigger, whose axis reports every move, names itself once a pull.</summary>
+    private readonly HashSet<PadButton> _padHeld = [];
 
     /// <summary>The game's degrees a mouse count turns (Kurt, the cameras): the gamepad's and the
     /// gyroscope's look in degrees becomes mouse counts.</summary>
@@ -195,6 +199,9 @@ public sealed class Input
     public float MouseScale { get; set; } = 1f;
     /// <summary>Vertical mouse motion is inverted.</summary>
     public bool InvertMouse { get; set; }
+    /// <summary>The gamepad's look is scaled by this; its vertical look is inverted.</summary>
+    public float PadSensitivity { get; set; } = 1f;
+    public bool InvertPad { get; set; }
     /// <summary>The pointer in the window (pixels).</summary>
     public float PointerX { get; private set; }
     public float PointerY { get; private set; }
@@ -206,6 +213,8 @@ public sealed class Input
     public bool AnyPressed { get; private set; }
     /// <summary>The name of the key or mouse button pressed this frame (for <see cref="Bind"/>), or "".</summary>
     public string LastControl { get; private set; } = "";
+    /// <summary>The name of the gamepad button pressed this frame (for <see cref="BindPad"/>), or "".</summary>
+    public string LastPadControl { get; private set; } = "";
     /// <summary>The digit (0-9) pressed this frame, or <see cref="NoDigit"/>.</summary>
     public int Digit { get; private set; } = NoDigit;
 
@@ -260,8 +269,11 @@ public sealed class Input
         Typed = "";
         AnyPressed = false;
         LastControl = "";
+        LastPadControl = "";
         Digit = NoDigit;
     }
+
+    public Input() => ResetPadBindings();
 
     /// <summary>Binds a key or mouse button (by its name, as <see cref="LastControl"/> gives it) to
     /// <paramref name="key"/>, instead of its other bindings. Returns false for an unknown name.</summary>
@@ -299,6 +311,51 @@ public sealed class Input
         {
             _buttonKeys[button] = key;
         }
+    }
+
+    /// <summary>Binds a gamepad button (by its name, <see cref="GamepadMap.Name"/>) to <paramref name="key"/>,
+    /// instead of its other buttons. Returns false for an unknown name, and for Start (pause).</summary>
+    public bool BindPad(Key key, string control)
+    {
+        if (GamepadMap.Parse(control) is not { } button || button == PadButton.Start)
+        {
+            return false;
+        }
+
+        foreach (var bound in _padKeys.Where(b => b.Value == key).Select(b => b.Key).ToList())
+        {
+            _padKeys.Remove(bound);
+        }
+
+        _padKeys[button] = key;
+        return true;
+    }
+
+    /// <summary>Back to the gamepad's default buttons.</summary>
+    public void ResetPadBindings()
+    {
+        _padKeys.Clear();
+        foreach (var button in Enum.GetValues<PadButton>())
+        {
+            if (GamepadMap.Game(button) is { } key)
+            {
+                _padKeys[button] = key;
+            }
+        }
+    }
+
+    /// <summary>The name of a key's first gamepad button, or "-".</summary>
+    public string DescribePad(Key key)
+    {
+        foreach (var (button, bound) in _padKeys)
+        {
+            if (bound == key)
+            {
+                return GamepadMap.Name(button);
+            }
+        }
+
+        return "-";
     }
 
     /// <summary>The name of a key's first binding, or "-".</summary>
@@ -380,6 +437,7 @@ public sealed class Input
         _menuDown.Clear();
         _pad.Clear();
         _padMenu.Clear();
+        _padHeld.Clear();
     }
 
     internal void SetKey(SDL_Scancode scancode, State state, Repeat repeat)
@@ -509,6 +567,34 @@ public sealed class Input
     {
         MouseX += degrees.X / LookDegrees;
         MouseY += degrees.Y / LookDegrees;
+    }
+
+    /// <summary>The gamepad's look (degrees: right, down; <see cref="GamepadMap.Look"/>), by its
+    /// sensitivity, inverted or not.</summary>
+    internal void AddPadLook(System.Numerics.Vector2 degrees) =>
+        AddLook(new System.Numerics.Vector2(degrees.X, InvertPad ? -degrees.Y : degrees.Y) * PadSensitivity);
+
+    /// <summary>A gamepad button: its bound key in play, its fixed menu key (<see cref="GamepadMap.Menu"/>).</summary>
+    internal void SetPadButton(PadButton button, State state)
+    {
+        if (state == State.Up)
+        {
+            _padHeld.Remove(button);
+        }
+        else if (_padHeld.Add(button))
+        {
+            LastPadControl = GamepadMap.Name(button);
+        }
+
+        if (_padKeys.TryGetValue(button, out var key))
+        {
+            SetPad(key, state);
+        }
+
+        if (GamepadMap.Menu(button) is { } menuKey)
+        {
+            SetPadMenu(menuKey, state);
+        }
     }
 
     /// <summary>A gamepad holds or releases a key; holding presses it this frame.</summary>

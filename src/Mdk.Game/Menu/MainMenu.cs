@@ -7,7 +7,7 @@ using Mdk.Game.Flow;
 namespace Mdk.Game.Menu;
 
 /// <summary>How the main menu opens (command line): its first page.</summary>
-public enum MenuPage { Main, Options, Controls, BetaLevels }
+public enum MenuPage { Main, Options, Controls, Gamepad, BetaLevels }
 
 /// <summary>The main menu (main_menu.gd): <c>MDK12.FLC</c> plays behind it each time it opens
 /// (0x4260e4), its last frame stays, then the slideshow; <c>MDKOPT</c> is the background when the
@@ -108,6 +108,10 @@ public sealed class MainMenu : IScreen
         else if (first == MenuPage.Controls)
         {
             _items.ShowControls(ShowOptions);
+        }
+        else if (first == MenuPage.Gamepad)
+        {
+            _items.ShowGamepad(ShowOptions);
         }
         else if (first == MenuPage.BetaLevels && ui.Beta != null)
         {

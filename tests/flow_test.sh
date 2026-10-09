@@ -40,19 +40,21 @@ LIT=$(tail -c +55 "$SHOT" | head -c $TOP_BAND | od -An -v -tx4 | tr -s ' ' '\n' 
 [ "$LIT" = 0 ]; check "page drawn laid out on its first frame" $?
 
 OUT=$(run --menu --options --wait=1)
-echo "$OUT" | grep -q "^Menu: Display | Graphics | 3D Stereo | Audio | Controls | Game | Mods | Back$"; check "options page" $?
+echo "$OUT" | grep -q "^Menu: Display | Graphics | 3D Stereo | Audio | Keyboard & mouse | Gamepad | Game | Mods | Back$"; check "options page" $?
 
 # The options' pages; Esc goes up a page (Audio, Options, the main menu).
 OUT=$(run --menu --options --press=Menu.Down@0.3,Menu.Down@0.4,Menu.Down@0.5,Menu.Accept@0.6,Menu.Back@1,Menu.Back@1.5 --wait=2)
 echo "$OUT" | grep -q "^Menu: Master volume: 80 | Music volume: 50 | Effects volume: 70 | Music filter: On | Back$"; check "audio page" $?
-[ "$(echo "$OUT" | grep "^Menu" | tail -n 2 | head -n 1)" = "Menu: Display | Graphics | 3D Stereo | Audio | Controls | Game | Mods | Back" ]; check "Esc: up to the options" $?
+[ "$(echo "$OUT" | grep "^Menu" | tail -n 2 | head -n 1)" = "Menu: Display | Graphics | 3D Stereo | Audio | Keyboard & mouse | Gamepad | Game | Mods | Back" ]; check "Esc: up to the options" $?
 echo "$OUT" | grep "^Menu" | tail -n 1 | grep -q "^Menu: New Game"; check "Esc: up to the main menu" $?
-OUT=$(run --menu --options --press=Menu.Down@0.3,Menu.Down@0.4,Menu.Down@0.5,Menu.Down@0.6,Menu.Down@0.7,Menu.Accept@0.8 --wait=1)
+OUT=$(run --menu --options --press=Menu.Down@0.3,Menu.Down@0.4,Menu.Down@0.5,Menu.Down@0.6,Menu.Down@0.7,Menu.Down@0.8,Menu.Accept@0.9 --wait=1)
 echo "$OUT" | grep -q "^Menu: Difficulty: Normal | Back$"; check "game page" $?
 OUT=$(run --menu --options --press=Menu.Down@0.3,Menu.Down@0.4,Menu.Accept@0.5 --wait=1)
 echo "$OUT" | grep -q "^Menu: Mode: Off | Separation: 0.25 | Convergence: 10 | Head tracking: Off | Back$"; check "3D stereo page" $?
 OUT=$(run --menu --controls --wait=1)
 echo "$OUT" | grep -q "^Menu: Mouse sensitivity: 1.00 | Invert mouse: Off | Forward: W | .* | Quick load: F9 | Default keys | Back$"; check "controls page" $?
+OUT=$(run --menu --gamepad --wait=1)
+echo "$OUT" | grep -q "^Menu: Look sensitivity: 1.00 | Invert look: Off | Jump: A | Run: B | Fire: RT | Sniper mode: LT | .* | Quick load: - | Default buttons | Back$"; check "gamepad page" $?
 
 # -nobloodno / -bloodyes (not saved) set gore (Options, Graphics).
 OUT=$(run --menu --options --nobloodno --press=Menu.Down@0.3,Menu.Accept@0.5 --wait=1)

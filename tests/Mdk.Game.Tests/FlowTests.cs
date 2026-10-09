@@ -67,6 +67,9 @@ public class FlowTests
         };
         settings.Bindings[Key.Fire] = "Left mouse";
         settings.Bindings[Key.Jump] = "Right Ctrl";
+        settings.PadBindings[Key.Fire] = "RB";
+        settings.PadSensitivity = 1.5f;
+        settings.InvertPad = true;
 
         var read = Settings.Parse(settings.Format());
 
@@ -78,6 +81,9 @@ public class FlowTests
         Assert.Equal(0.4f, read.StereoSeparation);
         Assert.Equal(HeadTracking.On, read.HeadTracking);
         Assert.Equal("Right Ctrl", read.Bindings[Key.Jump]);
+        Assert.Equal("RB", read.PadBindings[Key.Fire]);
+        Assert.Equal(1.5f, read.PadSensitivity);
+        Assert.True(read.InvertPad);
     }
 
     [Fact]

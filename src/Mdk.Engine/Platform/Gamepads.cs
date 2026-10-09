@@ -39,7 +39,7 @@ internal sealed unsafe class Gamepads : IDisposable
             case SDL_EventType.SDL_EVENT_GAMEPAD_BUTTON_UP:
                 if (Button((SDL_GamepadButton)e.gbutton.button) is { } button)
                 {
-                    Press(button, e.gbutton.down ? Input.State.Down : Input.State.Up, input);
+                    input.SetPadButton(button, e.gbutton.down ? Input.State.Down : Input.State.Up);
                 }
 
                 return true;
@@ -73,7 +73,7 @@ internal sealed unsafe class Gamepads : IDisposable
             input.SetPadMenu(key, GamepadMap.Steers(_left, key) ? Input.State.Down : Input.State.Up);
         }
 
-        input.AddLook(GamepadMap.Look(_right, seconds));
+        input.AddPadLook(GamepadMap.Look(_right, seconds));
     }
 
     private void Open(SDL_JoystickID id)
@@ -102,20 +102,7 @@ internal sealed unsafe class Gamepads : IDisposable
         _left = _right = Vector2.Zero;
         foreach (var button in Enum.GetValues<PadButton>())
         {
-            Press(button, Input.State.Up, input);
-        }
-    }
-
-    private static void Press(PadButton button, Input.State state, Input input)
-    {
-        if (GamepadMap.Game(button) is { } key)
-        {
-            input.SetPad(key, state);
-        }
-
-        if (GamepadMap.Menu(button) is { } menuKey)
-        {
-            input.SetPadMenu(menuKey, state);
+            input.SetPadButton(button, Input.State.Up);
         }
     }
 
@@ -136,10 +123,10 @@ internal sealed unsafe class Gamepads : IDisposable
                 _right.Y = value;
                 break;
             case SDL_GamepadAxis.SDL_GAMEPAD_AXIS_LEFT_TRIGGER:
-                Press(PadButton.LeftTrigger, value > TriggerPull ? Input.State.Down : Input.State.Up, input);
+                input.SetPadButton(PadButton.LeftTrigger, value > TriggerPull ? Input.State.Down : Input.State.Up);
                 break;
             case SDL_GamepadAxis.SDL_GAMEPAD_AXIS_RIGHT_TRIGGER:
-                Press(PadButton.RightTrigger, value > TriggerPull ? Input.State.Down : Input.State.Up, input);
+                input.SetPadButton(PadButton.RightTrigger, value > TriggerPull ? Input.State.Down : Input.State.Up);
                 break;
         }
     }

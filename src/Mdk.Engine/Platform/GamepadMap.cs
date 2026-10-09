@@ -10,7 +10,8 @@ public enum PadButton
     DpadUp, DpadDown, DpadLeft, DpadRight, LeftTrigger, RightTrigger,
 }
 
-/// <summary>The gamepad's fixed layout: the left stick walks, the right one looks.
+/// <summary>The gamepad's default layout (the buttons rebind but Start; the sticks are fixed): the
+/// left stick walks, the right one looks.
 /// <code>
 ///   LT sniper   LB item ◄            RB item ►   RT fire
 ///   d-pad: ▲ zoom in, ▼ zoom out, ◄ ► items      Y item ►
@@ -29,7 +30,34 @@ public static class GamepadMap
     /// <summary>The right stick's look at full tilt (degrees a second: right, down).</summary>
     public static readonly Vector2 LookRate = new(180f, 120f);
 
-    /// <summary>The key a button holds in play, or null.</summary>
+    /// <summary>The buttons' names (bindings, the gamepad's options), by Xbox's labels.</summary>
+    private static readonly Dictionary<PadButton, string> Names = new()
+    {
+        [PadButton.South] = "A", [PadButton.East] = "B", [PadButton.West] = "X", [PadButton.North] = "Y",
+        [PadButton.Back] = "Back", [PadButton.Start] = "Start", [PadButton.LeftStick] = "L3", [PadButton.RightStick] = "R3",
+        [PadButton.LeftShoulder] = "LB", [PadButton.RightShoulder] = "RB",
+        [PadButton.DpadUp] = "D-pad up", [PadButton.DpadDown] = "D-pad down",
+        [PadButton.DpadLeft] = "D-pad left", [PadButton.DpadRight] = "D-pad right",
+        [PadButton.LeftTrigger] = "LT", [PadButton.RightTrigger] = "RT",
+    };
+
+    public static string Name(PadButton button) => Names[button];
+
+    /// <summary>The button of a name, or null.</summary>
+    public static PadButton? Parse(string name)
+    {
+        foreach (var (button, text) in Names)
+        {
+            if (text == name)
+            {
+                return button;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>The key a button holds in play by default, or null.</summary>
     public static Key? Game(PadButton button) => button switch
     {
         PadButton.RightTrigger => Key.Fire,

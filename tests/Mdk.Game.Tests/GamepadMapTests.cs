@@ -78,4 +78,15 @@ public class GamepadMapTests
         // Up the stick looks up (the look's Y is down, as the mouse's).
         Assert.True(GamepadMap.Look(new Vector2(0f, -1f), 1f).Y < 0f);
     }
+
+    [Fact]
+    public void ButtonNamesRoundTrip()
+    {
+        foreach (var button in Enum.GetValues<PadButton>())
+        {
+            Assert.Equal(button, GamepadMap.Parse(GamepadMap.Name(button)));
+        }
+
+        Assert.Null(GamepadMap.Parse("W"));
+    }
 }

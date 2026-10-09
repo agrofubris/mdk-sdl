@@ -86,4 +86,64 @@ public class InputTests
         Assert.True(input.IsDown(Key.Jump));
         Assert.False(input.IsDown(Key.ItemPrevious));
     }
+
+    [Fact]
+    public void PadButtonsPlayAndWorkTheMenus()
+    {
+        var input = NewInput();
+        input.SetPadButton(PadButton.South, Input.State.Down);
+        Assert.True(input.IsDown(Key.Jump));
+        Assert.True(input.WasPressed(MenuKey.Accept));
+        Assert.Equal("A", input.LastPadControl);
+        Assert.Equal("", input.LastControl);
+
+        input.SetPadButton(PadButton.South, Input.State.Up);
+        Assert.False(input.IsDown(Key.Jump));
+    }
+
+    [Fact]
+    public void PadButtonBinds()
+    {
+        var input = NewInput();
+        Assert.True(input.BindPad(Key.Jump, "RB"));
+        Assert.Equal("RB", input.DescribePad(Key.Jump));
+
+        input.SetPadButton(PadButton.RightShoulder, Input.State.Down);
+        Assert.True(input.IsDown(Key.Jump));
+        Assert.False(input.IsDown(Key.ItemNext));
+
+        // A is free now; back to the defaults, it jumps again.
+        input.SetPadButton(PadButton.RightShoulder, Input.State.Up);
+        input.SetPadButton(PadButton.South, Input.State.Down);
+        Assert.False(input.IsDown(Key.Jump));
+        input.ResetPadBindings();
+        Assert.Equal("A", input.DescribePad(Key.Jump));
+    }
+
+    [Theory]
+    [InlineData("Start")]
+    [InlineData("Keypad")]
+    public void StartAndUnknownNamesDontBind(string name)
+    {
+        // Start pauses and goes back in the menus, whatever the bindings.
+        var input = NewInput();
+        Assert.False(input.BindPad(Key.Jump, name));
+        Assert.Equal("A", input.DescribePad(Key.Jump));
+    }
+
+    [Fact]
+    public void PadLookScalesAndInverts()
+    {
+        var input = NewInput();
+        input.AddPadLook(new System.Numerics.Vector2(0.15f, 0.15f));
+        Assert.Equal(1f, input.MouseX, 3);
+        Assert.Equal(1f, input.MouseY, 3);
+
+        input.ClearMouse();
+        input.PadSensitivity = 2f;
+        input.InvertPad = true;
+        input.AddPadLook(new System.Numerics.Vector2(0.15f, 0.15f));
+        Assert.Equal(2f, input.MouseX, 3);
+        Assert.Equal(-2f, input.MouseY, 3);
+    }
 }

@@ -26,6 +26,7 @@ public sealed class Settings
     public const int MaxVolume = 100;
     private const string FileName = "settings.cfg";
     private const string BindPrefix = "bind.";
+    private const string PadPrefix = "pad.";
     private const string ModPrefix = "mod.";
     /// <summary>The window's size until another is chosen (the original's 640 x 480, doubled).</summary>
     public static readonly Resolution DefaultWindow = new(1280, 960);
@@ -40,6 +41,10 @@ public sealed class Settings
         (Key.QuickSave, "Quick save"), (Key.QuickLoad, "Quick load"),
     ];
 
+    /// <summary>The actions the gamepad's buttons rebind: the sticks walk and look.</summary>
+    public static readonly IReadOnlyList<(Key Key, string Name)> PadActions =
+        [.. Actions.Where(a => a.Key is not (Key.Forward or Key.Back or Key.TurnLeft or Key.TurnRight or Key.StrafeLeft or Key.StrafeRight))];
+
     /// <summary>Volumes from 0 to 100.</summary>
     public int MasterVolume = 80;
     public int MusicVolume = 50;
@@ -48,6 +53,9 @@ public sealed class Settings
     /// <summary>Mouse sensitivity multiplier (0.25-3) and inverted vertical look.</summary>
     public float MouseSensitivity = 1f;
     public bool InvertMouse;
+    /// <summary>The gamepad's look: its sensitivity (as the mouse's) and inverted vertical look.</summary>
+    public float PadSensitivity = 1f;
+    public bool InvertPad;
     /// <summary>The window (Options, Display): windowed at <see cref="WindowSize"/>, fullscreen on
     /// the desktop, or exclusive at <see cref="ExclusiveSize"/> (null: the desktop's mode).</summary>
     public Fullscreen Fullscreen = Fullscreen.Off;
@@ -75,6 +83,8 @@ public sealed class Settings
     public HeadTracking HeadTracking = HeadTracking.Off;
     /// <summary>Rebound actions: action → key or mouse button name (see <see cref="Input.Bind"/>).</summary>
     public readonly Dictionary<Key, string> Bindings = [];
+    /// <summary>Rebound actions: action → gamepad button name (see <see cref="Input.BindPad"/>).</summary>
+    public readonly Dictionary<Key, string> PadBindings = [];
     /// <summary>Mods by folder; those not listed are on (<see cref="ModCatalog"/>).</summary>
     public readonly Dictionary<string, ModState> Mods = new(StringComparer.OrdinalIgnoreCase);
     /// <summary>The HD textures' upscaler archive and its SHA-256; empty: the platform's default.</summary>
@@ -131,6 +141,8 @@ public sealed class Settings
             $"music_filter={MusicFilter}",
             $"mouse_sensitivity={MouseSensitivity.ToString(CultureInfo.InvariantCulture)}",
             $"invert_mouse={InvertMouse}",
+            $"pad_sensitivity={PadSensitivity.ToString(CultureInfo.InvariantCulture)}",
+            $"invert_pad={InvertPad}",
             $"fullscreen={Fullscreen}",
             $"window_size={WindowSize}",
             $"exclusive_size={ExclusiveSize}",
@@ -150,6 +162,7 @@ public sealed class Settings
             $"upscaler_sha256={UpscalerSha256}",
         };
         lines.AddRange(Bindings.Select(b => $"{BindPrefix}{b.Key}={b.Value}"));
+        lines.AddRange(PadBindings.Select(b => $"{PadPrefix}{b.Key}={b.Value}"));
         lines.AddRange(Mods.OrderBy(m => m.Key, StringComparer.OrdinalIgnoreCase).Select(m => $"{ModPrefix}{m.Key}={m.Value}"));
         return string.Join('\n', lines) + "\n";
     }
@@ -161,6 +174,16 @@ public sealed class Settings
             if (Enum.TryParse<Key>(name[BindPrefix.Length..], out var key))
             {
                 Bindings[key] = value;
+            }
+
+            return;
+        }
+
+        if (name.StartsWith(PadPrefix, StringComparison.Ordinal))
+        {
+            if (Enum.TryParse<Key>(name[PadPrefix.Length..], out var key))
+            {
+                PadBindings[key] = value;
             }
 
             return;
@@ -195,6 +218,12 @@ public sealed class Settings
                 break;
             case "invert_mouse":
                 InvertMouse = bool.TryParse(value, out var invert) ? invert : InvertMouse;
+                break;
+            case "pad_sensitivity":
+                PadSensitivity = float.TryParse(value, CultureInfo.InvariantCulture, out var padSensitivity) ? padSensitivity : PadSensitivity;
+                break;
+            case "invert_pad":
+                InvertPad = bool.TryParse(value, out var invertPad) ? invertPad : InvertPad;
                 break;
             // Older settings: True or False.
             case "fullscreen" when bool.TryParse(value, out var on):
@@ -281,6 +310,8 @@ public sealed class Settings
         renderer.VSync = VSync;
         input.MouseScale = MouseSensitivity;
         input.InvertMouse = InvertMouse;
+        input.PadSensitivity = PadSensitivity;
+        input.InvertPad = InvertPad;
         Bind(input);
     }
 
@@ -291,6 +322,12 @@ public sealed class Settings
         foreach (var (key, control) in Bindings)
         {
             input.Bind(key, control);
+        }
+
+        input.ResetPadBindings();
+        foreach (var (key, control) in PadBindings)
+        {
+            input.BindPad(key, control);
         }
     }
 
