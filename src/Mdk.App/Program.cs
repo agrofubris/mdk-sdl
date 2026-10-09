@@ -82,6 +82,34 @@ var options = args.Where(a => a.StartsWith("--"))
     .Select(a => a[2..].Split('=', 2))
     .ToDictionary(p => p[0], p => p.Length > 1 ? p[1] : "");
 
+// The players' options (the tests' are listed above).
+if (options.ContainsKey("help") || args.Contains("-h"))
+{
+    Console.WriteLine("""
+        MDK in C# and SDL3. Needs the original game's data (see README.md).
+
+        Usage: mdk [options]
+
+          --level=N               play level 3-8 at once (961, 963, 966: the 1996 demo's)
+          --menu                  the main menu without the splash
+          --options, --controls, --gamepad, --beta-levels   open that menu page
+          --load=NAME             load a saved game
+          --stats=N, --briefing=N, --fall=N, --stream=N, --end   a screen of the game
+          --enhanced, --original  the enhanced or the original look (not saved)
+          --stereo=MODE           off, sbs, sbsfull, crossview, int, intr, tab, tabr, vr
+                                  (--stereo-separation=, --stereo-convergence=)
+          --gpu=d3d12|vulkan|metal  the GPU backend (not saved)
+          --bloodyes, --nobloodno gore on or off
+          --mute                  no sound
+          --mod=a,b               only these mods on, for this run
+          --export-assets=dir     write the textures, images and models for modding, then quit
+          --upscale-textures[=3,7] make the HD textures, then quit
+                                  (--hd-model=general|anime, --hd-scale=2|4)
+          --help, -h              this text
+        """);
+    return 0;
+}
+
 // Before the data: CI runs it without the game.
 if (options.TryGetValue("download-test", out var downloadUrl))
 {

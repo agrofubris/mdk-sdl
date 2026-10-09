@@ -42,7 +42,8 @@ original's box sweeps.
 - **Enhanced look (optional)**: filtered textures, each level lit from its sky (sun and shadows
   outdoors), dynamic lights of muzzle flashes, explosions and fires, ambient occlusion, glow, haze,
   anti-aliasing. The original look stays pixel-exact.
-- **Windows, Linux, macOS and Android** (touch controls; [notes](#android)).
+- **Windows, Linux, macOS, Android and Steam Deck** (touch controls on Android, [notes](#android);
+  [Steam Deck](#steam-deck)).
 - Quick save and load (F2, F9), a developer console and overlay, cheats.
 
 [Downloads](https://github.com/nemo22/mdk-sdl/releases): `mdk-win-x64.zip`, `mdk-linux-x64.tar.gz`,
@@ -173,6 +174,20 @@ On Linux and macOS copy the installed game's folder (from
 Windows, Wine or the GOG installer); file names match whatever their case. macOS keeps a downloaded
 program in quarantine: `xattr -d com.apple.quarantine mdk`.
 
+### Steam Deck
+
+The Linux build, with the Deck's controls as a gamepad ([Options](#options)); not tested on a
+Deck yet. In desktop mode:
+
+1. Extract `mdk-linux-x64.tar.gz` into a folder, e.g. `~/Games/mdk-sdl`.
+2. Point it at the game: put the folder inside the MDK installation, or write its path into
+   `mdk_paths.cfg` next to `mdk` (MDK from Steam, installed through Proton:
+   `~/.local/share/Steam/steamapps/common/MDK`).
+3. Steam, "Add a Non-Steam Game", choose `mdk`; in its controller settings pick the "Gamepad"
+   layout (not "Keyboard and mouse").
+
+Then it starts from game mode too.
+
 ```
 mdk.exe
 ```
@@ -181,7 +196,7 @@ mdk.exe
 - `--level=N`: play level N (3 to 8) at once, without the menu (the game plays them in the order
   7, 6, 3, 4, 8, 5); 961, 963 and 966 are the 1996 demo's.
 - `--menu`: the main menu without the splash (`--splash` with it); `--options`, `--controls`,
-  `--beta-levels` open those pages.
+  `--gamepad`, `--beta-levels` open those pages.
 - `--stats=N`: the screens after level N (`--phase=1-4` starts at a page: 1 the Score-O-matic, 2
   the intermission, 3 the briefing, 4 the debriefing; `--counts=shots,hits,sniper,sniper
   hits,kills,enemies,heads`, `--towns=bits`); `--briefing=N` its briefing alone; `--end` the end
