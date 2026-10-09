@@ -26,6 +26,10 @@ original's box sweeps.
 - **Stereo 3D (optional)**: side by side (half and full), crossview, row-interlaced, interlaced-reversed, top and
   bottom and reversed top and bottom, with real eye separation and convergence
   ([below](#stereo-3d)).
+- **VR viewer (optional)**: a phone in a Cardboard-like viewer, lens corrected, the view turned
+  by head tracking (gyroscope); also on the desktop with PC VR / 3D glasses (full side by side).
+- **Gamepads**: Xbox, PlayStation, Switch and Bluetooth pads, on the desktop and Android, buttons
+  rebindable ([Options](#options)).
 - **The whole game**: every level, the fall before it and the stream after it, rides, menus,
   briefings, statistics, saves, the end movies. Plays like the original (its BSP collisions,
   scripts and sound laws, reverse engineered).
