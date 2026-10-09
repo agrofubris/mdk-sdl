@@ -4,6 +4,7 @@
 #
 #   windows-latest ─► mdk-win-x64.zip      (DXIL + SPIR-V)
 #   ubuntu-latest  ─► mdk-linux-x64.tar.gz (SPIR-V)          ─► release (tags v*)
+#   ubuntu-24.04-arm ─► mdk-linux-arm64.tar.gz (SPIR-V; Raspberry Pi, ARM handhelds)
 #   macos-latest   ─► mdk-osx-arm64.zip    (SPIR-V + MSL)
 #   ubuntu-latest  ─► mdk-android.apk      (SPIR-V; Vulkan)
 name: build
@@ -34,6 +35,9 @@ jobs:
           - os: ubuntu-latest
             rid: linux-x64
             shaders: spirv
+          - os: ubuntu-24.04-arm
+            rid: linux-arm64
+            shaders: spirv
           - os: macos-latest
             rid: osx-arm64
             shaders: spirv msl
@@ -60,12 +64,21 @@ jobs:
           echo "SHADER_TOOLS=-p:Dxc=$DXC -p:DxcSpirv=$DXC" >> "$GITHUB_ENV"
 
       - name: Shader tools (Linux)
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && runner.arch == 'X64'
         run: |
           gh release download "$DXC_TAG" -R microsoft/DirectXShaderCompiler -p 'linux_dxc_*.tar.gz' -D "$RUNNER_TEMP"
           mkdir "$RUNNER_TEMP/dxc"
           tar -xzf "$RUNNER_TEMP"/linux_dxc_*.tar.gz -C "$RUNNER_TEMP/dxc"
           echo "SHADER_TOOLS=-p:DxcSpirv=$RUNNER_TEMP/dxc/bin/dxc" >> "$GITHUB_ENV"
+
+      # No ARM dxc release: Ubuntu's package.
+      - name: Shader tools (Linux ARM)
+        if: runner.os == 'Linux' && runner.arch == 'ARM64'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq directx-shader-compiler clang zlib1g-dev
+          DXC=$(dpkg -L directx-shader-compiler | grep -E '/bin/dxc[^/]*$' | head -n 1)
+          echo "SHADER_TOOLS=-p:DxcSpirv=$DXC" >> "$GITHUB_ENV"
 
       # No dxc release for macOS: the Vulkan SDK has dxc and spirv-cross.
       - name: Shader tools (macOS)
