@@ -47,6 +47,8 @@ original's box sweeps.
 
 ## Stereo 3D
 
+Contributed by [agrofubris](https://github.com/agrofubris) ([#2](https://github.com/nemo22/mdk-sdl/pull/2)).
+
 A stereo renderer draws each frame twice, once through each eye's camera, and composites for the
 display. The eyes are parallel; their images meet at the **convergence** distance (0 parallax
 there), nearer things come out of the screen and the sky stays at infinity (its panorama uses the
@@ -487,6 +489,10 @@ holders of MDK. MDK and its data are the property of their respective owners.
 This repository contains only original code, documentation and tools. It doesn't include or
 distribute any data from the game. To run the port you need a legally obtained copy of the
 original MDK, whose installed data files the port loads.
+
+## Contributors
+
+- [agrofubris](https://github.com/agrofubris): stereo 3D.
 
 ## Licence
 
