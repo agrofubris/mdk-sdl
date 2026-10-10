@@ -2,7 +2,8 @@
 
 C# (.NET 10) and SDL3 (ppy.SDL3-CS) port of MDK (1997), following the Godot port
 (`../godot-mdk`), whose `docs/` hold the reverse-engineering notes (formats, engine, script
-opcodes). Requires the original game data.
+opcodes). Overviews: [formats.md](formats.md), [original-engine.md](original-engine.md). Requires
+the original game data.
 
 ## Layers
 

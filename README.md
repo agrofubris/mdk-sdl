@@ -133,28 +133,30 @@ through. The [Godot port](https://github.com/nemo22/mdk-godot) is no longer deve
 
 | Area | Done |
 | --- | --- |
-| Data formats: levels, textures, models, sprites, sounds, fonts, scripts, videos | █████████░ 95% |
-| Rendering: arenas, glass, sky, mirrors, Kurt's sprite, effects | █████████░ 95% |
-| Enhanced look: filtering, mipmaps, sky light and shadows, point lights, occlusion, glow, haze, HD textures; anti-aliasing | █████████░ 85% |
-| Collisions: the original's BSP | █████████░ 95% |
-| Kurt: walking, turning, jumping, chute, ledges, slides, camera, damage, death | █████████░ 95% |
-| Sound mixer (the original's laws) and music | █████████░ 90% |
-| Script VM, aliens, objects, doors, effects, fans | █████████░ 90% |
-| Weapons, items, sniper mode | █████████░ 90% |
-| HUD (health, inventory, messages, health bar) | █████████░ 90% |
-| Menus, saves, level flow | █████████░ 90% |
-| The fall and the stream between levels, rides | █████████░ 90% |
-| Videos: the menu's FLC and slideshow, the end movies | █████████░ 90% |
-| Dev tools: console, F3 overlay, cheats, quick save/load | █████████░ 90% |
-| Mods: textures, 2D images, fonts, models (glTF), export | ████████░░ 80% |
-| Playtesting and bug fixing (every level played through) | ████████░░ 80% |
-| Android: APK, data import, touch controls (runs on a phone; controls to tune) | ███████░░░ 75% |
-| **Overall** | **about 92%** |
+| Data formats: levels, textures, models, sprites, sounds, fonts, scripts, videos | ██████████ 100% |
+| Rendering: arenas, glass, sky, mirrors, Kurt's sprite, effects | ██████████ 100% |
+| Enhanced look: filtering, mipmaps, sky light and shadows, point lights, occlusion, glow, haze, HD textures; anti-aliasing | ██████████ 100% |
+| Collisions: the original's BSP | ██████████ 100% |
+| Kurt: walking, turning, jumping, chute, ledges, slides, camera, damage, death | ██████████ 100% |
+| Sound mixer (the original's laws) and music | ██████████ 100% |
+| Script VM, aliens, objects, doors, effects, fans | ██████████ 100% |
+| Weapons, items, sniper mode | ██████████ 100% |
+| HUD (health, inventory, messages, health bar) | ██████████ 100% |
+| Menus, saves, level flow | ██████████ 100% |
+| The fall and the stream between levels, rides | ██████████ 100% |
+| Videos: the menu's FLC and slideshow, the end movies | ██████████ 100% |
+| Dev tools: console, F3 overlay, cheats, quick save/load | ██████████ 100% |
+| Mods: textures, 2D images, fonts, models (glTF), export | ██████████ 100% |
+| Playtesting and bug fixing (every level played through) | ██████████ 100% |
+| Android: APK, data import, touch controls (controls to tune) | █████████░ 95% |
+| **Overall** | **about 99%** |
 
-Recently added: modding (textures, 2D images, fonts, glTF models), HD textures as a mod with the
-HUD upscaled too, the Android app, per-level sky light and shadows, dynamic lights.
+Recently added: 3D stereo and a VR viewer mode (Cardboard) with head tracking, gamepads with
+rebindable buttons, touch controls that hide while a gamepad plays, gamma, a Linux ARM64 build.
 
-The plan is in [docs/architecture.md](docs/architecture.md#roadmap).
+The plan is in [docs/architecture.md](docs/architecture.md#roadmap). How the original works:
+[docs/original-engine.md](docs/original-engine.md) (engine, script VM) and
+[docs/formats.md](docs/formats.md) (data files).
 
 ## Running
 
