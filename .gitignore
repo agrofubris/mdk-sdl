@@ -6,3 +6,8 @@ shaders/compiled/
 publish/
 # Your own folders of the game data and the 1996 demo (src/Mdk.Formats/LocalPaths.cs)
 mdk_paths.cfg
+
+# The patched SDL checkout and build (tools/build_sdl3.ps1) and the shim's build output
+third_party/SDL/
+third_party/SDL-build/
+native/mdk_leia/build/

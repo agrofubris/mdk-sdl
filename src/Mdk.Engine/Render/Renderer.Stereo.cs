@@ -300,13 +300,23 @@ public sealed unsafe partial class Renderer
     /// blit (and skipped for exactly one settle frame after a size change).</summary>
     private void PresentLeia(SDL_GPUCommandBuffer* commands, out SDL_GPUTexture* texture, out uint width, out uint height)
     {
-        if (_leiaSettle)
-        {
-            _leiaSettle = false;
-        }
-
         texture = _leiaPair;
         width = _leiaWidth * 2;
         height = _leiaHeight;
+
+        if (_leiaSettle)
+        {
+            // The pack or the weave target changed size this frame: give the backend and the
+            // panel a frame to settle before weaving (a stale view can weave black).
+            _leiaSettle = false;
+            return;
+        }
+
+        if (WeaveLeia(commands))
+        {
+            texture = _leiaWoven;
+            width = _leiaWidth;
+            height = _leiaHeight;
+        }
     }
 }

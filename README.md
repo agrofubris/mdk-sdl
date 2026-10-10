@@ -100,8 +100,27 @@ with the enhanced look and the HD textures). Row-interlacing is drawn 1:1 with t
 the window at the display's native resolution (and 100% scaling) on a row-interleaved display.
 The menus, the HUD and the videos are drawn whole in both eyes (zero parallax), so they stay
 readable. Leia SR is Windows/D3D12 only; on any other backend the mode falls back to the plain
-side-by-side pair. The weave follows the [oneup03](https://github.com/oneup03/rt64-3D) design and
-[bo3b](https://github.com/bo3b/SR-lib)'s SR-lib.
+side-by-side pair.
+
+### Leia SR (this fork)
+
+Three optional pieces, each declining to the plain pair when missing:
+
+1. **The patched SDL3.dll**: `tools/build_sdl3.ps1` fetches SDL, injects the D3D12 interop
+   (`third_party/sdl3-interop`, vendored from
+   [starfox-enhanced-stereo](https://github.com/agrofubris/starfox-enhanced-stereo); the
+   injection's anchors fail the build loudly on a mismatched SDL) and builds `SDL3.dll`. Ship it
+   next to `mdk.exe`: a stock SDL3.dll has no bridge and the mode presents the pair.
+2. **The native shim**: `native/mdk_leia/build.ps1` builds `mdk_leia.dll` — the stub by default
+   (always the side-by-side fallback), or the real weaver with `-WithSrSdk` and your SR-lib / SR
+   SDK include and link flags (delay-load its DLLs). Copy it next to `mdk.exe`.
+3. **The SR Platform**: the runtime, the service and an SR display on the machine. Without them
+   the probe fails once (`leia-sr: CreateSRInterfaceDX12 failed (hr=...); presenting
+   side-by-side`) and the mode keeps presenting the pair.
+
+`MDK_DISABLE_LEIA_WEAVE=1` forces the fallback without touching the weaver; `MDK_TRACE_LEIA=1`
+logs the probe's pointers and each decline's stage. The proprietary Simulated Reality SDK is
+never part of this repository.
 
 ## Screenshots
 
@@ -542,7 +561,11 @@ original MDK, whose installed data files the port loads.
 
 ## Contributors
 
-- [agrofubris](https://github.com/agrofubris): stereo 3D.
+- [agrofubris](https://github.com/agrofubris): stereo 3D and the Leia SR output.
+- [oneup03](https://github.com/oneup03): the [RT64 3D](https://github.com/oneup03/rt64-3D)
+  Leia SR weaver design the weave follows.
+- [bo3b](https://github.com/bo3b): [SR-lib](https://github.com/bo3b/SR-lib), the Simulated
+  Reality SDK wrapper the optional weave links.
 
 ## Licence
 

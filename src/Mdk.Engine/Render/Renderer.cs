@@ -1339,6 +1339,8 @@ public sealed unsafe partial class Renderer : IDisposable
         SDL_ReleaseGPUSampler(_device, _clampSampler);
         SDL_ReleaseGPUSampler(_device, _mipSampler);
         DisposeColours();
+        // The Leia weaver holds the device: drop it before the device and its textures go.
+        ReleaseLeiaShim();
         SDL_ReleaseWindowFromGPUDevice(_device, _window.Handle);
         SDL_DestroyGPUDevice(_device);
     }
