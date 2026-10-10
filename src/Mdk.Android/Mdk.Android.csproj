@@ -6,8 +6,8 @@
     <RootNamespace>Mdk.Android</RootNamespace>
     <ApplicationId>io.github.nemo22.mdk</ApplicationId>
     <ApplicationTitle>MDK</ApplicationTitle>
-    <ApplicationVersion>9</ApplicationVersion>
-    <ApplicationDisplayVersion>1.0.0-beta.5</ApplicationDisplayVersion>
+    <ApplicationVersion>10</ApplicationVersion>
+    <ApplicationDisplayVersion>1.0.0</ApplicationDisplayVersion>
     <RuntimeIdentifiers>android-arm64;android-x64</RuntimeIdentifiers>
     <AndroidPackageFormat>apk</AndroidPackageFormat>
   </PropertyGroup>
