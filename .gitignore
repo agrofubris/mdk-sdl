@@ -11,3 +11,7 @@ mdk_paths.cfg
 third_party/SDL/
 third_party/SDL-build/
 native/mdk_leia/build/
+
+# The local SR-lib checkout (bo3b/SR-lib, api_expansion; MIT wrapper + proprietary SDK)
+third_party/SR-lib/
+native/mdk_leia/build-cmake/
