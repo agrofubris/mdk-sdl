@@ -45,7 +45,7 @@ public static class ConsoleCommands
         registry.Add(new Command("difficulty", "difficulty <easy|normal|hard>", args => SetDifficulty(target, args)));
         registry.Add(new Command("look", "look <original|enhanced>", args => Look(target, args)));
         registry.Add(new Command("aa", "aa <off|2x|4x>", args => AntiAlias(target, args)));
-        registry.Add(new Command("stereo", "stereo <off|sbs|sbsfull|crossview|int|intr|tab|tabr|vr> [separation] [convergence]", args => Stereo(target, args)));
+        registry.Add(new Command("stereo", "stereo <off|sbs|sbsfull|crossview|int|intr|tab|tabr|vr|leia> [separation] [convergence]", args => Stereo(target, args)));
         registry.Add(new Command("timescale", "timescale <x>", args => TimeScale(target, args)));
         registry.Add(new Command("fps", "fps", _ => $"overlay {Name(target.ToggleOverlay())}"));
         registry.Add(new Command("mods", "mods", _ => Mods(target)));
@@ -188,7 +188,7 @@ public static class ConsoleCommands
     /// <summary>The stereo mode, and the eyes' separation and convergence when given.</summary>
     private static string Stereo(ICommandTarget target, string[] args)
     {
-        const string usage = "stereo <off|sbs|sbsfull|crossview|int|intr|tab|tabr|vr> [separation] [convergence]";
+        const string usage = "stereo <off|sbs|sbsfull|crossview|int|intr|tab|tabr|vr|leia> [separation] [convergence]";
         if (args.Length is < 1 or > 3 || !StereoModes.TryParse(args[0], out var stereo))
         {
             return Usage(usage);

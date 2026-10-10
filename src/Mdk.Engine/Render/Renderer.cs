@@ -172,7 +172,7 @@ public sealed unsafe partial class Renderer : IDisposable
     private const uint VertexAttributes = 3;
 
     private readonly record struct PipelineKey(string Program, Pass Pass, Primitive Primitive, Geometry Geometry, uint Samples, Output Output,
-        Blend Blend = Blend.Alpha);
+        Blend Blend = Blend.Alpha, SDL_GPUTextureFormat Format = ColourFormat);
 
     /// <summary>A shader format and the extension of its embedded programs (shaders/palette.vs.dxil).</summary>
     private readonly record struct ShaderFormat(SDL_GPUShaderFormat Format, string Extension);
@@ -547,7 +547,7 @@ public sealed unsafe partial class Renderer : IDisposable
 
     private SDL_GPUGraphicsPipeline* CreatePipeline(PipelineKey key)
     {
-        var (program, pass, primitive, geometry, samples, output, blend) = key;
+        var (program, pass, primitive, geometry, samples, output, blend, format) = key;
         var vertexShader = LoadShader(program + ".vs", SDL_GPUShaderStage.SDL_GPU_SHADERSTAGE_VERTEX, 0);
         var fragmentShader = LoadShader(program + ".ps", SDL_GPUShaderStage.SDL_GPU_SHADERSTAGE_FRAGMENT, SamplerCount(program));
         var bufferDescription = new SDL_GPUVertexBufferDescription
@@ -564,7 +564,7 @@ public sealed unsafe partial class Renderer : IDisposable
         var blended = pass is Pass.Blended or Pass.Overlay;
         var colourTarget = new SDL_GPUColorTargetDescription
         {
-            format = ColourFormat,
+            format = format,
             blend_state = new SDL_GPUColorTargetBlendState
             {
                 enable_blend = blended,
@@ -813,6 +813,8 @@ public sealed unsafe partial class Renderer : IDisposable
         }
 
         var wait = Stopwatch.GetElapsedTime(waitStart);
+        _outputWidth = width;
+        _outputHeight = height;
         EnsureTargets(shown ? Scaled(width) : width, shown ? Scaled(height) : height);
         QueueCanvas();
         QueueStream();
@@ -823,10 +825,19 @@ public sealed unsafe partial class Renderer : IDisposable
         _eyeSide = 0f;
         if (StereoMode != Stereo.Off && _eyes[0] != null)
         {
-            // Each eye's whole frame, then the two into the frame (side by side or interlaced).
+            // Each eye's whole frame, then the two into the frame (side by side or interlaced);
+            // Leia SR packs them into the pair its weaver takes.
             RenderEye(commands, view, clearColour, 0, -1f);
             RenderEye(commands, view, clearColour, 1, +1f);
-            CompositeStereo(commands);
+            if (StereoMode == Stereo.LeiaSr && _leiaPair != null)
+            {
+                CompositeLeia(commands);
+            }
+            else
+            {
+                CompositeStereo(commands);
+            }
+
             _frame = _target;
         }
         else
@@ -835,7 +846,21 @@ public sealed unsafe partial class Renderer : IDisposable
             RenderScene(commands, view, clearColour);
         }
 
-        ApplyGamma(commands);
+        SDL_GPUTexture* presented;
+        uint presentWidth;
+        uint presentHeight;
+        if (StereoMode == Stereo.LeiaSr && _leiaPair != null)
+        {
+            PresentLeia(commands, out presented, out presentWidth, out presentHeight);
+        }
+        else
+        {
+            presented = _target;
+            presentWidth = _targetWidth;
+            presentHeight = _targetHeight;
+        }
+
+        ApplyGamma(commands, presented, presentWidth, presentHeight);
         if (swapchain != null)
         {
             Blit(commands, swapchain, width, height);
@@ -1119,22 +1144,24 @@ public sealed unsafe partial class Renderer : IDisposable
     {
         var blit = new SDL_GPUBlitInfo
         {
-            source = new SDL_GPUBlitRegion { texture = _shown, w = _targetWidth, h = _targetHeight },
+            source = new SDL_GPUBlitRegion { texture = _shownSource, w = _shownWidth, h = _shownHeight },
             destination = new SDL_GPUBlitRegion { texture = swapchain, w = width, h = height },
             load_op = SDL_GPULoadOp.SDL_GPU_LOADOP_DONT_CARE,
-            // A scaled frame is smoothed; at 100 % pixels copy as they are.
-            filter = _targetWidth == width && _targetHeight == height ? SDL_GPUFilter.SDL_GPU_FILTER_NEAREST : SDL_GPUFilter.SDL_GPU_FILTER_LINEAR,
+            // A scaled frame (or the Leia pair, squeezed into the window as its fallback) is
+            // smoothed; at 100 % pixels copy as they are.
+            filter = _shownWidth == width && _shownHeight == height ? SDL_GPUFilter.SDL_GPU_FILTER_NEAREST : SDL_GPUFilter.SDL_GPU_FILTER_LINEAR,
         };
         SDL_BlitGPUTexture(commands, &blit);
     }
 
-    /// <summary>Downloads the frame and writes it as a 32-bit BMP.</summary>
+    /// <summary>Downloads the shown frame (the Leia pair, un-woven, in the Leia fallback) and
+    /// writes it as a 32-bit BMP.</summary>
     private void Save(SDL_GPUCommandBuffer* commands, string path)
     {
-        var size = _targetWidth * _targetHeight * BytesPerPixel;
+        var size = _shownWidth * _shownHeight * BytesPerPixel;
         var transfer = CreateTransfer(size, SDL_GPUTransferBufferUsage.SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD);
         var copy = SDL_BeginGPUCopyPass(commands);
-        var source = new SDL_GPUTextureRegion { texture = _shown, w = _targetWidth, h = _targetHeight, d = 1 };
+        var source = new SDL_GPUTextureRegion { texture = _shownSource, w = _shownWidth, h = _shownHeight, d = 1 };
         var destination = new SDL_GPUTextureTransferInfo { transfer_buffer = transfer };
         SDL_DownloadFromGPUTexture(copy, &source, &destination);
         SDL_EndGPUCopyPass(copy);
@@ -1146,14 +1173,27 @@ public sealed unsafe partial class Renderer : IDisposable
         var rgba = new ReadOnlySpan<byte>((void*)mapped, (int)size).ToArray();
         SDL_UnmapGPUTransferBuffer(_device, transfer);
         SDL_ReleaseGPUTransferBuffer(_device, transfer);
-        Bmp.Write(path, (int)_targetWidth, (int)_targetHeight, rgba);
+
+        // The Leia pair and the woven output are B8G8R8A8; the writer takes RGBA.
+        if (_shownSource == _leiaPair || _shownSource == _leiaWoven)
+        {
+            for (var i = 0; i + 3 < rgba.Length; i += 4)
+            {
+                (rgba[i], rgba[i + 2]) = (rgba[i + 2], rgba[i]);
+            }
+        }
+
+        Bmp.Write(path, (int)_shownWidth, (int)_shownHeight, rgba);
     }
 
     private void EnsureTargets(uint width, uint height)
     {
         var samples = SupportedSamples();
+        var leiaWanted = StereoMode == Stereo.LeiaSr;
+        var leiaSized = !leiaWanted || (_leiaWidth == (_outputWidth & ~1u) && _leiaHeight == (_outputHeight & ~1u));
         if (_target != null && width == _targetWidth && height == _targetHeight && samples == _samples
-            && (StereoMode != Stereo.Off) == (_eyes[0] != null))
+            && (StereoMode != Stereo.Off) == (_eyes[0] != null)
+            && leiaWanted == (_leiaPair != null) && leiaSized)
         {
             return;
         }
@@ -1172,6 +1212,7 @@ public sealed unsafe partial class Renderer : IDisposable
         _samples = samples;
         CreateMultisampled(width, height);
         EnsureEyes();
+        EnsureLeia();
     }
 
     private SDL_GPUTexture* CreateTexture(SDL_GPUTextureFormat format, uint width, uint height, SDL_GPUTextureUsageFlags usage,

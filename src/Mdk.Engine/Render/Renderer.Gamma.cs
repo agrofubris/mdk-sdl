@@ -27,29 +27,40 @@ public sealed unsafe partial class Renderer
     /// <summary>Above 1 brighter (the darks lifted), below 1 darker.</summary>
     public float Gamma { get; set; } = DefaultGamma;
 
-    /// <summary>The frame after the gamma, the frame's size; made when the gamma isn't 1.</summary>
+    /// <summary>The frame after the gamma, its source's size; made when the gamma isn't 1 and
+    /// remade when the size changes.</summary>
     private SDL_GPUTexture* _graded;
+    private uint _gradedWidth;
+    private uint _gradedHeight;
 
-    /// <summary>The frame shown and saved: the target, or the graded one.</summary>
-    private SDL_GPUTexture* _shown;
+    /// <summary>The frame shown and saved: the source given to <see cref="ApplyGamma"/>, or the
+    /// graded one.</summary>
+    private SDL_GPUTexture* _shownSource;
+    private uint _shownWidth;
+    private uint _shownHeight;
 
-    /// <summary>The frame through the gamma into <see cref="_graded"/> (at 1: the target as it is).</summary>
-    private void ApplyGamma(SDL_GPUCommandBuffer* commands)
+    /// <summary>The frame through the gamma into <see cref="_graded"/> (at 1: the source as it is);
+    /// the source is the scene's frame, or the Leia pair the weave would take.</summary>
+    private void ApplyGamma(SDL_GPUCommandBuffer* commands, SDL_GPUTexture* source, uint width, uint height)
     {
-        _shown = _target;
+        _shownSource = source;
+        _shownWidth = width;
+        _shownHeight = height;
         if (Gamma == DefaultGamma)
         {
             return;
         }
 
-        if (_graded == null)
+        if (_graded == null || _gradedWidth != width || _gradedHeight != height)
         {
-            _graded = CreateTexture(ColourFormat, _targetWidth, _targetHeight,
+            ReleaseGraded();
+            _graded = CreateTexture(ColourFormat, width, height,
                 SDL_GPUTextureUsageFlags.SDL_GPU_TEXTUREUSAGE_COLOR_TARGET | SDL_GPUTextureUsageFlags.SDL_GPU_TEXTUREUSAGE_SAMPLER);
+            (_gradedWidth, _gradedHeight) = (width, height);
         }
 
         var uniforms = new GammaUniforms { Inverse = new Vector4(1f / Gamma, 0f, 0f, 0f) };
-        var sampler = new SDL_GPUTextureSamplerBinding { texture = _target, sampler = _mipSampler };
+        var sampler = new SDL_GPUTextureSamplerBinding { texture = source, sampler = _mipSampler };
         var colourTarget = new SDL_GPUColorTargetInfo
         {
             texture = _graded,
@@ -62,7 +73,7 @@ public sealed unsafe partial class Renderer
         SDL_PushGPUFragmentUniformData(commands, 0, (IntPtr)(&uniforms), (uint)sizeof(GammaUniforms));
         DrawPrimitives(pass, ScreenTriangle, 0, Primitive.Triangles);
         SDL_EndGPURenderPass(pass);
-        _shown = _graded;
+        _shownSource = _graded;
     }
 
     private void ReleaseGraded()
@@ -74,5 +85,6 @@ public sealed unsafe partial class Renderer
 
         SDL_ReleaseGPUTexture(_device, _graded);
         _graded = null;
+        _gradedWidth = _gradedHeight = 0;
     }
 }

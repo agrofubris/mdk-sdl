@@ -81,21 +81,27 @@ eye's own frustum, so it keeps the full eye separation's disparity).
   - `tabr` — top and bottom with the halves exchanged: the right eye in the top half.
   - `vr` — a phone in a VR viewer (Cardboard-like): full side by side, each half bent against the
     lens, the HUD and the menus kept to the middle, no touch controls (play with a gamepad).
+  - `leia` — Leia SR (Simulated Reality) autostereoscopic panels: a complete side-by-side pair at
+    the panel's resolution is handed to the SR runtime, which weaves it for the lenticular,
+    eye-tracked panel. Needs the SR Platform (runtime, service, display) and the fork's SDL3.dll
+    with the D3D12 weave bridge; without either, the same un-woven pair is presented plainly.
 - **Options, 3D Stereo** (main menu and pause menu): Mode, Separation (the eyes' distance apart,
   in the game's units) and Convergence (the distance their images meet at; at the most, `far`:
   parallel rays, meeting at infinity). Left/Right change them and, held, keep stepping; the
   settings apply at once and are saved (`settings.cfg`: `stereo`, `stereo_separation`,
   `stereo_convergence`). Head tracking (`head_tracking`): the phone's gyroscope turns the view
   as the mouse does.
-- **Console**: `stereo off|sbs|sbsfull|crossview|int|intr|tab|tabr|vr [separation] [convergence]` (saved).
-- **Command line** (tests, not saved): `--stereo=off|sbs|sbsfull|crossview|int|intr|tab|tabr|vr`,
+- **Console**: `stereo off|sbs|sbsfull|crossview|int|intr|tab|tabr|vr|leia [separation] [convergence]` (saved).
+- **Command line** (tests, not saved): `--stereo=off|sbs|sbsfull|crossview|int|intr|tab|tabr|vr|leia`,
   `--stereo-separation=0.25`, `--stereo-convergence=10`.
 
 Notes: the scene is rasterized twice, so stereo costs more GPU time (fine on a discrete GPU even
 with the enhanced look and the HD textures). Row-interlacing is drawn 1:1 with the window: keep
 the window at the display's native resolution (and 100% scaling) on a row-interleaved display.
 The menus, the HUD and the videos are drawn whole in both eyes (zero parallax), so they stay
-readable.
+readable. Leia SR is Windows/D3D12 only; on any other backend the mode falls back to the plain
+side-by-side pair. The weave follows the [oneup03](https://github.com/oneup03/rt64-3D) design and
+[bo3b](https://github.com/bo3b/SR-lib)'s SR-lib.
 
 ## Screenshots
 

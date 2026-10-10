@@ -86,6 +86,8 @@ public class ConsoleCommandsTests
         Assert.Equal(Stereo.TabReversed, _game.Stereo);
         Assert.Equal("stereo tab", Run("stereo tab"));
         Assert.Equal(Stereo.Tab, _game.Stereo);
+        Assert.Equal("stereo leia", Run("stereo leia"));
+        Assert.Equal(Stereo.LeiaSr, _game.Stereo);
         Run("stereo sbs 0.5 6");
         Assert.Equal((Stereo.Sbs, 0.5f, 6f), (_game.Stereo, _game.StereoSeparation, _game.StereoConvergence));
         Assert.StartsWith("Usage", Run("stereo sideways"));

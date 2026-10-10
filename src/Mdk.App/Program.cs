@@ -33,7 +33,7 @@ using Mdk.Game.Scripts;
 //   --mute                  no sound (tests)
 //   --enhanced, --original  the enhanced or the original look instead of the settings' (tests)
 //   --stereo=MODE           the stereo layout instead of the settings': off, sbs, sbsfull, crossview, int,
-//                           intr, tab, tabr, vr (--stereo-separation=, --stereo-convergence=; tests)
+//                           intr, tab, tabr, vr, leia (--stereo-separation=, --stereo-convergence=; tests)
 //   --bloodyes, --nobloodno gore on or off instead of the settings' (the original's -bloodyes, -nobloodno)
 //   --gamma=0.5-2           the display's gamma instead of the settings' (tests)
 //   --gpu=d3d12|vulkan|metal the GPU backend instead of the settings' (tests; not saved)
@@ -97,7 +97,7 @@ if (options.ContainsKey("help") || args.Contains("-h"))
           --load=NAME             load a saved game
           --stats=N, --briefing=N, --fall=N, --stream=N, --end   a screen of the game
           --enhanced, --original  the enhanced or the original look (not saved)
-          --stereo=MODE           off, sbs, sbsfull, crossview, int, intr, tab, tabr, vr
+          --stereo=MODE           off, sbs, sbsfull, crossview, int, intr, tab, tabr, vr, leia
                                   (--stereo-separation=, --stereo-convergence=)
           --gpu=d3d12|vulkan|metal  the GPU backend (not saved)
           --bloodyes, --nobloodno gore on or off
@@ -167,7 +167,7 @@ if (options.TryGetValue("stereo", out var stereoText))
 {
     if (!StereoModes.TryParse(stereoText, out var parsedStereo))
     {
-        Console.Error.WriteLine("--stereo: off, sbs, sbsfull, crossview, int, intr, tab, tabr or vr");
+        Console.Error.WriteLine("--stereo: off, sbs, sbsfull, crossview, int, intr, tab, tabr, vr or leia");
         return 1;
     }
 

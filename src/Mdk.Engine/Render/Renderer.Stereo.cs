@@ -29,6 +29,11 @@ public enum Stereo
     /// <summary>A phone in a VR viewer: full side by side, each half bent against the lens
     /// (barrel), the HUD and the menus kept to the middle (<see cref="StereoModes.CanvasZoom"/>).</summary>
     Vr,
+    /// <summary>Leia SR (Simulated Reality) autostereoscopic panels: a complete side-by-side pair
+    /// (2W x H) at the panel's resolution is handed to the SR runtime, which weaves it for the
+    /// lenticular, eye-tracked panel. Without the runtime, the service or the display the same
+    /// pair is presented plainly (see <see cref="Renderer.PresentLeia"/>).</summary>
+    LeiaSr,
 }
 
 /// <summary>The stereo modes and their names (the options page, the console, --stereo).</summary>
@@ -36,7 +41,7 @@ public static class StereoModes
 {
     /// <summary>The modes' names, by value (the options page's).</summary>
     public static readonly string[] Names =
-        ["Off", "Side by side (half)", "Side by side (full)", "Cross view", "Interlaced", "Interlaced reverse", "Top and bottom", "Top and bottom rev.", "VR viewer (phone)"];
+        ["Off", "Side by side (half)", "Side by side (full)", "Cross view", "Interlaced", "Interlaced reverse", "Top and bottom", "Top and bottom rev.", "VR viewer (phone)", "Leia SR"];
 
     /// <summary>The most the eyes go apart and the farthest their images converge (the sliders).</summary>
     public const float MaxSeparation = 2f;
@@ -74,6 +79,9 @@ public static class StereoModes
                 return true;
             case "vr" or "vrviewer" or "vrviewerphone":
                 stereo = Stereo.Vr;
+                return true;
+            case "leia" or "leiasr" or "simulatedreality":
+                stereo = Stereo.LeiaSr;
                 return true;
             default:
                 stereo = Stereo.Off;
@@ -200,5 +208,105 @@ public sealed unsafe partial class Renderer
         SDL_PushGPUFragmentUniformData(commands, 0, (IntPtr)(&uniforms), (uint)sizeof(StereoUniforms));
         DrawPrimitives(pass, ScreenTriangle, 0, Primitive.Triangles);
         SDL_EndGPURenderPass(pass);
+    }
+
+    // --- Leia SR (Simulated Reality) autostereoscopic panels ----------------------------------
+
+    /// <summary>B8G8R8A8: the format the SR weaver wants for its input and output (an RGBA pair
+    /// can weave black).</summary>
+    private const SDL_GPUTextureFormat LeiaFormat = SDL_GPUTextureFormat.SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM;
+
+    /// <summary>The packed eye pair (2W x H) and the woven output (W x H); the panel's even size
+    /// (<see cref="EnsureLeia"/>), and the window's size the pair is made for (the render scale
+    /// doesn't change the panel's output resolution).</summary>
+    private SDL_GPUTexture* _leiaPair;
+    private SDL_GPUTexture* _leiaWoven;
+    private uint _leiaWidth;
+    private uint _leiaHeight;
+    private uint _outputWidth;
+    private uint _outputHeight;
+    /// <summary>A size change just happened: the first weave waits a frame so the runtime, the
+    /// panel and the swapchain settle (a stale view can weave a black or torn frame).</summary>
+    private bool _leiaSettle;
+
+    /// <summary>The Leia targets, made when the mode is on (and remade when the panel's size
+    /// changes) and freed when it's switched off: the pair at the even panel size, the woven
+    /// output its size.</summary>
+    private void EnsureLeia()
+    {
+        var width = _outputWidth & ~1u;
+        var height = _outputHeight & ~1u;
+        if (StereoMode != Stereo.LeiaSr || width < 2 || height < 2)
+        {
+            ReleaseLeia();
+            return;
+        }
+
+        if (_leiaPair != null && width == _leiaWidth && height == _leiaHeight)
+        {
+            return;
+        }
+
+        ReleaseLeia();
+        _leiaWidth = width;
+        _leiaHeight = height;
+        _leiaPair = CreateTexture(LeiaFormat, width * 2, height,
+            SDL_GPUTextureUsageFlags.SDL_GPU_TEXTUREUSAGE_COLOR_TARGET | SDL_GPUTextureUsageFlags.SDL_GPU_TEXTUREUSAGE_SAMPLER);
+        _leiaWoven = CreateTexture(LeiaFormat, width, height,
+            SDL_GPUTextureUsageFlags.SDL_GPU_TEXTUREUSAGE_COLOR_TARGET | SDL_GPUTextureUsageFlags.SDL_GPU_TEXTUREUSAGE_SAMPLER);
+        _leiaSettle = true;
+    }
+
+    private void ReleaseLeia()
+    {
+        foreach (var texture in new[] { _leiaPair, _leiaWoven })
+        {
+            if (texture != null)
+            {
+                SDL_ReleaseGPUTexture(_device, texture);
+            }
+        }
+
+        _leiaPair = _leiaWoven = null;
+        _leiaWidth = _leiaHeight = 0;
+    }
+
+    /// <summary>The two eyes into the pair: each a complete view at the panel's resolution, the
+    /// left eye's in the left half and the right eye's in the right (never squeezed: the weave
+    /// needs whole views, and shrinking one drifts the lens alignment), in B8G8R8A8.</summary>
+    private void CompositeLeia(SDL_GPUCommandBuffer* commands)
+    {
+        var uniforms = new StereoUniforms { Mode = new Vector4(0f, 0f, AspectRatio, 0f) };
+        var samplers = stackalloc SDL_GPUTextureSamplerBinding[(int)StereoEyes];
+        samplers[0] = new SDL_GPUTextureSamplerBinding { texture = _eyes[0], sampler = _mipSampler };
+        samplers[1] = new SDL_GPUTextureSamplerBinding { texture = _eyes[1], sampler = _mipSampler };
+
+        var colourTarget = new SDL_GPUColorTargetInfo
+        {
+            texture = _leiaPair,
+            load_op = SDL_GPULoadOp.SDL_GPU_LOADOP_DONT_CARE,
+            store_op = SDL_GPUStoreOp.SDL_GPU_STOREOP_STORE,
+        };
+        var pass = SDL_BeginGPURenderPass(commands, &colourTarget, 1, null);
+        SDL_BindGPUGraphicsPipeline(pass, Pipeline(new PipelineKey("stereo", Pass.DoubleSided, Primitive.Triangles, Geometry.Post, 1, Output.Colour, Format: LeiaFormat)));
+        SDL_BindGPUFragmentSamplers(pass, 0, samplers, StereoEyes);
+        SDL_PushGPUFragmentUniformData(commands, 0, (IntPtr)(&uniforms), (uint)sizeof(StereoUniforms));
+        DrawPrimitives(pass, ScreenTriangle, 0, Primitive.Triangles);
+        SDL_EndGPURenderPass(pass);
+    }
+
+    /// <summary>The Leia frame for this present: the woven output when the weaver took the pair,
+    /// else the packed pair itself — the plain fallback, squeezed to the window by the present
+    /// blit (and skipped for exactly one settle frame after a size change).</summary>
+    private void PresentLeia(SDL_GPUCommandBuffer* commands, out SDL_GPUTexture* texture, out uint width, out uint height)
+    {
+        if (_leiaSettle)
+        {
+            _leiaSettle = false;
+        }
+
+        texture = _leiaPair;
+        width = _leiaWidth * 2;
+        height = _leiaHeight;
     }
 }
