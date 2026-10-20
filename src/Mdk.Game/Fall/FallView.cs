@@ -61,6 +61,9 @@ public sealed class FallView
     /// <summary>Kurt lies face down (+0x4c yaw 90°, +0x13c pitch −90°).</summary>
     private static readonly Matrix4x4 KurtTurn = Matrix4x4.CreateRotationY(MathF.PI / 2f) * Matrix4x4.CreateRotationZ(MathF.PI / 2f);
     private const float ChuteAbove = 2f;
+    /// <summary>Models and trails nearer below the camera aren't drawn: a missile past Kurt (5 units
+    /// above him, 5 below the camera) or a pickup dropped above him would fill the view.</summary>
+    private const float NearClearance = 5f;
     /// <summary>An explosion grows to twice its size over its frames.</summary>
     private const float ExplosionGrowth = 2f;
     private const float ExplosionMinScale = 0.01f;
@@ -308,18 +311,30 @@ public sealed class FallView
             Models.Draw("BONES", KurtTurn * Matrix4x4.CreateTranslation(bones), "BONESANM", (int)sim.BonesFrame);
         }
 
+        var camera = sim.CameraPosition;
         foreach (var missile in sim.Missiles)
         {
+            if (NearCamera(missile.Position, camera))
+            {
+                continue;
+            }
+
             Models.Draw("MISSILE", Orient(missile.Velocity) * Matrix4x4.CreateTranslation(missile.Position));
         }
 
         foreach (var pickup in sim.Pickups)
         {
+            if (NearCamera(pickup.Position, camera))
+            {
+                continue;
+            }
+
             var turn = Matrix4x4.CreateRotationZ(float.DegreesToRadians(pickup.Yaw));
             Models.Draw(pickup.Name, turn * Matrix4x4.CreateTranslation(pickup.Position));
-            if (pickup.Chute)
+            var chute = pickup.Position + new Vector3(0f, 0f, ChuteAbove);
+            if (pickup.Chute && !NearCamera(chute, camera))
             {
-                Models.Draw("CHUTE", turn * Matrix4x4.CreateTranslation(pickup.Position + new Vector3(0f, 0f, ChuteAbove)));
+                Models.Draw("CHUTE", turn * Matrix4x4.CreateTranslation(chute));
             }
         }
 
@@ -333,6 +348,9 @@ public sealed class FallView
         }
     }
 
+    /// <summary>Whether a model or trail point is too near the camera to draw.</summary>
+    public static bool NearCamera(Vector3 position, Vector3 camera) => position.Z > camera.Z - NearClearance;
+
     /// <summary>Points the model's +y along a direction, z up (0x4123e8).</summary>
     private static Matrix4x4 Orient(Vector3 direction)
     {
@@ -343,8 +361,8 @@ public sealed class FallView
         return new Matrix4x4(x.X, x.Y, x.Z, 0f, y.X, y.Y, y.Z, 0f, z.X, z.Y, z.Z, 0f, 0f, 0f, 0f, 1f);
     }
 
-    /// <summary>The radar's beam (0x412f94): a fan from its base to ring 1, rings 1-4 at
-    /// <c>1 − 2^−k</c> of the way to the spot with radius <c>r (1 − 2^−k)</c>, and a cap on ring 4.
+    /// <summary>The radar's beam (0x412f94): a fan from its base to ring 1, rings 1-3 at
+    /// <c>1 − 2^−k</c> of the way to the spot with radius <c>r (1 − 2^−k)</c>, ring 4 on the spot, and a cap on ring 4.
     /// <code>
     ///   base ◄── fan ── ring 1 ══ ring 2 ══ ring 3 ══ ring 4 (cap) ── spot
     /// </code></summary>
@@ -361,13 +379,12 @@ public sealed class FallView
         var rings = new Vector3[RadarRings][];
         for (var k = 0; k < RadarRings; k++)
         {
-            var f = 1f - MathF.Pow(2f, -(k + 1));
-            var centre = Vector3.Lerp(basePoint, spot, f);
+            var (centre, radius) = RadarRing(basePoint, spot, sim.RadarSpotRadius, k);
             rings[k] = new Vector3[RadarSides];
             for (var m = 0; m < RadarSides; m++)
             {
                 var angle = float.DegreesToRadians(RadarFirstAngle * (m + 1));
-                rings[k][m] = centre + new Vector3(MathF.Cos(angle), MathF.Sin(angle), 0f) * sim.RadarSpotRadius * f;
+                rings[k][m] = centre + new Vector3(MathF.Cos(angle), MathF.Sin(angle), 0f) * radius;
             }
         }
 
@@ -405,11 +422,20 @@ public sealed class FallView
         }
     }
 
+    /// <summary>The centre and radius of the beam's ring <paramref name="ring"/> (0-3): rings 1-3
+    /// halve the way left to the spot, ring 4 is the spot (0x412af8).</summary>
+    public static (Vector3 Centre, float Radius) RadarRing(Vector3 basePoint, Vector3 spot, float radius, int ring)
+    {
+        var f = ring == RadarRings - 1 ? 1f : 1f - MathF.Pow(2f, -(ring + 1));
+        return (Vector3.Lerp(basePoint, spot, f), radius * f);
+    }
+
     /// <summary>The smoke trails (0x439454, approximated): a band along the last 32 points of each
     /// missile, narrowing towards its tail.</summary>
     private void QueueTrails(FallSim sim)
     {
         var vertices = new List<Vertex>();
+        var camera = sim.CameraPosition;
         foreach (var missile in sim.Missiles.Take(TrailMissiles))
         {
             var trail = missile.Trail;
@@ -417,6 +443,11 @@ public sealed class FallView
             for (var i = 0; i < count - 1; i++)
             {
                 var (a, b) = (trail[i], trail[i + 1]);
+                if (NearCamera(a, camera) || NearCamera(b, camera))
+                {
+                    continue;
+                }
+
                 var side = new Vector3(b.Y - a.Y, a.X - b.X, 0f);
                 side = side == Vector3.Zero ? side : Vector3.Normalize(side);
                 var wa = TrailWidth + TrailWiden * (count - i) / FallMissile.TrailPoints;

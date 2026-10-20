@@ -156,6 +156,26 @@ public class FallTests
         Assert.Equal(FallMissile.TrailPoints, missile.Trail.Count);
     }
 
+    [Fact]
+    public void RadarBeamReachesItsSpot()
+    {
+        // Rings 1-3 halve the way to the spot (0x412af8), ring 4 is the spot itself.
+        var (basePoint, spot) = (new Vector3(-40f, 0f, 0f), new Vector3(0f, 0f, 400f));
+        Assert.Equal((new Vector3(-20f, 0f, 200f), 5f), FallView.RadarRing(basePoint, spot, 10f, 0));
+        Assert.Equal((new Vector3(-5f, 0f, 350f), 8.75f), FallView.RadarRing(basePoint, spot, 10f, 2));
+        Assert.Equal((spot, 10f), FallView.RadarRing(basePoint, spot, 10f, 3));
+    }
+
+    [Fact]
+    public void ModelsAtTheCameraAreNotDrawn()
+    {
+        // A missile past Kurt (5 units above him, 5 below the camera) would fill the view.
+        var camera = new Vector3(0f, 0f, 1000f);
+        Assert.False(FallView.NearCamera(new Vector3(0f, 0f, 990f), camera));
+        Assert.True(FallView.NearCamera(new Vector3(0f, 0f, 996f), camera));
+        Assert.True(FallView.NearCamera(new Vector3(0f, 0f, 1003f), camera));
+    }
+
     [Theory]
     [InlineData(0, 16)]
     [InlineData(3, 18)]
