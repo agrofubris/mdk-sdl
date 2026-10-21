@@ -64,6 +64,9 @@ public sealed class FallModels(Renderer renderer, Bni bni, TextureArchive mti, F
         }
     }
 
+    /// <summary>A model of <c>FALL3D.BNI</c> (its data: the trails' ends), or null.</summary>
+    public Model? Find(string name) => Get(name);
+
     private Model? Get(string name)
     {
         if (_models.TryGetValue(name, out var model))

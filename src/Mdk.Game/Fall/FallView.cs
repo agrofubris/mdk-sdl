@@ -42,9 +42,13 @@ public sealed class FallView
     private const float RadarBaseFactor = -4f;
     private const float RadarFirstAngle = 60f;
     private const int RadarVertices = 138;
-    private static readonly Vector4 TrailColour = new(0.8f, 0.8f, 0.8f, 0.35f);
-    private const float TrailWidth = 0.5f;
-    private const float TrailWiden = 1.5f;
+    /// <summary>A trail point's width by its age in ticks (0x491d64): the ribbon swells just behind the
+    /// missile, then tapers (<see cref="TrailWidth"/>).</summary>
+    private static readonly float[] TrailSwell = [1f, 1.25f, 1.2f, 1.1f, 1.05f, 1f];
+    /// <summary>The trail's colours (0x410874's translucent table): white at 215/255, and over the last
+    /// segments before the missile less and less blue (yellow) and more opaque.</summary>
+    private const byte TrailAlpha = 215;
+    private const int TrailYellowSegments = 8;
     private const int TrailMissiles = 24;
     // The intro as f goes 0 to 1 (0x41106c): space (600 x 360) behind, the moon (128²) centred at
     // (300, 270 − 90 f) scaled (64 + 256 f) / 256, the earth (512²) centred at (300, 488 − 224 f)
@@ -90,6 +94,9 @@ public sealed class FallView
     private readonly int _backMesh;
     private readonly int _radarMesh;
     private readonly int _trailMesh;
+    /// <summary>The trail ribbon's ends in the missile's model space (0x43911c): its leftmost and
+    /// rightmost vertices (by x), the tips of its tail fins.</summary>
+    private readonly (Vector3 Left, Vector3 Right) _trailEnds;
     private readonly List<Vertex> _back = [];
     private readonly List<(int First, Material Material, int Frame)> _backDraws = [];
 
@@ -109,6 +116,10 @@ public sealed class FallView
         Array.Fill(white, byte.MaxValue);
         _whitePalette = renderer.CreatePalette(white);
         Models = new FallModels(renderer, bni, mti, _effects, _palette);
+        var missileVertices = Models.Find("MISSILE")?.PartList.SelectMany(p => p.Vertices).ToList() ?? [];
+        _trailEnds = missileVertices.Count == 0
+            ? (-Vector3.UnitX, Vector3.UnitX)
+            : (missileVertices.MinBy(v => v.X), missileVertices.MaxBy(v => v.X));
         Hud = new FallHud(renderer, bni, _palette, fti, palette, mods);
 
         _ground = new FallGround(mti.Textures[$"LEVEL{n}"], mti.Textures[$"POD{n}"]);
@@ -440,32 +451,47 @@ public sealed class FallView
         return (Vector3.Lerp(basePoint, spot, f), radius * f);
     }
 
-    /// <summary>The smoke trails (0x439454, approximated): a band along the last 32 points of each
-    /// missile, narrowing towards its tail.</summary>
+    /// <summary>The smoke trails (0x439454; set up by 0x43911c, sampled by 0x4392a4): a ribbon along the
+    /// last 32 points of each missile (oldest first), between its tail fins' tips as the missile was
+    /// turned at each point, widened by <see cref="TrailWidth"/>; each segment in one colour
+    /// (<see cref="TrailColour"/>).
+    /// <code>
+    ///   tail ─────── white (215/255) ───────╴╴▶ last 8 segments: yellower, more opaque ─▶ missile
+    ///   width ×0 ◄──── tapering ────── ×1, ×1.05, ×1.1, ×1.2, ×1.25 (swell), ×1 at the missile
+    /// </code></summary>
     private void QueueTrails(FallSim sim)
     {
         var vertices = new List<Vertex>();
         var camera = sim.CameraPosition;
+        var middle = (_trailEnds.Left + _trailEnds.Right) / 2f;
+        Span<Vector3> lefts = stackalloc Vector3[FallMissile.TrailPoints];
+        Span<Vector3> rights = stackalloc Vector3[FallMissile.TrailPoints];
         foreach (var missile in sim.Missiles.Take(TrailMissiles))
         {
             var trail = missile.Trail;
-            var count = trail.Count;
-            for (var i = 0; i < count - 1; i++)
+            var count = Math.Min(trail.Count, FallMissile.TrailPoints);
+            for (var i = 0; i < count; i++)
             {
-                var (a, b) = (trail[i], trail[i + 1]);
-                if (NearCamera(a, camera) || NearCamera(b, camera))
+                // The fins' tips around their middle, as turned then, scaled by the point's age.
+                var turn = Orient(missile.TrailHeadings[i]);
+                var centre = trail[i] + Vector3.TransformNormal(middle, turn);
+                var width = TrailWidth(count - 1 - i);
+                lefts[i] = centre + Vector3.TransformNormal(_trailEnds.Left - middle, turn) * width;
+                rights[i] = centre + Vector3.TransformNormal(_trailEnds.Right - middle, turn) * width;
+            }
+
+            for (var k = 1; k < count; k++)
+            {
+                if (NearCamera(trail[k - 1], camera) || NearCamera(trail[k], camera))
                 {
                     continue;
                 }
 
-                var side = new Vector3(b.Y - a.Y, a.X - b.X, 0f);
-                side = side == Vector3.Zero ? side : Vector3.Normalize(side);
-                var wa = TrailWidth + TrailWiden * (count - i) / FallMissile.TrailPoints;
-                var wb = TrailWidth + TrailWiden * (count - i - 1) / FallMissile.TrailPoints;
-                Vector3[] quad = [a - side * wa, a + side * wa, b + side * wb, b - side * wb];
-                foreach (var k in (int[])[0, 1, 2, 0, 2, 3])
+                var colour = TrailColour(k, count);
+                Vector3[] quad = [lefts[k - 1], rights[k - 1], rights[k], lefts[k]];
+                foreach (var q in (int[])[0, 1, 2, 0, 2, 3])
                 {
-                    vertices.Add(new Vertex(quad[k], Vector2.Zero));
+                    vertices.Add(new Vertex(quad[q], Vector2.Zero, colour));
                 }
             }
         }
@@ -476,6 +502,35 @@ public sealed class FallView
         }
 
         _renderer.UpdateMesh(_trailMesh, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(vertices));
-        _renderer.Draw(_trailMesh, 0, vertices.Count, Material.Flat(_effects.Apply(TrailColour), Pass.Blended));
+        _renderer.Draw(_trailMesh, 0, vertices.Count, Material.Flat(_effects.Apply(Vector4.One), Pass.Blended));
+    }
+
+    /// <summary>A trail point's width factor by its age in ticks: the swell's (0-5), then down to 0 at
+    /// the 32nd.</summary>
+    public static float TrailWidth(int age)
+    {
+        if (age < TrailSwell.Length)
+        {
+            return TrailSwell[age];
+        }
+
+        var taper = FallMissile.TrailPoints - TrailSwell.Length;
+        return 1f - (float)(age - TrailSwell.Length) / taper;
+    }
+
+    /// <summary>Segment <paramref name="k"/> (1 to count − 1, the last one at the missile) of a trail of
+    /// <paramref name="count"/> points: white at 215/255, the last 8 with blue 255 down to 31 and alpha
+    /// 215 up to 250 (8 steps).</summary>
+    public static uint TrailColour(int k, int count)
+    {
+        var step = k - (count - TrailYellowSegments);
+        if (step < 0)
+        {
+            return Vertex.Rgba(byte.MaxValue, byte.MaxValue, byte.MaxValue, TrailAlpha);
+        }
+
+        var blue = (2040 - byte.MaxValue * step) >> 3;
+        var alpha = ((TrailYellowSegments - step) * TrailAlpha + byte.MaxValue * step) >> 3;
+        return Vertex.Rgba(byte.MaxValue, byte.MaxValue, (byte)blue, (byte)alpha);
     }
 }

@@ -37,11 +37,16 @@ public sealed class FallMissile
     private readonly Vector2 _offset;
     /// <summary>The last points, for the smoke trail.</summary>
     private readonly List<Vector3> _trail = [];
+    /// <summary>The velocity at each trail point: the ribbon there keeps the missile's turn (0x4392a4).</summary>
+    private readonly List<Vector3> _headings = [];
     private Phase _phase = Phase.Free;
     /// <summary>Ticks left free, or since it passed.</summary>
     private float _ticks = FreeTicks;
 
     public IReadOnlyList<Vector3> Trail => _trail;
+
+    /// <summary>The missile's velocity at each <see cref="Trail"/> point.</summary>
+    public IReadOnlyList<Vector3> TrailHeadings => _headings;
 
     /// <summary>Launched from the origin in a random direction, climbing, with a random aim offset
     /// of ±<paramref name="spread"/>.</summary>
@@ -66,11 +71,13 @@ public sealed class FallMissile
         for (var i = 0; i < ticks; i++)
         {
             _trail.Add(Position);
+            _headings.Add(Velocity);
         }
 
         if (_trail.Count > TrailPoints)
         {
             _trail.RemoveRange(0, _trail.Count - TrailPoints);
+            _headings.RemoveRange(0, _headings.Count - TrailPoints);
         }
 
         switch (_phase)

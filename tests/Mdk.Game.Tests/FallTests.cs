@@ -244,4 +244,27 @@ public class FallTests
         Assert.Equal(new System.Drawing.RectangleF(272f, 644f, 480f, 360f), texels);
         Assert.Equal(200f, FallGround.CentreRow(FallSim.EndTime), 3);
     }
+
+    [Theory]
+    [InlineData(0, 1f)]
+    [InlineData(1, 1.25f)]
+    [InlineData(2, 1.2f)]
+    [InlineData(5, 1f)]
+    [InlineData(19, 0.5f)]
+    [InlineData(31, 1f / 26f)]
+    public void TrailsSwellBehindTheMissileThenTaper(int age, float width) =>
+        // The original's trail (0x439454): its widths by a point's age in ticks (0x491d64, then linear).
+        Assert.Equal(width, FallView.TrailWidth(age), 4);
+
+    [Fact]
+    public void TrailsTurnYellowAndOpaqueOverTheirLastEightSegments()
+    {
+        // 0x410874's translucent table: white at 215, then blue 255 down to 31, alpha up to 250.
+        const int Count = 32;
+        Assert.Equal(Engine.Render.Vertex.Rgba(255, 255, 255, 215), FallView.TrailColour(1, Count));
+        Assert.Equal(Engine.Render.Vertex.Rgba(255, 255, 255, 215), FallView.TrailColour(23, Count));
+        Assert.Equal(Engine.Render.Vertex.Rgba(255, 255, 255, 215), FallView.TrailColour(24, Count));
+        Assert.Equal(Engine.Render.Vertex.Rgba(255, 255, 223, 220), FallView.TrailColour(25, Count));
+        Assert.Equal(Engine.Render.Vertex.Rgba(255, 255, 31, 250), FallView.TrailColour(31, Count));
+    }
 }
