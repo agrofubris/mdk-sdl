@@ -16,6 +16,7 @@ public sealed class FallMissile
     private enum Phase { Free, Homing, Passed }
 
     private const float Speed = 250f;
+    private const float TicksPerSecond = 30f;
     private const int FreeTicks = 60;
     private const float PassHeight = 5f;
     private const int GoneTicks = 60;
@@ -83,7 +84,7 @@ public sealed class FallMissile
 
                 return Event.None;
             case Phase.Homing:
-                return Home(kurt);
+                return Home(kurt, dt);
             default:
                 _ticks += ticks;
                 return _ticks > GoneTicks ? Event.Gone : Event.None;
@@ -92,7 +93,7 @@ public sealed class FallMissile
 
     /// <summary>Steers towards a point below Kurt (deeper the farther below him it is), until it's 5
     /// units above him.</summary>
-    private Event Home(Vector3 kurt)
+    private Event Home(Vector3 kurt, float dt)
     {
         var dz = kurt.Z - Position.Z;
         if (dz <= -PassHeight)
@@ -109,7 +110,10 @@ public sealed class FallMissile
             towards = Vector3.Normalize(towards);
         }
 
-        Velocity = (1f - Homing) * Velocity + Homing * Speed * towards;
+        // The original blends once per 1/30 s tick: blending once per frame made the steering far
+        // stiffer at 60-120 fps, so a missile that missed locked on and hovered by Kurt.
+        var keep = MathF.Pow(1f - Homing, dt * TicksPerSecond);
+        Velocity = keep * Velocity + (1f - keep) * Speed * towards;
         return Event.None;
     }
 }

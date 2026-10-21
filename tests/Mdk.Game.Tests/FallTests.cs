@@ -173,6 +173,31 @@ public class FallTests
     }
 
     [Fact]
+    public void MissilesHomeAsFastAt120FpsAsAt30()
+    {
+        // The homing blends once per 1/30 s tick (0.8 v + 0.2 aim): frames between ticks don't stiffen it.
+        // Free until tick 59, then 3 ticks of homing: mid-turn, where per-frame blending turned the
+        // 120 fps missile about 76 degrees off the 30 fps one (about 12 with the blend per tick).
+        const int Ticks = 62;
+        const int Frames = 4;
+        const float MaxDegrees = 20f;
+        var kurt = new Vector3(0f, 0f, 2000f);
+        var atTicks = new FallMissile(0f, new Random(1));
+        var atFrames = new FallMissile(0f, new Random(1));
+        for (var tick = 0; tick < Ticks; tick++)
+        {
+            atTicks.Update(1f / FallSim.TicksPerSecond, 1, kurt);
+            for (var frame = 0; frame < Frames; frame++)
+            {
+                atFrames.Update(1f / (FallSim.TicksPerSecond * Frames), frame == 0 ? 1 : 0, kurt);
+            }
+        }
+
+        var cos = Vector3.Dot(Vector3.Normalize(atTicks.Velocity), Vector3.Normalize(atFrames.Velocity));
+        Assert.True(float.RadiansToDegrees(MathF.Acos(Math.Clamp(cos, -1f, 1f))) < MaxDegrees);
+    }
+
+    [Fact]
     public void RadarBeamReachesItsSpot()
     {
         // Rings 1-3 halve the way to the spot (0x412af8), ring 4 is the spot itself.
