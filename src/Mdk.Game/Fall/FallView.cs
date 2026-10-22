@@ -66,6 +66,10 @@ public sealed class FallView
     private const float NearClearance = 5f;
     /// <summary>An explosion grows to twice its size over its frames.</summary>
     private const float ExplosionGrowth = 2f;
+    /// <summary>The explosion is pitched 90° (+0x13c), before its random yaw: the model is a fireball
+    /// thin along x, so this turns its face to the camera above. Unpitched, it was seen edge-on, a
+    /// sliver beside Kurt.</summary>
+    private static readonly Matrix4x4 ExplosionTurn = Matrix4x4.CreateRotationY(-MathF.PI / 2f);
     private const float ExplosionMinScale = 0.01f;
 
     private readonly Renderer _renderer;
@@ -343,7 +347,7 @@ public sealed class FallView
         {
             var frame = (int)explosion.Ticks;
             var scale = MathF.Max(ExplosionGrowth * frame / FallSim.ExplosionTicks, ExplosionMinScale);
-            var world = Matrix4x4.CreateScale(scale) * Matrix4x4.CreateRotationZ(explosion.Yaw) * Matrix4x4.CreateTranslation(explosion.Position);
+            var world = Matrix4x4.CreateScale(scale) * ExplosionTurn * Matrix4x4.CreateRotationZ(explosion.Yaw) * Matrix4x4.CreateTranslation(explosion.Position);
             Models.Draw("EXPLODE", world, textureFrame: frame, pass: Pass.OnTop);
         }
     }

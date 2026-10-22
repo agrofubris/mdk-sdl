@@ -97,7 +97,9 @@ public sealed partial class FallSim
         _brightness = HitBrightness;
         KurtPose = KurtAnimation.Hit;
         KurtFrame = 0f;
-        _explosions.Add(new Explosion(missile.Position, _random.NextSingle() * MathF.Tau));
+        // The explosion goes off on Kurt (0x411ee8 copies his position), not where the missile met
+        // his box, up to 4 units to his side.
+        _explosions.Add(new Explosion(KurtPosition, _random.NextSingle() * MathF.Tau));
         _missiles.Remove(missile);
         if (Health > 0)
         {

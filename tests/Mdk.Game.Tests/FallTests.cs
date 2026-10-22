@@ -157,6 +157,22 @@ public class FallTests
     }
 
     [Fact]
+    public void AHitExplodesOnKurt()
+    {
+        // The explosion goes off at Kurt's position, not where the missile met his box (up to 4
+        // units to his side), and follows him down.
+        var sim = NewFall();
+        Run(sim, 5f);
+        while (sim.Explosions.Count == 0 && sim.Time < FallSim.SteerTime)
+        {
+            sim.Update(Step, Vector2.Zero);
+        }
+
+        var explosion = Assert.Single(sim.Explosions);
+        Assert.Equal(sim.KurtPosition, explosion.Position);
+    }
+
+    [Fact]
     public void RadarBeamReachesItsSpot()
     {
         // Rings 1-3 halve the way to the spot (0x412af8), ring 4 is the spot itself.
