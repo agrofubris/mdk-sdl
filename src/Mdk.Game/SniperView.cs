@@ -24,6 +24,8 @@ public sealed class SniperView(Renderer renderer, ObjectView objects, LevelData 
     private const float RoundFieldWidth = 90f;
     private const float RoundNear = 0.5f;
     private const float Far = 20000f;
+    /// <summary>The stereo crosshair's aim fallback (nothing under it: the sky).</summary>
+    private const float CrosshairFar = 1000f;
 
     // The loaded rounds (0x41eb10): round i at time clip timer + i (shown between 0 and 3, not at 0),
     // between keys of position, angles (z, y, x: Rz(a) Ry(-b) Rx(c)) and scale (0x490e4c), seen from
@@ -68,6 +70,16 @@ public sealed class SniperView(Renderer renderer, ObjectView objects, LevelData 
         }
 
         hud.Sniper.Update(delta, new SniperHud(kurt.Scope.Zoom, kurt.Inventory.Ammo, kurt.Inventory.SelectedAmmo, cameras, Aim(kurt, scripts)));
+        if (renderer.StereoMode != Stereo.Off)
+        {
+            // Stereo: the crosshair is a world sprite at the aim point, so each eye sees it over
+            // the target (aiming lines up instead of splitting at the screen plane).
+            var eye = kurt.SniperEye;
+            var forward = kurt.SniperForward;
+            var aim = scripts.CrosshairPoint(eye, forward, CrosshairFar);
+            hud.Sniper.DrawAimCrosshair(aim, eye, forward, FollowCamera.UpOf(forward), kurt.Scope.Zoom);
+        }
+
         var (scale, left) = SniperOverlay.Placement(renderer.CanvasWidth);
         for (var i = 0; i < cameras.Count; i++)
         {

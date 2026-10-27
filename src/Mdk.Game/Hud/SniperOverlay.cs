@@ -2,6 +2,7 @@ using System.Drawing;
 using System.Numerics;
 using Mdk.Engine.Render;
 using Mdk.Formats;
+using Mdk.Game.Kurt;
 using Mdk.Game.Mods;
 using Mdk.Game.Scripts;
 
@@ -87,6 +88,8 @@ public sealed class SniperOverlay
 
     private sealed record Image(int Texture, Vector2 Size, Vector2 Hotspot);
 
+    private const int QuadVertices = 6;
+
     private readonly Renderer _renderer;
     private readonly int _palette;
     private readonly Palette _colours;
@@ -94,6 +97,8 @@ public sealed class SniperOverlay
     private readonly Image _frame;
     private readonly Image _mask;
     private readonly Image _cross;
+    /// <summary>The stereo crosshair's world quad (the canvas one would sit at the screen plane).</summary>
+    private readonly int _crossMesh;
     private readonly Image _gauge;
     private readonly Image _weapon;
     private readonly Image _digits;
@@ -120,6 +125,7 @@ public sealed class SniperOverlay
         _mask = Load(MaskImage, mask, Vector2.Zero);
         var cross = sprites.GetAnimation(Cross).GetFrame(0);
         _cross = Load(CanvasImages.FrameName(Cross, 0), cross.Image, new Vector2(cross.HotspotX, cross.HotspotY));
+        _crossMesh = renderer.CreateDynamicMesh(QuadVertices);
         _gauge = Load(GaugeImage, sprites.GetImage(GaugeImage), Vector2.Zero);
         _weapon = Load(WeaponImage, sprites.GetImage(WeaponImage), Vector2.Zero);
         _digits = Load(Digits, sprites.GetImage(Digits), Vector2.Zero);
@@ -264,6 +270,33 @@ public sealed class SniperOverlay
 
     /// <summary>Draws the sniper screen, and the health centred in the panel at <paramref name="panel"/>
     /// (pixels of the view) of <paramref name="panelSize"/>.</summary>
+    /// <summary>The stereo crosshair: the same image as a world sprite at the aim point (the
+    /// crosshair's hotspot there), sized by the scope's projection so it keeps its screen size, and
+    /// so each eye sees it over the target instead of at the screen plane. The camera's up keeps it
+    /// upright; the hotspot is <see cref="Crosshair"/> here too.</summary>
+    public void DrawAimCrosshair(Vector3 aim, Vector3 eye, Vector3 forward, Vector3 up, float zoom)
+    {
+        var distance = MathF.Max(Vector3.Dot(aim - eye, forward), 0.1f);
+        // World units per crosshair pixel at that distance (the scope's focal is 384 pixels of
+        // the 480-high screen; its zoom shrinks them).
+        var pixel = distance * zoom / Scope.Focal;
+        var right = Vector3.Normalize(Vector3.Cross(forward, up));
+        var (width, height) = (_cross.Size.X, _cross.Size.Y);
+        var (hotspotX, hotspotY) = (_cross.Hotspot.X, _cross.Hotspot.Y);
+        Vector3 Corner(float x, float y) => aim + right * ((x - hotspotX) * pixel) + up * ((hotspotY - y) * pixel);
+        Span<Vertex> quad =
+        [
+            new(Corner(0f, 0f), new Vector2(0f, 0f)), new(Corner(width, 0f), new Vector2(1f, 0f)),
+            new(Corner(width, height), new Vector2(1f, 1f)), new(Corner(0f, 0f), new Vector2(0f, 0f)),
+            new(Corner(width, height), new Vector2(1f, 1f)), new(Corner(0f, height), new Vector2(0f, 1f)),
+        ];
+        _renderer.UpdateMesh(_crossMesh, quad);
+        var shading = _renderer.Lighting != null ? Shading.Sprite : Shading.Original;
+        var material = new Material(_cross.Texture, _palette, Vector4.One, 1, Pass.OnTopBlended, Shading: shading);
+        _renderer.Prepare(material);
+        _renderer.Draw(_crossMesh, 0, QuadVertices, material);
+    }
+
     public void Draw(float canvasWidth, int health, Blink blink, Vector2 panel, Vector2 panelSize)
     {
         if (_shown is not { } hud)
@@ -283,7 +316,12 @@ public sealed class SniperOverlay
         DrawCameras(screen, hud);
         DrawIris(screen);
         screen.Image(_mask, View);
-        screen.Image(_cross, View + Crosshair - _cross.Hotspot);
+        if (_renderer.StereoMode == Stereo.Off)
+        {
+            // In stereo the crosshair is a world sprite at the aim point (DrawAimCrosshair), so
+            // each eye sees it over the target; the canvas one would sit at the screen plane.
+            screen.Image(_cross, View + Crosshair - _cross.Hotspot);
+        }
 
         var fraction = ZoomFraction(hud.Zoom);
         DrawNumber(screen, (int)MathF.Round(Percent * fraction), View + ZoomDigits);

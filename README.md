@@ -99,7 +99,10 @@ Notes: the scene is rasterized twice, so stereo costs more GPU time (fine on a d
 with the enhanced look and the HD textures). Row-interlacing is drawn 1:1 with the window: keep
 the window at the display's native resolution (and 100% scaling) on a row-interleaved display.
 The menus, the HUD and the videos are drawn whole in both eyes (zero parallax), so they stay
-readable. Leia SR is Windows/D3D12 only; on any other backend the mode falls back to the plain
+readable; the sniper crosshair is the exception: in the stereo modes it is drawn in the world at
+the aim point (the locked target's near face, else the surface, else far), so each eye sees it
+over the target and aiming lines up instead of splitting at the screen plane. Leia SR is
+Windows/D3D12 only; on any other backend the mode falls back to the plain
 side-by-side pair.
 
 ### Leia SR (this fork)

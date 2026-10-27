@@ -43,6 +43,9 @@ public enum Pass
     Blended,
     /// <summary>Opaque, both faces, over the scene without depth (the fall's explosions).</summary>
     OnTop,
+    /// <summary>Blended by alpha, both faces, over the scene without depth (stereo's aim crosshair:
+    /// always visible, at the aim point's depth).</summary>
+    OnTopBlended,
     /// <summary>The 2D canvas over the scene (HUD, menus): blended, no depth.</summary>
     Overlay,
 }
@@ -561,7 +564,7 @@ public sealed unsafe partial class Renderer : IDisposable
         attributes[1] = new SDL_GPUVertexAttribute { location = 1, format = SDL_GPUVertexElementFormat.SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2, offset = (uint)sizeof(Vector3) };
         attributes[2] = new SDL_GPUVertexAttribute { location = 2, format = SDL_GPUVertexElementFormat.SDL_GPU_VERTEXELEMENTFORMAT_UBYTE4_NORM, offset = (uint)(sizeof(Vector3) + sizeof(Vector2)) };
 
-        var blended = pass is Pass.Blended or Pass.Overlay;
+        var blended = pass is Pass.Blended or Pass.OnTopBlended or Pass.Overlay;
         var colourTarget = new SDL_GPUColorTargetDescription
         {
             format = format,
@@ -602,7 +605,7 @@ public sealed unsafe partial class Renderer : IDisposable
             depth_stencil_state = new SDL_GPUDepthStencilState
             {
                 compare_op = SDL_GPUCompareOp.SDL_GPU_COMPAREOP_LESS_OR_EQUAL,
-                enable_depth_test = geometry == Geometry.Mesh && pass is not (Pass.Overlay or Pass.OnTop),
+                enable_depth_test = geometry == Geometry.Mesh && pass is not (Pass.Overlay or Pass.OnTop or Pass.OnTopBlended),
                 enable_depth_write = geometry == Geometry.Mesh && !blended && pass != Pass.OnTop,
             },
             target_info = new SDL_GPUGraphicsPipelineTargetInfo
