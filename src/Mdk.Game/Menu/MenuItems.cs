@@ -54,6 +54,9 @@ public sealed class MenuItems
     /// <summary>The baseline is 26 below the row's top.</summary>
     private const float Baseline = 26f / 36f;
     private const float SmallFontRow = 24f;
+    /// <summary>A touch screen's rows grow towards this height (millimetres), at most by the factor.</summary>
+    private const float TouchRowMm = 10f;
+    private const float MaxEnlargement = 1.4f;
     private const float Small = 0.65f;
     /// <summary>0.35 x 0.2 per tick.</summary>
     private const float GrowRate = 0.07f * 30f;
@@ -96,6 +99,11 @@ public sealed class MenuItems
     private HdJob? _job;
     private Entry? _jobLine;
     private Entry? _jobBack;
+
+    /// <summary>The rows' height as the original's (it picks the font), and the texts' scale on
+    /// it (1, larger on a touch screen's grown rows).</summary>
+    private float _originalRow;
+    private float _textScale = 1f;
 
     public Align Alignment = Align.Centre;
     /// <summary>The row the first item stands in.</summary>
@@ -352,9 +360,11 @@ public sealed class MenuItems
             return;
         }
 
-        var row = RowFor(_entries.Count);
-        var font = UsesBigFont(row) ? _fonts.Big : _fonts.Small;
-        var width = _entries.Max(e => font.Width(Encoding.ASCII.GetBytes(e.Text)));
+        _originalRow = RowFor(_entries.Count);
+        var row = RowFor(_entries.Count, FirstRow, Enlargement());
+        _textScale = row / _originalRow;
+        var font = UsesBigFont(_originalRow) ? _fonts.Big : _fonts.Small;
+        var width = _entries.Max(e => font.Width(Encoding.ASCII.GetBytes(e.Text))) * _textScale;
         var x = Alignment == Align.Left ? 0f : (ScreenView.Size.X - width) / 2f;
         for (var i = 0; i < _entries.Count; i++)
         {
@@ -364,6 +374,39 @@ public sealed class MenuItems
 
     /// <summary>The height of a row for a page of <paramref name="entries"/> items: 36, less when they don't fit.</summary>
     public static float RowFor(int entries) => MathF.Min(Row, (ScreenView.Size.Y - Top * 2f) / Math.Max(entries, 1));
+
+    /// <summary>The height of a row grown by <paramref name="enlargement"/> as far as the page's
+    /// rows (from <paramref name="firstRow"/>) fit, never below <see cref="RowFor(int)"/>.
+    /// <code>
+    ///   phone, 6 items: min(36 × 1.4, 350 / 6) = 50.4
+    /// </code></summary>
+    public static float RowFor(int entries, int firstRow, float enlargement) =>
+        MathF.Max(RowFor(entries), MathF.Min(Row * enlargement, (ScreenView.Size.Y - Top * 2f) / Math.Max(entries + firstRow, 1)));
+
+    /// <summary>How much a touch screen's rows grow: to <see cref="TouchRowMm"/> from a row of
+    /// <paramref name="rowMm"/>, at most <see cref="MaxEnlargement"/> (1: no touch screen, or an
+    /// unknown display).
+    /// <code>
+    ///   phone  1080 px, 16.5 px/mm: a row of 108 px is 6.5 mm ─► × 1.4
+    ///   tablet 1800 px, 12.6 px/mm: 173 px, 13.7 mm ─► × 1
+    /// </code></summary>
+    public static float Enlargement(float rowMm) =>
+        rowMm > 0f ? Math.Clamp(TouchRowMm / rowMm, 1f, MaxEnlargement) : 1f;
+
+    /// <summary>The growth of this window's rows (<see cref="Enlargement(float)"/>).</summary>
+    private float Enlargement()
+    {
+        var window = _ui.Window;
+        var unitsPerMm = window.UnitsPerMm;
+        if (!window.HasTouchScreen || unitsPerMm <= 0f)
+        {
+            return 1f;
+        }
+
+        // A view unit in window units: the view's scale on the canvas, the canvas on the window.
+        var unit = _ui.View.Scale * window.Size.Height / Renderer.CanvasHeight;
+        return Enlargement(Row * unit / unitsPerMm);
+    }
 
     /// <summary>Rows below 24 use the small font.</summary>
     public static bool UsesBigFont(float row) => row >= SmallFontRow;
@@ -381,14 +424,15 @@ public sealed class MenuItems
         // A press may have just opened another page: its items have no rows yet.
         Layout();
         var row = _entries[0].Area.Height;
-        var font = UsesBigFont(row) ? _fonts.Big : _fonts.Small;
+        var font = UsesBigFont(_originalRow) ? _fonts.Big : _fonts.Small;
         var baseline = MathF.Round(row * Baseline);
         foreach (var entry in _entries)
         {
             var text = Encoding.ASCII.GetBytes(entry.Text);
-            var x = entry.Area.X + (entry.Area.Width - font.Width(text) * entry.Grow) / 2f;
+            var grow = entry.Grow * _textScale;
+            var x = entry.Area.X + (entry.Area.Width - font.Width(text) * grow) / 2f;
             var alpha = entry.Disabled ? DisabledAlpha : 1f;
-            _ui.View.Text(font, text, MathF.Round(x), entry.Area.Y + baseline, entry.Grow, alpha);
+            _ui.View.Text(font, text, MathF.Round(x), entry.Area.Y + baseline, grow, alpha);
         }
     }
 

@@ -114,6 +114,8 @@ Vulkan with the SPIR-V shaders.
   → window units per mm): 11 mm buttons, 3 mm apart, at most the 15 % of the height a phone has;
   inside the window's safe area. `TouchView` stretches rounded masks (9 parts: corners kept),
   a see-through fill (brighter while held), a thin outline, the label scaled to the button.
+- The menus' rows grow on a touch screen towards 10 mm (at most × 1.4, as far as the page fits;
+  `MenuItems.RowFor`, `Enlargement`): a phone's 6.5 mm rows become 9 mm; tablets' are big enough.
 
 ## Rendering (original look)
 
