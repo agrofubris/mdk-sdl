@@ -174,6 +174,27 @@ public class DisplayTests
         Assert.Equal(GpuBackend.Vulkan, read.Backend);
     }
 
+    [Theory]
+    [InlineData(2880u, 1800u, 63)]
+    [InlineData(2344u, 2156u, 64)]
+    [InlineData(2400u, 1080u, 89)]
+    [InlineData(1920u, 1080u, 100)]
+    [InlineData(1280u, 720u, 100)]
+    [InlineData(7680u, 4320u, 50)]
+    [InlineData(0u, 0u, 100)]
+    public void AutoRenderScaleAimsAt1080p(uint width, uint height, int percent)
+    {
+        // A tablet's 5.2 MP drawn as about 2.1 MP; never above the window's, never below half.
+        Assert.Equal(percent, Renderer.AutoPercent(width, height));
+    }
+
+    [Fact]
+    public void AutoRenderScaleIsSaved()
+    {
+        var read = Settings.Parse(new Settings { RenderScale = Renderer.AutoScale }.Format());
+        Assert.Equal(Renderer.AutoScale, read.RenderScale);
+    }
+
     [Fact]
     public void BadDisplaySettingsKeepDefaults()
     {

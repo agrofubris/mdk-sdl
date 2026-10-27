@@ -887,7 +887,8 @@ public sealed unsafe partial class Renderer : IDisposable
         }
 
         _presenting = swapchain != null ? presenting : null;
-        EnsureTargets(shown ? Scaled(width) : width, shown ? Scaled(height) : height);
+        var percent = PercentFor(width, height);
+        EnsureTargets(shown ? Scaled(width, percent) : width, shown ? Scaled(height, percent) : height);
         QueueCanvas();
         QueueStream();
         UploadDynamic(commands);
@@ -1001,16 +1002,40 @@ public sealed unsafe partial class Renderer : IDisposable
     }
 
     /// <summary>The render scales (%): the frame is drawn at this share of the window's size, then
-    /// stretched to it (below 100: faster, blurrier; above: supersampled).</summary>
-    public static readonly int[] Scales = [50, 100, 150, 200];
+    /// stretched to it (below 100: faster, blurrier; above: supersampled); Auto picks one by the
+    /// window's pixels (<see cref="AutoPercent"/>).</summary>
+    public static readonly int[] Scales = [AutoScale, 50, 100, 150, 200];
     public const int FullScale = 100;
+    public const int AutoScale = 0;
+    /// <summary>Auto's frame: about a 1920 x 1080's pixels, at least half the window's sides.</summary>
+    private const float AutoPixels = 1920f * 1080f;
+    private const int MinAutoScale = 50;
     /// <summary>The largest texture side every backend takes.</summary>
     private const uint MaxTargetSide = 16384;
 
     /// <summary>The render scale (%) of a shown window; a hidden one draws <see cref="HiddenSize"/>.</summary>
     public int RenderScale { get; set; } = FullScale;
 
-    private uint Scaled(uint side) => Math.Clamp(side * (uint)RenderScale / FullScale, 1u, MaxTargetSide);
+    private uint Scaled(uint side, int percent) => Math.Clamp(side * (uint)percent / FullScale, 1u, MaxTargetSide);
+
+    /// <summary>The render scale (%) Auto picks for a window: its frame about 1080p's pixels, never
+    /// above the window's own nor below half its sides.
+    /// <code>
+    ///   2880 x 1800 tablet: √(2.07 MP / 5.18 MP) = 63 %   2400 x 1080 phone: 89 %   1920 x 1080: 100 %
+    /// </code></summary>
+    public static int AutoPercent(uint width, uint height)
+    {
+        var pixels = (float)width * height;
+        if (pixels <= 0f)
+        {
+            return FullScale;
+        }
+
+        return Math.Clamp((int)(FullScale * MathF.Sqrt(AutoPixels / pixels)), MinAutoScale, FullScale);
+    }
+
+    /// <summary>The render scale (%) for a window of this size.</summary>
+    private int PercentFor(uint width, uint height) => RenderScale == AutoScale ? AutoPercent(width, height) : RenderScale;
 
     /// <summary>The present mode in use (SDL starts with VSync).</summary>
     private VSync _vsync = VSync.On;

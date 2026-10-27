@@ -42,7 +42,8 @@ Each layer talks only to the one below it.
 - Display (`Platform/Display.cs`, `Window.Apply`): windowed at a size, fullscreen on the desktop,
   or exclusive (`SDL_SetWindowFullscreenMode` with the display's mode of that size at its highest
   refresh); applied on a change only, never to a hidden window (tests: always 1280 x 960).
-  The renderer draws at the render scale of the swapchain's size and blits (linear when scaled);
+  The renderer draws at the render scale of the swapchain's size and blits (linear when scaled;
+  Auto, Android's default: about 1080p's pixels, 50-100 %, `Renderer.AutoPercent`);
   VSync is the swapchain's present mode (VSYNC, IMMEDIATE, MAILBOX; falls back to one the window
   supports); the frame limiter sleeps with `SDL_DelayPrecise`.
 - `Mdk.Formats` finds the game: `MDK_DATA_DIR`, `mdk` in `mdk_paths.cfg` next to the program

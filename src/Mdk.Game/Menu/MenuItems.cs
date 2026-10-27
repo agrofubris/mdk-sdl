@@ -506,7 +506,7 @@ public sealed class MenuItems
                     AddOption(ResolutionText, ResolutionStep);
                     break;
                 case DisplayItem.Scale:
-                    AddOption(() => $"Render scale: {s.RenderScale}%",
+                    AddOption(() => s.RenderScale == Renderer.AutoScale ? "Render scale: Auto" : $"Render scale: {s.RenderScale}%",
                         step => s.RenderScale = Renderer.Scales[Wrap(Array.IndexOf(Renderer.Scales, s.RenderScale) + step, Renderer.Scales.Length)]);
                     break;
                 case DisplayItem.VSync:

@@ -61,8 +61,9 @@ public sealed class Settings
     public Fullscreen Fullscreen = Fullscreen.Off;
     public Resolution WindowSize = DefaultWindow;
     public Resolution? ExclusiveSize;
-    /// <summary>The frame's size, % of the window's (<see cref="Renderer.Scales"/>).</summary>
-    public int RenderScale = Renderer.FullScale;
+    /// <summary>The frame's size, % of the window's (<see cref="Renderer.Scales"/>); Android's
+    /// default is Auto (a frame of about 1080p's pixels: big tablets' GPUs can't fill theirs).</summary>
+    public int RenderScale = OperatingSystem.IsAndroid() ? Renderer.AutoScale : Renderer.FullScale;
     public VSync VSync = VSync.On;
     /// <summary>Frames a second at most with VSync off or adaptive (<see cref="FrameLimiter.Limits"/>).</summary>
     public int FrameLimit = FrameLimiter.Off;
