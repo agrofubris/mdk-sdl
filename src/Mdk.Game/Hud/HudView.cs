@@ -19,7 +19,8 @@ public readonly record struct HudState(
     int SuperChainGun,
     int BarHealth,
     int BarMax,
-    BomberSight? Bomber = null);
+    BomberSight? Bomber = null,
+    float TimeLeft = 1f);
 
 /// <summary>The in-game HUD, drawn like the original (0x41e128) on the 360-high canvas: the health
 /// in the <c>SC_STAT</c> panel (bottom right, <c>SNIP_TXT</c> digits, blinking at 20 or less,
@@ -73,6 +74,13 @@ public sealed class HudView
     private readonly Vector4 _barFill;
     private readonly Vector4 _barFrame;
     private int _blink;
+    // The mission timer: the panel's indices with the time gone stamped in, up to this angle.
+    private readonly Texture _fullPanel;
+    private readonly Texture _emptyPanel;
+    private readonly byte[] _timerPanel;
+    private float _timerAngle;
+    /// <summary>The ring is stamped again once the time gone moved this far (0x420830: a degree).</summary>
+    private const float TimerStep = MathF.PI / 180f;
 
     public Messages Messages { get; }
     /// <summary>Sniper mode's screen, which replaces the HUD while it shows.</summary>
@@ -87,6 +95,9 @@ public sealed class HudView
         _colours = palette;
         _mods = mods;
         _panel = Load(Panel, sprites.GetImage(Panel), 0, 0);
+        _fullPanel = sprites.GetImage(Panel);
+        _emptyPanel = sprites.GetImage(EmptyPanel);
+        _timerPanel = (byte[])_fullPanel.Indices.Clone();
         _skull = Load(Skull, sprites.GetImage(Skull), 0, 0);
         _digits = Load(Digits, sprites.GetImage(Digits), 0, 0);
         var pickups = sprites.GetAnimation(Pickups);
@@ -134,6 +145,7 @@ public sealed class HudView
     }
 
     private const string Panel = "SC_STAT";
+    private const string EmptyPanel = "SC_BSTAT";
     private const string Skull = "SKULL";
     private const string Digits = "SNIP_TXT";
     private const string Pickups = "PICKUPS";
@@ -169,6 +181,7 @@ public sealed class HudView
 
         // Health panel at the bottom right; the number blinks when health is low.
         var panel = new Vector2(width - (_panel.Size.X + PanelRight), height - (_panel.Size.Y + PanelBottom));
+        UpdateTimer(state.TimeLeft);
         DrawImage(_panel, panel, Vector4.One);
         if (state.Health > LowHealth || _blink < BlinkOn)
         {
@@ -202,6 +215,28 @@ public sealed class HudView
         {
             _renderer.FillRect(new RectangleF(0f, 0f, width, height), new Vector4(1f, 1f, 1f, MathF.Min(state.WhiteFlash / FlashMax, 1f)));
         }
+    }
+
+    /// <summary>The mission timer's ring empties as the time runs out (0x420830): the time gone is
+    /// stamped in once it moved a degree. Less gone than stamped (a game loaded): the full ring again.</summary>
+    private void UpdateTimer(float timeLeft)
+    {
+        var angle = (1f - timeLeft) * MathF.Tau;
+        if (angle < _timerAngle)
+        {
+            _fullPanel.Indices.CopyTo(_timerPanel, 0);
+            _timerAngle = 0f;
+            _renderer.UpdateTexture(_panel.Texture, _fullPanel.Width, _fullPanel.Height, _timerPanel);
+        }
+
+        if (angle <= _timerAngle + TimerStep)
+        {
+            return;
+        }
+
+        TimerRing.Wipe(_timerPanel, _emptyPanel, _timerAngle, angle);
+        _timerAngle = angle;
+        _renderer.UpdateTexture(_panel.Texture, _fullPanel.Width, _fullPanel.Height, _timerPanel);
     }
 
     private void DrawImage(Image image, Vector2 at, Vector4 tint) =>

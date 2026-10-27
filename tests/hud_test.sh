@@ -3,6 +3,8 @@
 # every frame): 3 seconds after the start, with Kurt still and firing, the super chain gun's
 # slot and its ticks are still drawn at the bottom left. Each run is compared with the same run
 # without the pickup.
+# The mission timer (0x420830): with 3/4 of the time gone, SC_BSTAT's black covers the panel's
+# ring counter-clockwise from the right (0x420d88), all but its bottom right quarter.
 # Run from the project folder after `dotnet build`: sh tests/hud_test.sh
 # No window: the game draws off screen and never takes the focus.
 export MDK_HIDDEN=1
@@ -51,6 +53,39 @@ inventory_shown mdk_hud_gatt.bmp mdk_hud_none.bmp; check "inventory shown while 
 shot mdk_hud_gatt_fire.bmp --give=SW_GATT --fire
 shot mdk_hud_none_fire.bmp --fire
 inventory_shown mdk_hud_gatt_fire.bmp mdk_hud_none_fire.bmp; check "inventory shown while firing" $?
+
+# timer_shot <file> <ticks left>: a save of the start with that time left, loaded.
+timer_shot() {
+	timeout 60 "$MDK" --level=3 --mute --wait=1 --snapshot=TIMER --screenshot="$DIR/$1" > /dev/null 2>&1
+	sed -i "s/\"town_ticks\":[0-9]*/\"town_ticks\":$2/" "$MDK_USER_DIR/saves/TIMER.sav"
+	rm -f "$DIR/$1"
+	timeout 60 "$MDK" --load=TIMER --mute --wait=1 --screenshot="$DIR/$1" > /dev/null 2>&1
+}
+
+# timer_emptied <late> <early>: the panel's top left quarter changed, not its bottom right.
+timer_emptied() {
+	python - "$DIR/$1" "$DIR/$2" <<'EOF'
+import sys
+from PIL import Image, ImageChops, ImageStat
+late = Image.open(sys.argv[1]).convert("L")
+early = Image.open(sys.argv[2]).convert("L")
+w, h = late.size
+s = h / 360
+left, top, right, bottom = w - 100 * s, h - 73 * s, w - 16 * s, h - 10 * s
+mid_x, mid_y = (left + right) / 2, (top + bottom) / 2
+def diff(box):
+	box = tuple(int(v) for v in box)
+	return ImageStat.Stat(ImageChops.difference(late.crop(box), early.crop(box))).mean[0]
+emptied = diff((left, top, mid_x, mid_y))
+kept = diff((mid_x, mid_y, right, bottom))
+print("  timer: top left difference %.1f, bottom right %.1f" % (emptied, kept))
+sys.exit(0 if emptied > 5 and kept < 1 else 1)
+EOF
+}
+
+timer_shot mdk_hud_timer_early.bmp 53900
+timer_shot mdk_hud_timer_late.bmp 13500
+timer_emptied mdk_hud_timer_late.bmp mdk_hud_timer_early.bmp; check "timer ring emptied" $?
 
 [ $FAILED = 0 ] && echo PASSED && exit 0
 echo FAILED

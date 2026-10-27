@@ -921,7 +921,7 @@ public sealed class Viewer : IScreen
 
         var (barHealth, barMax) = scripts.GetBar();
         return new HudState(kurt.Health, kurt.HurtFlash, kurt.WhiteFlash, kurt.Current == Kurt.Kurt.State.Dead,
-            slots, inventory.Selected, inventory.SuperChainGun, barHealth, barMax, scripts.Rides.Bomber?.Shown);
+            slots, inventory.Selected, inventory.SuperChainGun, barHealth, barMax, scripts.Rides.Bomber?.Shown, scripts.TownTimeLeft);
     }
 
     /// <summary>Lays out the models before they're drawn: each arena's own, and those of the objects
