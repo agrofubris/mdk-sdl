@@ -192,6 +192,17 @@ public class FallTests
         Assert.True(FallView.NearCamera(new Vector3(0f, 0f, 1003f), camera));
     }
 
+    [Fact]
+    public void ChutesOverTheCameraAreNotDrawn()
+    {
+        // The canopy reaches 24.3 units above the chute's origin, so its top must stay clear of the
+        // camera; nearer, the near plane cuts its lines into warped slivers.
+        var camera = new Vector3(0f, 0f, 1000f);
+        Assert.True(FallView.ChuteVisible(new Vector3(0f, 0f, 960f), camera));
+        Assert.False(FallView.ChuteVisible(new Vector3(0f, 0f, 980f), camera));
+        Assert.False(FallView.ChuteVisible(new Vector3(0f, 0f, 1010f), camera));
+    }
+
     [Theory]
     [InlineData(0, 16)]
     [InlineData(3, 18)]

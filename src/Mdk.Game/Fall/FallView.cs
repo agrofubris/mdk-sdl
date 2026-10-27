@@ -61,6 +61,8 @@ public sealed class FallView
     /// <summary>Kurt lies face down (+0x4c yaw 90°, +0x13c pitch −90°).</summary>
     private static readonly Matrix4x4 KurtTurn = Matrix4x4.CreateRotationY(MathF.PI / 2f) * Matrix4x4.CreateRotationZ(MathF.PI / 2f);
     private const float ChuteAbove = 2f;
+    /// <summary>The chute's canopy reaches this far above its origin (its model's +z).</summary>
+    private const float ChuteHeight = 24.3f;
     /// <summary>Models and trails nearer below the camera aren't drawn: a missile past Kurt (5 units
     /// above him, 5 below the camera) or a pickup dropped above him would fill the view.</summary>
     private const float NearClearance = 5f;
@@ -336,7 +338,7 @@ public sealed class FallView
             var turn = Matrix4x4.CreateRotationZ(float.DegreesToRadians(pickup.Yaw));
             Models.Draw(pickup.Name, turn * Matrix4x4.CreateTranslation(pickup.Position));
             var chute = pickup.Position + new Vector3(0f, 0f, ChuteAbove);
-            if (pickup.Chute && !NearCamera(chute, camera))
+            if (pickup.Chute && ChuteVisible(chute, camera))
             {
                 Models.Draw("CHUTE", turn * Matrix4x4.CreateTranslation(chute));
             }
@@ -354,6 +356,10 @@ public sealed class FallView
 
     /// <summary>Whether a model or trail point is too near the camera to draw.</summary>
     public static bool NearCamera(Vector3 position, Vector3 camera) => position.Z > camera.Z - NearClearance;
+
+    /// <summary>Whether a chute is far enough below the camera to draw: its canopy reaches 24 units
+    /// above the pickup, so nearer, the near plane cuts its canopy and lines into warped slivers.</summary>
+    public static bool ChuteVisible(Vector3 chute, Vector3 camera) => chute.Z + ChuteHeight < camera.Z - NearClearance;
 
     /// <summary>Points the model's +y along a direction, z up (0x4123e8).</summary>
     private static Matrix4x4 Orient(Vector3 direction)
