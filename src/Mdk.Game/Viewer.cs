@@ -269,7 +269,7 @@ public sealed class Viewer : IScreen
         _soak = options.Soak != null ? new SoakTest(level, _space, options.Route, options.Wait) : null;
         _fly = new FreeCamera { Pitch = options.Pitch };
         _flying = options.Fly;
-        _pause = new PauseMenu(ui);
+        _pause = new PauseMenu(ui, new PauseMenu.Quick(OpenSnapshot, QuickLoad, CanQuickLoad));
         Console.WriteLine($"Level {options.Level}: {level.Arenas.Count} arenas, {_view.TriangleCount} triangles, {_view.OutlineCount} outlines, loaded in {loading.ElapsedMilliseconds} ms");
         var enabled = ui.Mods.Enabled(ui.Settings).Count;
         if (mods != null && enabled > 0)
@@ -385,7 +385,9 @@ public sealed class Viewer : IScreen
             var paused = _pause.Update(elapsed);
             _renderer.Present(SceneView(), Background(), screenshot);
             CaptureMouse();
-            return paused;
+
+            // Its Quick load reloads at once.
+            return paused == Event.None ? _next : paused;
         }
 
         if (input.WasPressed(MenuKey.Back) && _scripts.Strike is not { Active: true })
@@ -830,6 +832,9 @@ public sealed class Viewer : IScreen
         _next = save.Kind == SaveKind.BeforeLevel ? Event.Briefing : Event.Play;
     }
 
+    /// <summary>Whether quick load has a save to load (the pause menu's Quick load).</summary>
+    private bool CanQuickLoad() => SaveGames.In(_ui.UserFolder).QuickSlot(_state.QuickSlot) != null;
+
     /// <summary>A message of the port's own on the HUD (zooming, ahead of the others), also printed.</summary>
     private void Notify(string text)
     {
@@ -863,10 +868,11 @@ public sealed class Viewer : IScreen
         return _state.Save(SaveKind.Snapshot) with { Health = _kurt.Health, State = json };
     }
 
-    /// <summary>The mouse looks around again once the pause menu closes.</summary>
+    /// <summary>The mouse looks around again once the pause menu closes (not under F2's prompt,
+    /// which the menu's Quick save opens).</summary>
     private void CaptureMouse()
     {
-        if (!_pause.Open)
+        if (!_pause.Open && _snapshotPrompt == null)
         {
             _ui.Window.CaptureMouse(_test ? Capture.Off : Capture.On);
         }

@@ -296,7 +296,7 @@ Enter or E to use the item, Tab, [ ] or the mouse wheel to select it (or 1-5), t
 (the mouse wheel or PageUp/PageDown zoom, Tab or [ ] select the ammo), F1 for the flying camera (E/Q to go up and
 down), F2 for a quick save (the original's full save: the name is asked, the level's number
 offered), F9 for a quick load (this session's last F2 save, else the newest save; "Nothing to
-load" if none), F3 for the debug overlay, the key left of 1 for the console, F12 for a screenshot, Esc for the pause menu (resume, options, main menu, quit; it names the quick keys). Saving
+load" if none), F3 for the debug overlay, the key left of 1 for the console, F12 for a screenshot, Esc for the pause menu (resume, quick save, quick load (greyed out with no save), options, main menu, quit; it names the quick keys). Saving
 and loading show "Game saved", "Game loaded" or "Can't save now" (sniper mode, rides) on the HUD;
 outside a level the quick keys do nothing. The bindings
 can be changed in Options, Controls (to any key, mouse button or wheel direction). In the menus: the arrows or the mouse, Enter or a click, Esc

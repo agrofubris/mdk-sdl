@@ -5,11 +5,15 @@ using Mdk.Game.Flow;
 
 namespace Mdk.Game.Menu;
 
-/// <summary>The pause menu (Esc during the game; pause_menu.gd): resume, options, back to the main
-/// menu, quit, over the dimmed game. The game waits while it's open. Its first page names the
-/// quick save and quick load keys at the bottom (small font).</summary>
+/// <summary>The pause menu (Esc during the game; pause_menu.gd): resume, quick save, quick load,
+/// options, back to the main menu, quit, over the dimmed game. The game waits while it's open. Its
+/// first page names the quick save and quick load keys at the bottom (small font).</summary>
 public sealed class PauseMenu
 {
+    /// <summary>The level's quick save and quick load (what the keys do), and whether there's a
+    /// save to load (Quick load is greyed out otherwise). The fall has none.</summary>
+    public sealed record Quick(Action Save, Action Load, Func<bool> CanLoad);
+
     private enum Page { Main, Options }
 
     private const float ClickGain = 0.5f;
@@ -20,14 +24,16 @@ public sealed class PauseMenu
     private readonly Ui _ui;
     private readonly Fonts _fonts;
     private readonly MenuItems _items;
+    private readonly Quick? _quick;
     private Event _next = Event.None;
     private Page _page;
 
     public bool Open { get; private set; }
 
-    public PauseMenu(Ui ui)
+    public PauseMenu(Ui ui, Quick? quick = null)
     {
         _ui = ui;
+        _quick = quick;
         _fonts = new Fonts(ui.Renderer, ui.Fti, mods: ui.CanvasMods());
         _items = new MenuItems(ui, _fonts, ClickGain);
     }
@@ -77,6 +83,8 @@ public sealed class PauseMenu
         _items.Clear();
         _page = Page.Main;
         _items.AddItem("Resume", Resume);
+
+        AddQuick();
         _items.AddItem("Options", () =>
         {
             _page = Page.Options;
@@ -88,9 +96,34 @@ public sealed class PauseMenu
         Console.WriteLine($"Hint: {KeysHint(_ui.Input)}");
     }
 
+    /// <summary>Quick save and quick load: the menu closes first, quick save's name prompt and the
+    /// loaded level take the screen.</summary>
+    private void AddQuick()
+    {
+        if (_quick is not { } quick)
+        {
+            return;
+        }
+
+        _items.AddItem("Quick save", () => ResumeThen(quick.Save));
+        if (!quick.CanLoad())
+        {
+            _items.AddDisabled("Quick load");
+            return;
+        }
+
+        _items.AddItem("Quick load", () => ResumeThen(quick.Load));
+    }
+
     private void Resume()
     {
         _items.Clear();
         Open = false;
+    }
+
+    private void ResumeThen(Action quick)
+    {
+        Resume();
+        quick();
     }
 }
