@@ -2,7 +2,7 @@
 
 ![Status: 1.0](https://img.shields.io/badge/status-1.0-brightgreen)
 ![Progress: about 99%](https://img.shields.io/badge/progress-~99%25-brightgreen)
-[![Release](https://img.shields.io/github/v/release/nemo22/mdk-sdl?include_prereleases)](https://github.com/nemo22/mdk-sdl/releases)
+[![Release](https://img.shields.io/github/v/release/agrofubris/mdk-sdl?include_prereleases)](https://github.com/agrofubris/mdk-sdl/releases)
 ![.NET 10](https://img.shields.io/badge/.NET-10-512bd4?logo=dotnet&logoColor=white)
 ![SDL3](https://img.shields.io/badge/SDL-3-blue)
 
@@ -20,6 +20,16 @@ original's box sweeps.
 > textures, models, sounds, music or videos. It reads them at run time from your own installed
 > copy of the original game (available for example on GOG). Without the original game data the
 > port won't run.
+
+> [!NOTE]
+> **Stereo fork** ([agrofubris](https://github.com/agrofubris)): the stereo 3D modes were merged
+> into [nautilusbits/mdk-sdl](https://github.com/nautilusbits/mdk-sdl)
+> ([#2](https://github.com/nautilusbits/mdk-sdl/pull/2), credited below) and this fork tracks
+> upstream `main`, adding the **Leia SR** output and a **depth-aware sniper crosshair**.
+> **Download this fork's Windows builds from its
+> [releases](https://github.com/agrofubris/mdk-sdl/releases)**; the
+> [upstream releases](https://github.com/nautilusbits/mdk-sdl/releases) have the base port for
+> Linux, macOS and Android.
 
 ## Features
 
