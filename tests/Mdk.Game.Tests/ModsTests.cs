@@ -260,4 +260,55 @@ public class ModsTests : IDisposable
 
         Assert.Equal(["WALL"], images.Found);
     }
+
+    /// <summary>Straight alpha becomes premultiplied, rounded: (c × a + 127) / 255; opaque
+    /// pixels keep their colour, clear ones lose it.</summary>
+    [Fact]
+    public void PremultipliesRounded()
+    {
+        byte[] alphas = [Opaque, 254, 128, 1, 0];
+        var rgba = new byte[256 * alphas.Length * Rgba];
+        for (var i = 0; i < rgba.Length / Rgba; i++)
+        {
+            (rgba[i * Rgba], rgba[i * Rgba + 1], rgba[i * Rgba + 2]) = ((byte)i, (byte)~i, (byte)(i * 7));
+            rgba[i * Rgba + 3] = alphas[i / 256];
+        }
+
+        var path = Path.Combine(Mod("m"), "textures", "WALL.png");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllBytes(path, Png.Encode(256, alphas.Length, rgba, Png.Channels.Rgba));
+        var image = Open(3, "m").Texture("WALL", Texture("WALL"), Colours())!;
+
+        var expected = (byte[])rgba.Clone();
+        for (var i = 0; i < expected.Length; i += Rgba)
+        {
+            for (var c = 0; c < 3; c++)
+            {
+                expected[i + c] = (byte)((rgba[i + c] * rgba[i + 3] + 127) / 255);
+            }
+        }
+
+        Assert.Equal(expected, image.Rgba);
+    }
+
+    /// <summary>Prefetched images are the ones a lookup would decode (the exact view, by name).</summary>
+    [Fact]
+    public void PrefetchesTheSameImages()
+    {
+        var palette = Colours();
+        var keyed = Texture("K_RUN_0");
+        Image(Path.Combine(Mod("m"), "textures", "LEVEL3", $"K_RUN_0@{HdKey.Of(keyed, palette)}.png"), 4, 4, 5, 128);
+        Image(Path.Combine(_folder, "m", "textures", "K_RUN_1.png"), 4, 4, 9, 200);
+        var plain = Open(8, "m");
+        var prefetched = Open(8, "m");
+
+        prefetched.Prefetch([("K_RUN_0", keyed), ("K_RUN_1", Texture("K_RUN_1")), ("K_NONE", Texture("K_NONE"))], palette);
+
+        foreach (var name in new[] { "K_RUN_0", "K_RUN_1", "K_NONE" })
+        {
+            Assert.Equal(plain.Texture(name, Texture(name), palette)?.Rgba, prefetched.Texture(name, Texture(name), palette)?.Rgba);
+        }
+
+        Assert.NotNull(prefetched.Texture("K_RUN_0", keyed, palette));
+    }
 }
