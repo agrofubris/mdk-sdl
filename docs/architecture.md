@@ -110,6 +110,10 @@ Vulkan with the SPIR-V shaders.
   (play), fingers drive `TouchControls` (`Input.Touch`: keys of their own, which tests' holds
   don't release) and SDL's mouse events made of touches are dropped; otherwise touches are clicks.
   `TouchView` (Game) draws the controls in the renderer's overlay.
+- The controls' sizes are physical (`ScreenDensity`: SDL's display scale over Android's 160 dpi
+  → window units per mm): 11 mm buttons, 3 mm apart, at most the 15 % of the height a phone has;
+  inside the window's safe area. `TouchView` stretches rounded masks (9 parts: corners kept),
+  a see-through fill (brighter while held), a thin outline, the label scaled to the button.
 
 ## Rendering (original look)
 

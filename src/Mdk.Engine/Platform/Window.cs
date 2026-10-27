@@ -1,3 +1,4 @@
+using System.Drawing;
 using System.Numerics;
 using SDL;
 using static SDL.SDL3;
@@ -240,6 +241,26 @@ public sealed unsafe class Window : IDisposable
         }
     }
 
+    /// <summary>Window units per millimetre of the display the window is on (0: unknown).</summary>
+    public float UnitsPerMm => ScreenDensity.UnitsPerMm(SDL_GetWindowDisplayScale(Handle), SDL_GetWindowPixelDensity(Handle), ScreenDensity.BaseDpi);
+
+    /// <summary>The part of the window clear of cut-outs and rounded corners (window units); all
+    /// of it when SDL doesn't know.</summary>
+    public RectangleF SafeArea
+    {
+        get
+        {
+            SDL_Rect safe;
+            if (SDL_GetWindowSafeArea(Handle, &safe) && safe.w > 0 && safe.h > 0)
+            {
+                return new RectangleF(safe.x, safe.y, safe.w, safe.h);
+            }
+
+            var (width, height) = Size;
+            return new RectangleF(0f, 0f, width, height);
+        }
+    }
+
     /// <summary>The mouse cursor becomes an image (RGBA8, <paramref name="width"/> x
     /// <paramref name="height"/>) whose hotspot is (<paramref name="hotX"/>, <paramref name="hotY"/>).</summary>
     public void SetCursor(byte[] rgba, int width, int height, int hotX, int hotY)
@@ -298,6 +319,9 @@ public sealed unsafe class Window : IDisposable
         {
             _touch?.Release(input);
         }
+
+        // The controls' physical size, on whichever display the window is.
+        _touch?.Measure(UnitsPerMm, SafeArea);
 
         SDL_Event e;
         while (SDL_PollEvent(&e))

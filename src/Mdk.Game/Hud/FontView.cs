@@ -82,6 +82,9 @@ public sealed class FontView
 
     public int Width(ReadOnlySpan<byte> text) => _font.Width(text);
 
+    /// <summary>The tallest glyph's rows above the baseline (unscaled).</summary>
+    public int Ascent => _maxAscent;
+
     /// <summary>Draws a text from <paramref name="x"/> along the baseline <paramref name="y"/>,
     /// scaled about the baseline. Returns the x after it.</summary>
     public float Draw(ReadOnlySpan<byte> text, float x, float y, float scale = 1f, float alpha = 1f)

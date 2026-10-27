@@ -7,24 +7,90 @@ using Mdk.Engine.Render;
 namespace Mdk.Game.Hud;
 
 /// <summary>Draws the on-screen controls of a touch screen (<see cref="TouchControls"/>) in play:
-/// the buttons' outlines and labels, the stick where a finger walks.</summary>
-public sealed class TouchView(Renderer renderer, FontView font)
+/// rounded buttons (a see-through fill, a thin outline, the label; brighter while held), the
+/// stick's ring and knob where a finger walks.
+/// <code>
+///   a shape: 9 parts of a rounded square's mask (corners kept, edges and centre stretched)
+///   ┌──┬────┬──┐
+///   │ ╭┼────┼╮ │   r = corner radius on the canvas
+///   ├──┼────┼──┤
+///   │ ╰┼────┼╯ │
+///   └──┴────┴──┘
+/// </code></summary>
+public sealed class TouchView
 {
-    /// <summary>Outline width (canvas units).</summary>
-    private const float Line = 1f;
-    /// <summary>The knob's half size (canvas units).</summary>
-    private const float Knob = 6f;
-    private static readonly Vector4 Outline = new(1f, 1f, 1f, 0.35f);
-    private static readonly Vector4 Fill = new(1f, 1f, 1f, 0.25f);
-    private const float LabelAlpha = 0.7f;
+    /// <summary>The masks' corner radius and outline width (texels); a mask is 2 × radius + 1 wide.</summary>
+    private const int MaskRadius = 32;
+    private const float MaskLine = 4f;
+    private const int MaskSide = 2 * MaskRadius + 1;
+    private const int PaletteEntries = 256;
+    private const int BytesPerColour = 4;
+    private const byte Inside = 1;
+    /// <summary>A button's corner radius, a part of its side.</summary>
+    private const float Rounding = 0.25f;
+    /// <summary>The knob's radius, a part of the stick's.</summary>
+    private const float KnobPart = 0.4f;
+    /// <summary>A label's height and widest width, parts of its button.</summary>
+    private const float LabelHeight = 0.3f;
+    private const float LabelWidth = 0.7f;
+    private static readonly Vector4 Fill = new(1f, 1f, 1f, 0.18f);
+    private static readonly Vector4 HeldFill = new(1f, 1f, 1f, 0.45f);
+    private static readonly Vector4 Outline = new(1f, 1f, 1f, 0.55f);
+    private static readonly Vector4 StickFill = new(1f, 1f, 1f, 0.1f);
+    private static readonly Vector4 KnobFill = new(1f, 1f, 1f, 0.4f);
+    private const float LabelAlpha = 0.85f;
+    private static readonly Vector2 MaskSize = new(MaskSide, MaskSide);
+
+    private readonly Renderer _renderer;
+    private readonly FontView _font;
+    /// <summary>The rounded square's inside and its outline (index 1 through a white palette).</summary>
+    private readonly int _fillMask;
+    private readonly int _lineMask;
+    private readonly int _palette;
 
     /// <summary>The labels' bytes, made once (frames don't allocate).</summary>
     private readonly Dictionary<string, byte[]> _labels = [];
 
+    public TouchView(Renderer renderer, FontView font)
+    {
+        _renderer = renderer;
+        _font = font;
+        _fillMask = renderer.CreateIndexTexture(MaskSide, MaskSide, MaskOf(Cover.Fill));
+        _lineMask = renderer.CreateIndexTexture(MaskSide, MaskSide, MaskOf(Cover.Line));
+        var white = new byte[PaletteEntries * BytesPerColour];
+        Array.Fill(white, byte.MaxValue);
+        _palette = renderer.CreatePalette(white);
+    }
+
+    /// <summary>What a mask covers.</summary>
+    private enum Cover { Fill, Line }
+
+    /// <summary>A rounded square's mask: the corners are quarter circles of the mask's radius about
+    /// (radius, radius); the outline is the inside's last <see cref="MaskLine"/> texels.</summary>
+    private static byte[] MaskOf(Cover cover)
+    {
+        var indices = new byte[MaskSide * MaskSide];
+        for (var y = 0; y < MaskSide; y++)
+        {
+            for (var x = 0; x < MaskSide; x++)
+            {
+                // The distance in from the edge: along the straight sides, or the corner's arc.
+                var dx = MathF.Max(MaskRadius - (x + 0.5f), x + 0.5f - (MaskSide - MaskRadius));
+                var dy = MathF.Max(MaskRadius - (y + 0.5f), y + 0.5f - (MaskSide - MaskRadius));
+                var outside = new Vector2(MathF.Max(dx, 0f), MathF.Max(dy, 0f)).Length();
+                var depth = MaskRadius - outside;
+                var covered = cover == Cover.Fill ? depth > 0f : depth > 0f && depth <= MaskLine;
+                indices[y * MaskSide + x] = covered ? Inside : (byte)0;
+            }
+        }
+
+        return indices;
+    }
+
     public void Draw(Window window)
     {
         // In a VR viewer no finger reaches the screen: a gamepad plays.
-        if (window.Touch is not { } touch || renderer.StereoMode == Stereo.Vr)
+        if (window.Touch is not { } touch || _renderer.StereoMode == Stereo.Vr)
         {
             return;
         }
@@ -34,10 +100,10 @@ public sealed class TouchView(Renderer renderer, FontView font)
         foreach (var button in touch.Layout(screen))
         {
             var area = Canvas(button.Area);
-            renderer.FrameRect(area, Line, Outline);
-            var text = Label(button.Label);
-            var x = area.X + (area.Width - font.Width(text)) / 2f;
-            font.Draw(text, x, area.Y + area.Height / 2f, 1f, LabelAlpha);
+            var radius = Rounding * area.Width;
+            Shape(_fillMask, area, radius, touch.Held(button.Key) ? HeldFill : Fill);
+            Shape(_lineMask, area, radius, Outline);
+            Label(Bytes(button.Label), area);
         }
 
         if (touch.Stick is not { } stick || touch.StickAt is not { } at)
@@ -46,21 +112,57 @@ public sealed class TouchView(Renderer renderer, FontView font)
         }
 
         // The stick's reach around where the finger landed, and the finger's knob.
-        var radius = touch.StickRadius(screen);
-        renderer.FrameRect(Canvas(new RectangleF(stick.X - radius, stick.Y - radius, 2f * radius, 2f * radius)), Line, Outline);
-        var knob = renderer.CanvasPoint(at.X, at.Y);
-        renderer.FillRect(new RectangleF(knob.X - Knob, knob.Y - Knob, 2f * Knob, 2f * Knob), Fill);
+        var reach = Canvas(Circle(stick, touch.StickRadius(screen)));
+        Shape(_fillMask, reach, reach.Width / 2f, StickFill);
+        Shape(_lineMask, reach, reach.Width / 2f, Outline);
+        var knob = Canvas(Circle(at, KnobPart * touch.StickRadius(screen)));
+        Shape(_fillMask, knob, knob.Width / 2f, KnobFill);
+    }
+
+    private static RectangleF Circle(Vector2 centre, float radius) =>
+        new(centre.X - radius, centre.Y - radius, 2f * radius, 2f * radius);
+
+    /// <summary>A mask over <paramref name="area"/> with corners of <paramref name="radius"/>: its
+    /// corners as they are, its middle row and column stretched.</summary>
+    private void Shape(int mask, RectangleF area, float radius, Vector4 colour)
+    {
+        // Source and target edges, left to right (top to bottom alike).
+        ReadOnlySpan<float> source = [0f, MaskRadius, MaskSide - MaskRadius, MaskSide];
+        Span<float> xs = [area.Left, area.Left + radius, area.Right - radius, area.Right];
+        Span<float> ys = [area.Top, area.Top + radius, area.Bottom - radius, area.Bottom];
+        for (var row = 0; row < 3; row++)
+        {
+            for (var column = 0; column < 3; column++)
+            {
+                var from = RectangleF.FromLTRB(source[column], source[row], source[column + 1], source[row + 1]);
+                var to = RectangleF.FromLTRB(xs[column], ys[row], xs[column + 1], ys[row + 1]);
+                if (to.Width > 0f && to.Height > 0f)
+                {
+                    _renderer.DrawImage(mask, _palette, MaskSize, from, to, colour);
+                }
+            }
+        }
+    }
+
+    /// <summary>A label centred on its button, scaled to its size.</summary>
+    private void Label(byte[] text, RectangleF area)
+    {
+        var scale = LabelHeight * area.Height / Math.Max(_font.Ascent, 1);
+        scale = MathF.Min(scale, LabelWidth * area.Width / Math.Max(_font.Width(text), 1));
+        var x = area.X + (area.Width - _font.Width(text) * scale) / 2f;
+        var baseline = area.Y + (area.Height + _font.Ascent * scale) / 2f;
+        _font.Draw(text, x, baseline, scale, LabelAlpha);
     }
 
     /// <summary>A window rectangle on the canvas.</summary>
     private RectangleF Canvas(RectangleF area)
     {
-        var from = renderer.CanvasPoint(area.Left, area.Top);
-        var to = renderer.CanvasPoint(area.Right, area.Bottom);
+        var from = _renderer.CanvasPoint(area.Left, area.Top);
+        var to = _renderer.CanvasPoint(area.Right, area.Bottom);
         return RectangleF.FromLTRB(from.X, from.Y, to.X, to.Y);
     }
 
-    private byte[] Label(string label)
+    private byte[] Bytes(string label)
     {
         if (!_labels.TryGetValue(label, out var bytes))
         {
