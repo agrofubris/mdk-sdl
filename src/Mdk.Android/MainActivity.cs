@@ -43,7 +43,11 @@ public sealed class MainActivity : SDLActivity
         _setup = setup;
         try
         {
-            if (setup.Get() is not { } found)
+            // The setup's dialogs over the project's art, gone before the game draws.
+            Backdrop.Show(this);
+            var found = setup.Get();
+            Backdrop.Hide(this);
+            if (found == null)
             {
                 return;
             }
@@ -57,7 +61,7 @@ public sealed class MainActivity : SDLActivity
         {
             // No console on a phone: say why the game stopped (e.g. no Vulkan for SDL_GPU).
             Console.Error.WriteLine(e);
-            Dialogs.Tell(this, $"MDK stopped: {e.Message}");
+            Dialogs.Tell(this, new Prompt("MDK stopped", e.Message));
         }
     }
 

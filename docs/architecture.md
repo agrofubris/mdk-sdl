@@ -106,6 +106,11 @@ Vulkan with the SPIR-V shaders.
   a folder in place from the next start (settings and saves copied there, files there kept).
 - Store build: `-p:StoreBuild=true` defines `STORE_BUILD`: no storage permissions in the manifest,
   `AllFilesAccess` says `Unavailable`, the files are always copied.
+- Setup dialogs (`Dialogs`): platform Material alerts (`Theme.Material.Dialog.Alert`, no
+  AndroidX) in the icon's teal and orange (`Resources/values/styles.xml`), titled; the copy shows
+  a progress bar. `Backdrop`, a view over SDL's still black surface, draws a starry sky, the icon
+  and the name on the left and moves the dialogs right, undimmed; it's removed before the game
+  starts. In game (Options, "Import from folder") they stay centred over the game, dimmed.
 - `Window` on Android: landscape, full screen, back button trapped (Esc; the manifest turns
   predictive back off), no text input (it would open the keyboard). While the mouse is captured
   (play), fingers drive `TouchControls` (`Input.Touch`: keys of their own, which tests' holds
