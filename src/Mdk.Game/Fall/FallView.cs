@@ -200,6 +200,8 @@ public sealed class FallView
 
         var view = Matrix4x4.CreateLookAt(camera, camera - Vector3.UnitZ, Vector3.UnitY);
         var fieldOfView = 2f * MathF.Atan(ViewCentreY / Focal);
+        var widened = Kurt.CameraMath.KeepWidth(float.RadiansToDegrees(fieldOfView), _renderer.AspectRatio);
+        fieldOfView = widened == float.RadiansToDegrees(fieldOfView) ? fieldOfView : float.DegreesToRadians(widened);
         var projection = Matrix4x4.CreatePerspectiveFieldOfView(fieldOfView, _renderer.AspectRatio, Near, Far);
         return new View(view * projection, Matrix4x4.Identity, camera, new ViewCamera(-Vector3.UnitZ, Vector3.UnitY, projection, Near));
     }

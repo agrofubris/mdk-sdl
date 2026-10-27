@@ -96,7 +96,7 @@ public sealed class StreamView
     public View ViewOf(Flight flight)
     {
         var fieldOfView = float.RadiansToDegrees(2f * MathF.Atan(ViewHeight / 2f / Focal));
-        return CameraMath.View(flight.Eye, flight.Forward, flight.Up, fieldOfView, _renderer.AspectRatio, Near, Far);
+        return CameraMath.View(flight.Eye, flight.Forward, flight.Up, CameraMath.KeepWidth(fieldOfView, _renderer.AspectRatio), _renderer.AspectRatio, Near, Far);
     }
 
     /// <summary>Queues the whole frame.</summary>

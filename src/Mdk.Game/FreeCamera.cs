@@ -53,5 +53,5 @@ public sealed class FreeCamera
         (input.IsDown(positive) ? 1f : 0f) - (input.IsDown(negative) ? 1f : 0f);
 
     public View View(float aspect) =>
-        Kurt.CameraMath.View(Position, Forward, Vector3.UnitZ, FieldOfView, aspect, Near, Far);
+        Kurt.CameraMath.View(Position, Forward, Vector3.UnitZ, Kurt.CameraMath.KeepWidth(FieldOfView, aspect), aspect, Near, Far);
 }

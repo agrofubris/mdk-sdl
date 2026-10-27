@@ -299,6 +299,26 @@ public sealed unsafe partial class Renderer : IDisposable
         return height <= 0 ? Vector2.Zero : new Vector2(x, y) * (CanvasHeight / height);
     }
 
+    /// <summary>The canvas clear of the window's cut-outs and rounded corners (its safe area's
+    /// insets taken off the whole canvas); all of it on a desktop.</summary>
+    public RectangleF CanvasSafeArea
+    {
+        get
+        {
+            var canvas = new RectangleF(0f, 0f, CanvasWidth, CanvasHeight);
+            var (width, height) = _window.Size;
+            var safe = _window.SafeArea;
+            if (height <= 0 || safe == new RectangleF(0f, 0f, width, height))
+            {
+                return canvas;
+            }
+
+            var scale = CanvasHeight / height;
+            return RectangleF.FromLTRB(safe.Left * scale, safe.Top * scale,
+                canvas.Right - (width - safe.Right) * scale, canvas.Bottom - (height - safe.Bottom) * scale);
+        }
+    }
+
     /// <summary>The textures and meshes created so far; <see cref="Release"/> frees those created after.</summary>
     public readonly record struct Scope(int Textures, int Buffers);
 

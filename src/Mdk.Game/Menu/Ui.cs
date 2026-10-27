@@ -97,8 +97,9 @@ public sealed class Ui(MdkData data, Window window, Renderer renderer, AudioDevi
     public int Play(Sound? sound, Bus bus = Bus.Effects, float gain = 1f) => sound == null ? 0 : audio.Play(sound, gain, 1f, 0f, bus);
 }
 
-/// <summary>The original's 600 x 360 screen on the canvas: scaled to fit (menus, statistics) or to
-/// the canvas's height (the loading screen), centred.
+/// <summary>The original's 600 x 360 screen on the canvas's safe area (clear of cut-outs): scaled
+/// to fit, centred, black bars around it, never cut (menus, statistics, videos). The loading
+/// screen fills a 4:3 canvas's height as the original's, its sides cut; other screens fit it too.
 /// <code>
 ///   canvas ┌──────────────────────────┐
 ///          │   ┌──────────────────┐   │  origin + view point × scale
@@ -112,16 +113,31 @@ public sealed class ScreenView(Renderer renderer)
 
     public enum Fit { Inside, Height }
 
+    /// <summary>The 4:3 canvas the loading screen's height fills (within a pixel's rounding).</summary>
+    private const float FourByThree = 4f / 3f;
+    private const float AspectTolerance = 0.01f;
+
     public float Scale { get; private set; } = 1f;
     public Vector2 Origin { get; private set; }
 
     /// <summary>Places a <paramref name="size"/> view (the 600 x 360 screen, or a movie's) on the canvas.</summary>
     public void Layout(Fit fit, Vector2? size = null)
     {
-        var view = size ?? Size;
-        var canvas = new Vector2(renderer.CanvasWidth, Renderer.CanvasHeight);
-        Scale = fit == Fit.Height ? canvas.Y / view.Y : MathF.Min(canvas.X / view.X, canvas.Y / view.Y);
-        Origin = (canvas - view * Scale) / 2f;
+        var safe = renderer.CanvasSafeArea;
+        (Scale, Origin) = Place(fit, size ?? Size, new Vector2(safe.Width, safe.Height));
+        Origin += new Vector2(safe.X, safe.Y);
+    }
+
+    /// <summary>A view's scale and origin on a canvas: inside it, or (a 4:3 canvas) to its height.
+    /// <code>
+    ///   600 x 360 on 480 x 360 (4:3), Height: × 1,    x from -60 (sides cut)
+    ///   600 x 360 on 576 x 360 (16:10):       × 0.96, y from 7.2 (bars)
+    /// </code></summary>
+    public static (float Scale, Vector2 Origin) Place(Fit fit, Vector2 view, Vector2 canvas)
+    {
+        var height = fit == Fit.Height && MathF.Abs(canvas.X / canvas.Y - FourByThree) < AspectTolerance;
+        var scale = height ? canvas.Y / view.Y : MathF.Min(canvas.X / view.X, canvas.Y / view.Y);
+        return (scale, (canvas - view * scale) / 2f);
     }
 
     public Vector2 ToCanvas(Vector2 point) => Origin + point * Scale;

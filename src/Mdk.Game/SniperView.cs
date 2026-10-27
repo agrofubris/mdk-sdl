@@ -186,7 +186,7 @@ public sealed class SniperView(Renderer renderer, ObjectView objects, LevelData 
         var (eye, target) = strike.Camera;
         var forward = Vector3.Normalize(target - eye);
         objects.Draw(strike.Subject, LookOf(strike.Subject.Arena));
-        return CameraMath.View(eye, forward, FollowCamera.UpOf(forward), StrikeScene.FieldOfView, renderer.AspectRatio, RoundNear, Far);
+        return CameraMath.View(eye, forward, FollowCamera.UpOf(forward), CameraMath.KeepWidth(StrikeScene.FieldOfView, renderer.AspectRatio), renderer.AspectRatio, RoundNear, Far);
     }
 
     /// <summary>Whether Esc was pressed during the strike.</summary>

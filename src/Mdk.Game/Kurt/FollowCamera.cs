@@ -398,7 +398,7 @@ public sealed class FollowCamera(ArenaSpace? space = null)
         return feet + facing * back + Vector3.UnitZ * (pivot + distance * MathF.Sin(pitch));
     }
 
-    public View View(float aspect) => CameraMath.View(Position, Forward, Up, FieldOfView, aspect, Near, Far);
+    public View View(float aspect) => CameraMath.View(Position, Forward, Up, CameraMath.KeepWidth(FieldOfView, aspect), aspect, Near, Far);
 
     /// <summary>Sniper mode: the view from Kurt's eye through the scope.</summary>
     public static View SniperView(Kurt kurt, float aspect) => SniperView(kurt.SniperEye, kurt.SniperForward, kurt.Scope.Zoom, aspect);
@@ -415,6 +415,26 @@ public sealed class FollowCamera(ArenaSpace? space = null)
 /// <summary>View matrices for a camera (MDK coordinates, Z up).</summary>
 public static class CameraMath
 {
+    /// <summary>The original's screen: 4:3.</summary>
+    private const float OriginalAspect = 4f / 3f;
+
+    /// <summary>A vertical field of view that keeps a 4:3 view's width on a narrower screen (a
+    /// near-square foldable sees as far left and right, more above and below); wider screens see
+    /// more at the sides at the same height.
+    /// <code>
+    ///   aspect ≥ 4:3: fov (Hor+)    aspect &lt; 4:3: 2 atan(tan(fov / 2) × (4/3) / aspect) (Vert-)
+    /// </code></summary>
+    public static float KeepWidth(float fieldOfView, float aspect)
+    {
+        if (aspect >= OriginalAspect || aspect <= 0f)
+        {
+            return fieldOfView;
+        }
+
+        var half = MathF.Tan(float.DegreesToRadians(fieldOfView) / 2f) * OriginalAspect / aspect;
+        return float.RadiansToDegrees(2f * MathF.Atan(half));
+    }
+
     public static View View(Vector3 position, Vector3 forward, Vector3 up, float fieldOfView, float aspect, float near, float far)
     {
         var view = Matrix4x4.CreateLookAt(position, position + forward, up);

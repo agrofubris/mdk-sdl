@@ -279,7 +279,12 @@ texture expansion, no decoding, (almost) no managed allocation, so no garbage co
 `Flow/Game.cs` runs one screen (`IScreen`) at a time; each frame returns an `Event` and the game
 picks the next screen. A screen's textures and meshes are freed when it ends (`Renderer.Mark`,
 `Renderer.Release`); the 2D screens draw the original's 600 x 360 view fitted on the canvas
-(`Menu/Ui.cs`, `ScreenView`).
+(`Menu/Ui.cs`, `ScreenView`): inside the window's safe area (`Renderer.CanvasSafeArea`: no
+cut-out or rounded corner over it), whole, with black bars; only the loading screen fills a 4:3
+canvas's height as before (its sides cut). The 3D cameras keep the 4:3 view's width on narrower
+screens (`CameraMath.KeepWidth`: Vert-, a near-square foldable sees more above and below) and
+widen on wider ones (Hor+); sniper mode's scope keeps its 2D-aligned projection
+(`tests/aspect_test.sh`).
 
 ```
  splash ─► main menu ─new game─► briefing ──fall──► loading ─► level (Viewer)

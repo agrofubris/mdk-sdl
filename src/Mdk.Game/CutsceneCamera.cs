@@ -82,5 +82,5 @@ public sealed class CutsceneCamera
         return new Vector3(MathF.Sin(y) * MathF.Cos(p), MathF.Cos(y) * MathF.Cos(p), -MathF.Sin(p));
     }
 
-    public View View(float aspect) => CameraMath.View(Position, Forward, Up, FollowCamera.FieldOfView, aspect, Near, Far);
+    public View View(float aspect) => CameraMath.View(Position, Forward, Up, CameraMath.KeepWidth(FollowCamera.FieldOfView, aspect), aspect, Near, Far);
 }
