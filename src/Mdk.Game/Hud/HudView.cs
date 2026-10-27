@@ -2,6 +2,7 @@ using System.Drawing;
 using System.Numerics;
 using Mdk.Engine.Render;
 using Mdk.Formats;
+using Mdk.Game.HdTextures;
 using Mdk.Game.Mods;
 
 namespace Mdk.Game.Hud;
@@ -80,6 +81,9 @@ public sealed class HudView
     private readonly Texture _emptyPanel;
     private readonly byte[] _timerPanel;
     private float _timerAngle;
+    // A mod's panel (RGBA, any size): the stamped pixels take SC_BSTAT's colours over it.
+    private readonly HdImage? _modPanel;
+    private readonly byte[] _modTimerPanel = [];
     /// <summary>The ring is stamped again once the time gone moved this far (0x420830: a degree).</summary>
     private const float TimerStep = MathF.PI / 180f;
 
@@ -99,6 +103,8 @@ public sealed class HudView
         _fullPanel = sprites.GetImage(Panel);
         _emptyPanel = sprites.GetImage(EmptyPanel);
         _timerPanel = (byte[])_fullPanel.Indices.Clone();
+        _modPanel = mods?.Image(Panel, _fullPanel, palette);
+        _modTimerPanel = _modPanel is { } mod ? (byte[])mod.Rgba.Clone() : [];
         _skull = Load(Skull, sprites.GetImage(Skull), 0, 0);
         _digits = Load(Digits, sprites.GetImage(Digits), 0, 0);
         var pickups = sprites.GetAnimation(Pickups);
@@ -240,7 +246,7 @@ public sealed class HudView
         {
             _fullPanel.Indices.CopyTo(_timerPanel, 0);
             _timerAngle = 0f;
-            _renderer.UpdateTexture(_panel.Texture, _fullPanel.Width, _fullPanel.Height, _timerPanel);
+            UploadTimer();
         }
 
         if (angle <= _timerAngle + TimerStep)
@@ -250,7 +256,39 @@ public sealed class HudView
 
         TimerRing.Wipe(_timerPanel, _emptyPanel, _timerAngle, angle);
         _timerAngle = angle;
-        _renderer.UpdateTexture(_panel.Texture, _fullPanel.Width, _fullPanel.Height, _timerPanel);
+        UploadTimer();
+    }
+
+    /// <summary>The stamped panel to the GPU, and over a mod's panel: each of its pixels shows the
+    /// panel pixel it covers, SC_BSTAT's colour where the ring was stamped.</summary>
+    private void UploadTimer()
+    {
+        var width = _fullPanel.Width;
+        var height = _fullPanel.Height;
+        _renderer.UpdateTexture(_panel.Texture, width, height, _timerPanel);
+        if (_modPanel is not { } mod)
+        {
+            return;
+        }
+
+        for (var y = 0; y < mod.Height; y++)
+        {
+            var row = y * height / mod.Height * width;
+            for (var x = 0; x < mod.Width; x++)
+            {
+                var at = row + x * width / mod.Width;
+                var pixel = (y * mod.Width + x) * 4;
+                if (_timerPanel[at] == _fullPanel.Indices[at])
+                {
+                    Array.Copy(mod.Rgba, pixel, _modTimerPanel, pixel, 4);
+                    continue;
+                }
+
+                Array.Copy(_colours.Rgba, _timerPanel[at] * 4, _modTimerPanel, pixel, 4);
+            }
+        }
+
+        _renderer.ReplaceImage(_panel.Texture, _palette, mod.Width, mod.Height, _modTimerPanel);
     }
 
     private void DrawImage(Image image, Vector2 at, Vector4 tint) =>

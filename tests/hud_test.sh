@@ -4,7 +4,8 @@
 # slot and its ticks are still drawn at the bottom left. Each run is compared with the same run
 # without the pickup.
 # The mission timer (0x420830): with 3/4 of the time gone, SC_BSTAT's black covers the panel's
-# ring counter-clockwise from the right (0x420d88), all but its bottom right quarter.
+# ring counter-clockwise from the right (0x420d88), all but its bottom right quarter; also over
+# a mod's panel (a plain green image twice the size), in the enhanced look.
 # Run from the project folder after `dotnet build`: sh tests/hud_test.sh
 # No window: the game draws off screen and never takes the focus.
 export MDK_HIDDEN=1
@@ -54,12 +55,14 @@ shot mdk_hud_gatt_fire.bmp --give=SW_GATT --fire
 shot mdk_hud_none_fire.bmp --fire
 inventory_shown mdk_hud_gatt_fire.bmp mdk_hud_none_fire.bmp; check "inventory shown while firing" $?
 
-# timer_shot <file> <ticks left>: a save of the start with that time left, loaded.
+# timer_shot <file> <ticks left> <options>: a save of the start with that time left, loaded.
 timer_shot() {
 	timeout 60 "$MDK" --level=3 --mute --wait=1 --snapshot=TIMER --screenshot="$DIR/$1" > /dev/null 2>&1
 	sed -i "s/\"town_ticks\":[0-9]*/\"town_ticks\":$2/" "$MDK_USER_DIR/saves/TIMER.sav"
-	rm -f "$DIR/$1"
-	timeout 60 "$MDK" --load=TIMER --mute --wait=1 --screenshot="$DIR/$1" > /dev/null 2>&1
+	FILE=$1
+	shift 2
+	rm -f "$DIR/$FILE"
+	timeout 60 "$MDK" --load=TIMER --mute --wait=1 --screenshot="$DIR/$FILE" "$@" > /dev/null 2>&1
 }
 
 # timer_emptied <late> <early>: the panel's top left quarter changed, not its bottom right.
@@ -86,6 +89,14 @@ EOF
 timer_shot mdk_hud_timer_early.bmp 53900
 timer_shot mdk_hud_timer_late.bmp 13500
 timer_emptied mdk_hud_timer_late.bmp mdk_hud_timer_early.bmp; check "timer ring emptied" $?
+
+MOD="$MDK_USER_DIR/mods/panel"
+mkdir -p "$MOD/images"
+printf 'name=Panel\npriority=0\n' > "$MOD/mod.txt"
+python -c "import sys; from PIL import Image; Image.new('RGBA', (168, 126), (0, 200, 0, 255)).save(sys.argv[1])" "$MOD/images/SC_STAT.png"
+timer_shot mdk_hud_timer_mod_early.bmp 53900 --enhanced
+timer_shot mdk_hud_timer_mod_late.bmp 13500 --enhanced
+timer_emptied mdk_hud_timer_mod_late.bmp mdk_hud_timer_mod_early.bmp; check "timer ring emptied over a mod's panel" $?
 
 [ $FAILED = 0 ] && echo PASSED && exit 0
 echo FAILED
