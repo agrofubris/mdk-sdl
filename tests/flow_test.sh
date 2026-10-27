@@ -48,7 +48,10 @@ echo "$OUT" | grep -q "^Menu: Master volume: 80 | Music volume: 50 | Effects vol
 [ "$(echo "$OUT" | grep "^Menu" | tail -n 2 | head -n 1)" = "Menu: Display | Graphics | 3D Stereo | Audio | Keyboard & mouse | Gamepad | Game | Mods | Back" ]; check "Esc: up to the options" $?
 echo "$OUT" | grep "^Menu" | tail -n 1 | grep -q "^Menu: New Game"; check "Esc: up to the main menu" $?
 OUT=$(run --menu --options --press=Menu.Down@0.3,Menu.Down@0.4,Menu.Down@0.5,Menu.Down@0.6,Menu.Down@0.7,Menu.Down@0.8,Menu.Accept@0.9 --wait=1)
-echo "$OUT" | grep -q "^Menu: Difficulty: Normal | Back$"; check "game page" $?
+echo "$OUT" | grep -q "^Menu: Difficulty: Normal | FPS overlay: Off | Back$"; check "game page" $?
+# The FPS overlay without the console (phones): on, then the page again shows it on.
+OUT=$(run --menu --options --press=Menu.Down@0.3,Menu.Down@0.4,Menu.Down@0.5,Menu.Down@0.6,Menu.Down@0.7,Menu.Down@0.8,Menu.Accept@0.9,Menu.Down@1.1,Menu.Accept@1.2,Menu.Back@1.4,Menu.Accept@1.6 --wait=2)
+echo "$OUT" | grep "^Menu" | tail -n 1 | grep -q "^Menu: Difficulty: Normal | FPS overlay: On | Back$"; check "FPS overlay from the game page" $?
 OUT=$(run --menu --options --press=Menu.Down@0.3,Menu.Down@0.4,Menu.Accept@0.5 --wait=1)
 echo "$OUT" | grep -q "^Menu: Mode: Off | Separation: 0.25 | Convergence: 10 | Head tracking: Off | Back$"; check "3D stereo page" $?
 OUT=$(run --menu --controls --wait=1)

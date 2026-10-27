@@ -6,6 +6,7 @@ using Mdk.Engine.Audio;
 using Mdk.Engine.Platform;
 using Mdk.Engine.Render;
 using Mdk.Formats;
+using Mdk.Game.DevTools;
 using Mdk.Game.Flow;
 using Mdk.Game.HdTextures;
 using Mdk.Game.Kurt;
@@ -569,6 +570,10 @@ public sealed class MenuItems
         ClearPage();
         var s = _ui.Settings;
         AddOption(() => $"Difficulty: {DifficultyNames[(int)s.Difficulty]}", step => s.Difficulty = (Difficulty)Wrap((int)s.Difficulty + step, DifficultyNames.Length));
+
+        // The console's fps overlay, for phones without a keyboard (this session only).
+        var dev = _ui.Dev;
+        AddOption(() => $"FPS overlay: {OnOff(dev.Overlay == Switch.On)}", _ => dev.ToggleOverlay());
         EndPage(back);
     }
 
