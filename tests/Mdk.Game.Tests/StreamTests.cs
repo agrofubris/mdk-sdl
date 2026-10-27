@@ -220,6 +220,25 @@ public class StreamTests
         Assert.Equal(Outcome.Died, flight.Outcome);
     }
 
+    /// <summary>Gunter (0x435a34) takes the tube's frame unturned (0x4366f4), head first down the
+    /// stream, and plays his loop.</summary>
+    [Fact]
+    public void GunterFollowsTheTube()
+    {
+        var flight = FlightOf(StreamTube.Kind.Gunter, 100);
+        for (var i = 0; i < 30; i++)
+        {
+            flight.Update(Step, default);
+        }
+
+        var gunter = flight.Other!;
+        var transform = flight.Transform(gunter);
+        var frame = flight.Tube.Frame(gunter.T, flight.Up);
+        Near(frame.Y, new Vector3(transform.M21, transform.M22, transform.M23));
+        Near(frame.Z, new Vector3(transform.M31, transform.M32, transform.M33));
+        Assert.NotEqual(0, flight.OtherFrame(gunter));
+    }
+
     [Fact]
     public void BonesComesAfterSegment177()
     {

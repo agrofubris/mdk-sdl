@@ -148,8 +148,9 @@ public sealed class Flight
         Health = health;
         (_kurtClip, _rescueClip, _otherClip) = (kurt, rescue, other);
         LightCount = AddSpawns();
+        // Gunter's yaw (90 at 0x433b50) never turns him: 0x435a34 takes the tube's frame (0x4366f4).
         Other = kind == StreamTube.Kind.Gunter
-            ? new Thing { T = GuntaStart, Speed = Speed, Yaw = NeutralYaw }
+            ? new Thing { T = GuntaStart, Speed = Speed }
             : new Thing { T = BonusStart, Speed = BonusSpeed };
         UpdateCamera();
     }
