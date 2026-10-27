@@ -2884,24 +2884,27 @@ public sealed partial class ScriptRuntime
 
     /// <summary>Where the sniper crosshair aims: the locked target's near face, else the arena
     /// surface along the view, else a point <paramref name="far"/> away. The stereo modes draw the
-    /// crosshair there (a world sprite), so it carries the target's depth instead of the screen's.</summary>
-    public Vector3 CrosshairPoint(Vector3 eye, Vector3 forward, float far)
+    /// crosshair there (a world sprite), so it carries the target's depth instead of the screen's.
+    /// Its distance is clamped to [<paramref name="minDistance"/>, <paramref name="far"/>]: a
+    /// reticle on something very close would cross the eyes hard, right when aiming.</summary>
+    public Vector3 CrosshairPoint(Vector3 eye, Vector3 forward, float minDistance, float far)
     {
+        var aim = eye + forward * far;
         if (SniperTarget is { } target)
         {
             // The target's bounding sphere: its near face, in front of the model, so the crosshair
             // isn't hidden inside it by the depth test.
             var bounds = GetWorldBounds(target);
-            return bounds.Center() - forward * (bounds.Size().Length() / 2f + 0.1f);
+            aim = bounds.Center() - forward * (bounds.Size().Length() / 2f + 0.1f);
         }
-
-        if (Raycast(eye, eye + forward * far) is { } hit)
+        else if (Raycast(eye, eye + forward * far) is { } hit)
         {
             // A hair in front of the surface: depth equality is fragile across the two eyes.
-            return hit.Point - forward * MathF.Max(0.05f, Vector3.Distance(eye, hit.Point) * 0.0005f);
+            aim = hit.Point - forward * MathF.Max(0.05f, Vector3.Distance(eye, hit.Point) * 0.0005f);
         }
 
-        return eye + forward * far;
+        var distance = Math.Clamp(Vector3.Dot(aim - eye, forward), minDistance, far);
+        return eye + forward * distance;
     }
 
     /// <summary>Whether a segment crosses an up-facing face (|nz| ≥ 0.5) of one arena (0x421708):

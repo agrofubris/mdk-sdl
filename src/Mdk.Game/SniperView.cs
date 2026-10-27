@@ -26,6 +26,9 @@ public sealed class SniperView(Renderer renderer, ObjectView objects, LevelData 
     private const float Far = 20000f;
     /// <summary>The stereo crosshair's aim fallback (nothing under it: the sky).</summary>
     private const float CrosshairFar = 1000f;
+    /// <summary>The nearest the stereo crosshair may sit: a reticle on something very close would
+    /// cross the eyes hard, exactly while aiming.</summary>
+    private const float CrosshairNear = 4f;
 
     // The loaded rounds (0x41eb10): round i at time clip timer + i (shown between 0 and 3, not at 0),
     // between keys of position, angles (z, y, x: Rz(a) Ry(-b) Rx(c)) and scale (0x490e4c), seen from
@@ -76,7 +79,7 @@ public sealed class SniperView(Renderer renderer, ObjectView objects, LevelData 
             // the target (aiming lines up instead of splitting at the screen plane).
             var eye = kurt.SniperEye;
             var forward = kurt.SniperForward;
-            var aim = scripts.CrosshairPoint(eye, forward, CrosshairFar);
+            var aim = scripts.CrosshairPoint(eye, forward, CrosshairNear, CrosshairFar);
             hud.Sniper.DrawAimCrosshair(aim, eye, forward, FollowCamera.UpOf(forward), kurt.Scope.Zoom);
         }
 
