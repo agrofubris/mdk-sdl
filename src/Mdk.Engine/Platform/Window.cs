@@ -31,6 +31,18 @@ public sealed unsafe class Window : IDisposable
     /// <summary>A touch screen (Android): the on-screen controls' setting applies.</summary>
     public bool HasTouchScreen => _touch != null;
 
+    /// <summary>A touch screen reads text only while asked (the console): its keyboard shows then.
+    /// Other windows always read it.</summary>
+    public void SetTyping(Typing typing)
+    {
+        if (_touch == null)
+        {
+            return;
+        }
+
+        _ = typing == Typing.On ? SDL_StartTextInput(Handle) : SDL_StopTextInput(Handle);
+    }
+
     /// <summary>The gamepads (none in a hidden window: tests aren't steered by a pad left plugged in).</summary>
     private readonly Gamepads? _gamepads;
     private readonly HeadTracker _head = new();
@@ -426,6 +438,9 @@ public sealed unsafe class Window : IDisposable
 }
 
 public enum Capture { Off, On }
+
+/// <summary>Whether typed text is read (on a touch screen: the on-screen keyboard shows).</summary>
+public enum Typing { Off, On }
 
 public enum Visibility { Shown, Hidden }
 

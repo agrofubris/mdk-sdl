@@ -574,6 +574,7 @@ public sealed class MenuItems
         // The console's fps overlay, for phones without a keyboard (this session only).
         var dev = _ui.Dev;
         AddOption(() => $"FPS overlay: {OnOff(dev.Overlay == Switch.On)}", _ => dev.ToggleOverlay());
+        AddItem("Console", () => dev.ConsoleAsked = true);
         EndPage(back);
     }
 

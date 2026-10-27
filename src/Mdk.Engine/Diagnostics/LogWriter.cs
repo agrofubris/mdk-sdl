@@ -68,6 +68,9 @@ public sealed class LogWriter(TextWriter inner, LogRing ring) : TextWriter
 /// <summary>Captures the program's output (stdout and stderr) into one ring, still printing it.</summary>
 public static class Log
 {
+    /// <summary>The lines the console keeps.</summary>
+    public const int Lines = 500;
+
     private static LogRing? _ring;
 
     /// <summary>The ring of the output's last lines; the first call installs it.</summary>

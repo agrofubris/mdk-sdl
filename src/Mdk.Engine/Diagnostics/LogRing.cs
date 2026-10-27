@@ -5,12 +5,14 @@ public sealed class LogRing(int capacity)
 {
     private readonly Queue<string> _lines = new();
     private readonly Lock _lock = new();
+    private StreamWriter? _file;
 
     public void Add(string line)
     {
         lock (_lock)
         {
             _lines.Enqueue(line);
+            _file?.WriteLine(line);
             if (_lines.Count > capacity)
             {
                 _lines.Dequeue();
@@ -49,6 +51,31 @@ public sealed class LogRing(int capacity)
         lock (_lock)
         {
             _lines.Clear();
+        }
+    }
+
+    /// <summary>Also writes the lines to <paramref name="path"/> (mdk.log, made anew), those kept so
+    /// far first; each line is flushed, so a crash keeps them.</summary>
+    public void WriteTo(string path)
+    {
+        var file = new StreamWriter(path, append: false) { AutoFlush = true };
+        lock (_lock)
+        {
+            _file?.Dispose();
+            _file = file;
+            foreach (var line in _lines)
+            {
+                file.WriteLine(line);
+            }
+        }
+    }
+
+    public void Close()
+    {
+        lock (_lock)
+        {
+            _file?.Dispose();
+            _file = null;
         }
     }
 }

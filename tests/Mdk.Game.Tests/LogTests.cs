@@ -37,4 +37,20 @@ public class LogTests
         Assert.Equal("Level 3: 42 arenas" + Environment.NewLine + "one\r\ntwo\nthree", output.ToString());
         Assert.Equal(["Level 3: 42 arenas", "one", "two"], ring.Lines());
     }
+
+    [Fact]
+    public void RingWritesItsLinesToAFile()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"mdk_log_{Guid.NewGuid():N}.log");
+        var ring = new LogRing(10);
+        ring.Add("before");
+
+        // The lines kept so far, then each new one as it comes.
+        ring.WriteTo(path);
+        ring.Add("after");
+        ring.Close();
+
+        Assert.Equal(["before", "after"], File.ReadAllLines(path));
+        File.Delete(path);
+    }
 }

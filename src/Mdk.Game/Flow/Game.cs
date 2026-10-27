@@ -88,6 +88,7 @@ public sealed class Game : IDisposable
     private const string SavesFolder = "saves";
     /// <summary>Overrides the user folder (settings and saves), for tests.</summary>
     private const string UserFolderVariable = "MDK_USER_DIR";
+    private const string LogFile = "mdk.log";
     private const int TownShift = 29;
     /// <summary>The soak test's frames are this many game steps (0.1 s): it runs faster.</summary>
     private const int SoakSteps = 6;
@@ -107,6 +108,7 @@ public sealed class Game : IDisposable
     private readonly Renderer.Scope _scope;
     /// <summary>The console and the overlay, over every screen.</summary>
     private readonly DevUi _dev;
+    private Typing _typing;
     private readonly GameCommands _commands;
     /// <summary>The soak test's random keys, on every screen; menu keys too when it starts in the
     /// menus or the flow screens.</summary>
@@ -191,6 +193,7 @@ public sealed class Game : IDisposable
     {
         _options = options;
         var folder = Environment.GetEnvironmentVariable(UserFolderVariable) ?? UserFolder();
+        WriteLog(folder);
         _saves = SaveGames.In(folder);
 
         // The original deletes LASTGAME.SAV when it quits.
@@ -315,7 +318,9 @@ public sealed class Game : IDisposable
             _options.Presses?.Apply(_input, time);
 
             // The open console has the keys: the screen runs on without them.
+            OpenAskedConsole();
             _dev.Update(_input, elapsed);
+            UpdateTyping();
             if (_screen is not Viewer { ConsoleReady: false })
             {
                 _dev.RunOnce(_options.Level.Console);
@@ -664,8 +669,52 @@ public sealed class Game : IDisposable
         return folder;
     }
 
+    /// <summary>The console a menu asked for opens (the game's options; phones have no Grave key).</summary>
+    private void OpenAskedConsole()
+    {
+        if (!_ui.Dev.ConsoleAsked)
+        {
+            return;
+        }
+
+        _ui.Dev.ConsoleAsked = false;
+        if (_dev.Console.State == ConsoleState.Closed)
+        {
+            _dev.Console.Toggle();
+        }
+    }
+
+    /// <summary>A touch screen's keyboard shows while the console is open.</summary>
+    private void UpdateTyping()
+    {
+        var typing = _dev.Console.State == ConsoleState.Open ? Typing.On : Typing.Off;
+        if (typing == _typing)
+        {
+            return;
+        }
+
+        _typing = typing;
+        _window.SetTyping(typing);
+    }
+
+    /// <summary>The output also goes to mdk.log in the user folder (phones have no console to read):
+    /// made anew each start. A folder it can't write to keeps the output on screen only.</summary>
+    private static void WriteLog(string folder)
+    {
+        try
+        {
+            Directory.CreateDirectory(folder);
+            Log.Capture(Log.Lines).WriteTo(Path.Combine(folder, LogFile));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Console.Error.WriteLine($"No log file in {folder}: {e.Message}");
+        }
+    }
+
     public void Dispose()
     {
+        Log.Capture(Log.Lines).Close();
         _screen?.Dispose();
         _audio.Dispose();
         _renderer.Dispose();

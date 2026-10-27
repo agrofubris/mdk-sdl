@@ -7,9 +7,7 @@ namespace Mdk.Game.DevTools;
 /// god mode, noclip and onehit (every level's Kurt gets them).</summary>
 public sealed class DevSession
 {
-    private const int LogLines = 500;
-
-    public LogRing Log { get; } = Engine.Diagnostics.Log.Capture(LogLines);
+    public LogRing Log { get; } = Engine.Diagnostics.Log.Capture(Engine.Diagnostics.Log.Lines);
     public Profiler Profiler { get; } = new();
     public CommandHistory History { get; } = new();
     public Switch Overlay { get; set; } = Switch.Off;
@@ -18,4 +16,7 @@ public sealed class DevSession
     public Switch OneHit { get; set; } = Switch.Off;
 
     public Switch ToggleOverlay() => Overlay = Overlay == Switch.On ? Switch.Off : Switch.On;
+
+    /// <summary>A menu asked for the console (phones have no Grave key); the game opens it next frame.</summary>
+    public bool ConsoleAsked { get; set; }
 }
