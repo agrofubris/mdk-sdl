@@ -280,7 +280,13 @@ public sealed class ModImages
     {
         for (var i = 0; i < rgba.Length; i += Channels)
         {
+            // Opaque pixels keep their colour: (c × 255 + 127) / 255 is c.
             var alpha = rgba[i + Alpha];
+            if (alpha == byte.MaxValue)
+            {
+                continue;
+            }
+
             for (var c = 0; c < Alpha; c++)
             {
                 rgba[i + c] = (byte)((rgba[i + c] * alpha + byte.MaxValue / 2) / byte.MaxValue);
