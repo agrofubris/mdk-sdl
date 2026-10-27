@@ -9,7 +9,21 @@ namespace Mdk.Game.Level;
 /// lights (<see cref="LightSources"/>).</summary>
 public sealed class LevelLight(Renderer renderer, LevelData level)
 {
-    private readonly Dictionary<string, Lighting> _arenas = level.Arenas.ToDictionary(a => a.Name, a => EnhancedLook.Lighting(level.Dti, a));
+    private readonly Dictionary<string, Lighting> _arenas = Light(level);
+
+    /// <summary>Each arena's light, on every core: each one averages the whole sky panorama.</summary>
+    private static Dictionary<string, Lighting> Light(LevelData level)
+    {
+        var lightings = new Lighting[level.Arenas.Count];
+        Parallel.For(0, lightings.Length, a => lightings[a] = EnhancedLook.Lighting(level.Dti, level.Arenas[a]));
+        var arenas = new Dictionary<string, Lighting>();
+        for (var a = 0; a < lightings.Length; a++)
+        {
+            arenas.Add(level.Arenas[a].Name, lightings[a]);
+        }
+
+        return arenas;
+    }
 
     /// <summary>Lights the scene as the scripts' current arena (unknown: unchanged), with this
     /// frame's point lights.</summary>
