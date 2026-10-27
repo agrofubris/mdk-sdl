@@ -117,13 +117,41 @@ public sealed class KurtSprite
         _palette = renderer.CreatePalette(palette.Rgba);
         _mesh = renderer.CreateDynamicMesh(FrameVertices);
         _muzzleMesh = renderer.CreateDynamicMesh(QuadVertices);
+        var animations = new List<SpriteAnimation>();
         foreach (var name in Animations.Values.Select(a => a.Name).Append(ChuteSway).Append(MuzzleFlash).Append(BackUp).Distinct())
         {
             if (sprites.Has(name))
             {
-                Preload(sprites.GetAnimation(name));
+                animations.Add(sprites.GetAnimation(name));
             }
         }
+
+        Prefetch(animations);
+        foreach (var animation in animations)
+        {
+            Preload(animation);
+        }
+    }
+
+    /// <summary>Decodes the frames' mod images on every core before they're asked for one by one
+    /// (the HD textures' Kurt: 360 files a level's load).</summary>
+    private void Prefetch(List<SpriteAnimation> animations)
+    {
+        if (_mods == null || _shading != Shading.Sprite)
+        {
+            return;
+        }
+
+        var frames = new List<(string, Texture)>();
+        foreach (var animation in animations)
+        {
+            for (var frame = 0; frame < animation.FrameCount; frame++)
+            {
+                frames.Add((FrameName(animation.Name, frame), animation.GetFrame(frame).Image));
+            }
+        }
+
+        _mods.Prefetch(frames, _colours);
     }
 
     /// <summary>Decodes an animation's frames and puts them on the GPU, HD when made (a level's load).</summary>
@@ -162,6 +190,7 @@ public sealed class KurtSprite
         if (animation != null)
         {
             _extra[animation.Name] = animation;
+            Prefetch([animation]);
             Preload(animation);
         }
     }

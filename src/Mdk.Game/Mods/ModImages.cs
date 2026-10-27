@@ -146,6 +146,43 @@ public sealed class ModImages
         return image;
     }
 
+    /// <summary>Decodes, on every core, the files first in line to replace these single-frame
+    /// textures (as <see cref="Texture"/> would look them up), so that their lookups find them.</summary>
+    public void Prefetch(IReadOnlyList<(string Name, Texture Texture)> textures, Palette palette)
+    {
+        var paths = new HashSet<string>();
+        foreach (var (name, texture) in textures)
+        {
+            if (FirstFile(name, texture, palette) is { } path && !_decoded.ContainsKey(path))
+            {
+                paths.Add(path);
+            }
+        }
+
+        Decode([.. paths]);
+    }
+
+    /// <summary>A texture's first file to try (the exact view, the level's, all levels').</summary>
+    private string? FirstFile(string name, Texture texture, Palette palette)
+    {
+        string? key = null;
+        foreach (var mod in _mods)
+        {
+            var index = mod[Kind.Textures];
+            if (index.Keys.Count > 0 && index.Keys.TryGetValue(key ??= HdKey.Of(texture, palette), out var exact))
+            {
+                return exact;
+            }
+
+            if (index.Level.TryGetValue(name, out var level) || index.Names.TryGetValue(name, out level))
+            {
+                return level;
+            }
+        }
+
+        return null;
+    }
+
     /// <summary>A 3D texture's replacement (arenas, models, Kurt's frames), or null.</summary>
     public HdImage? Texture(string name, Texture texture, Palette palette) => Find(Kind.Textures, name, texture, palette);
 
