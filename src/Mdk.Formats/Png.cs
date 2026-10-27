@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.IO.Compression;
+using System.Runtime.Intrinsics;
 using System.Text;
 
 namespace Mdk.Formats;
@@ -149,29 +150,87 @@ public static class Png
         return raw;
     }
 
-    /// <summary>Undoes each row's filter in place (the filter byte stays before the row).</summary>
+    /// <summary>Undoes each row's filter in place (the filter byte stays before the row). The first
+    /// row's "up" is a row of zeros.</summary>
     private static void Unfilter(byte[] raw, int stride, int bpp, int height)
     {
+        ReadOnlySpan<byte> previous = new byte[stride];
         for (var y = 0; y < height; y++)
         {
             var start = y * (stride + 1) + 1;
+            var row = raw.AsSpan(start, stride);
             var filter = raw[start - 1];
-            var previous = start - (stride + 1);
-            for (var x = 0; x < stride; x++)
+            switch (filter)
             {
-                int a = x >= bpp ? raw[start + x - bpp] : 0;
-                int b = y > 0 ? raw[previous + x] : 0;
-                int c = x >= bpp && y > 0 ? raw[previous + x - bpp] : 0;
-                raw[start + x] += filter switch
-                {
-                    FilterNone => 0,
-                    FilterSub => (byte)a,
-                    FilterUp => (byte)b,
-                    FilterAverage => (byte)((a + b) / 2),
-                    FilterPaeth => (byte)Paeth(a, b, c),
-                    _ => throw new InvalidDataException($"PNG row filter {filter}"),
-                };
+                case FilterNone:
+                    break;
+                case FilterSub:
+                    UnfilterSub(row, bpp);
+                    break;
+                case FilterUp:
+                    UnfilterUp(row, previous);
+                    break;
+                case FilterAverage:
+                    UnfilterAverage(row, previous, bpp);
+                    break;
+                case FilterPaeth:
+                    UnfilterPaeth(row, previous, bpp);
+                    break;
+                default:
+                    throw new InvalidDataException($"PNG row filter {filter}");
             }
+
+            previous = row;
+        }
+    }
+
+    private static void UnfilterSub(Span<byte> row, int bpp)
+    {
+        for (var x = bpp; x < row.Length; x++)
+        {
+            row[x] += row[x - bpp];
+        }
+    }
+
+    private static void UnfilterUp(Span<byte> row, ReadOnlySpan<byte> previous)
+    {
+        // Bytes wrap, so whole vectors add as the bytes do.
+        var x = 0;
+        for (; x <= row.Length - Vector128<byte>.Count; x += Vector128<byte>.Count)
+        {
+            (Vector128.Create(row[x..]) + Vector128.Create(previous[x..])).CopyTo(row[x..]);
+        }
+
+        for (; x < row.Length; x++)
+        {
+            row[x] += previous[x];
+        }
+    }
+
+    private static void UnfilterAverage(Span<byte> row, ReadOnlySpan<byte> previous, int bpp)
+    {
+        for (var x = 0; x < bpp; x++)
+        {
+            row[x] += (byte)(previous[x] / 2);
+        }
+
+        for (var x = bpp; x < row.Length; x++)
+        {
+            row[x] += (byte)((row[x - bpp] + previous[x]) / 2);
+        }
+    }
+
+    private static void UnfilterPaeth(Span<byte> row, ReadOnlySpan<byte> previous, int bpp)
+    {
+        // Left of the first pixel is zero: Paeth(0, b, 0) is b.
+        for (var x = 0; x < bpp; x++)
+        {
+            row[x] += previous[x];
+        }
+
+        for (var x = bpp; x < row.Length; x++)
+        {
+            row[x] += (byte)Paeth(row[x - bpp], previous[x], previous[x - bpp]);
         }
     }
 
@@ -188,16 +247,22 @@ public static class Png
         var rgba = new byte[width * height * Rgba];
         for (var y = 0; y < height; y++)
         {
-            var row = y * (width * bpp + 1) + 1;
+            var source = raw.AsSpan(y * (width * bpp + 1) + 1, width * bpp);
+            var target = rgba.AsSpan(y * width * Rgba, width * Rgba);
+            if (bpp == Rgba)
+            {
+                source.CopyTo(target);
+                continue;
+            }
+
             for (var x = 0; x < width; x++)
             {
-                var source = raw.AsSpan(row + x * bpp, bpp);
-                var target = rgba.AsSpan((y * width + x) * Rgba, Rgba);
+                var pixel = source.Slice(x * bpp, bpp);
                 var colour = bpp >= 3;
-                target[0] = source[0];
-                target[1] = colour ? source[1] : source[0];
-                target[2] = colour ? source[2] : source[0];
-                target[3] = bpp is 2 or Rgba ? source[bpp - 1] : Opaque;
+                target[x * Rgba] = pixel[0];
+                target[x * Rgba + 1] = colour ? pixel[1] : pixel[0];
+                target[x * Rgba + 2] = colour ? pixel[2] : pixel[0];
+                target[x * Rgba + 3] = bpp == 2 ? pixel[1] : Opaque;
             }
         }
 
