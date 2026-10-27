@@ -703,6 +703,7 @@ public sealed class Viewer : IScreen
         _view.Draw(_scripts.DrawnArenas, _scripts.AnimatedTextures);
         _view.DrawEnd(_scripts.EndLevel);
         DrawObjects(_objects, _scripts, _level, _looks, _blend);
+        DrawBoard(camera.Position, eye.Forward);
         _ropes.Draw(_scripts.Objects, _blend);
         _sniper.Draw(_kurt, _scripts, _blend, elapsed);
         _effects.Draw(_scripts, camera, _blend.Tick);
@@ -960,13 +961,27 @@ public sealed class Viewer : IScreen
     {
         foreach (var obj in scripts.Objects)
         {
-            if (!obj.Visible)
+            if (!obj.Visible || IsBoard(scripts, obj))
             {
                 continue;
             }
 
             view.Draw(obj, ObjectLook(level, looks, obj.Arena), blend.TransformOf(obj), blend.PoseOf(obj));
         }
+    }
+
+    private static bool IsBoard(ScriptRuntime scripts, MdkObject obj) => scripts.Rides.OnBoard() && obj == scripts.Rides.Ridden;
+
+    /// <summary>The ridden board, in front of the floors it stands above (<see cref="FloorPull"/>).</summary>
+    private void DrawBoard(Vector3 eye, Vector3 forward)
+    {
+        if (_scripts.Rides.Ridden is not { Visible: true } board || !IsBoard(_scripts, board))
+        {
+            return;
+        }
+
+        var transform = FloorPull.Of(board, _blend.TransformOf(board), eye, forward, _space);
+        _objects.Draw(board, ObjectLook(_level, _looks, board.Arena), transform, _blend.PoseOf(board));
     }
 
     /// <summary>An arena's palette and textures for its objects (the level's outside the arenas).</summary>
