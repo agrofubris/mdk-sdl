@@ -83,6 +83,12 @@ public sealed class DevConsole
                     Press(key);
                 }
             }
+
+            // A phone's Back button: it has no Escape key.
+            if (State == ConsoleState.Open && input.WasPressed(MenuKey.Back))
+            {
+                Press(EditKey.Close);
+            }
         }
 
         var goal = State == ConsoleState.Open ? 1f : 0f;

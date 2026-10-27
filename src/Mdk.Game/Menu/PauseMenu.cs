@@ -68,7 +68,8 @@ public sealed class PauseMenu
 
     private void DrawHint()
     {
-        if (_page != Page.Main)
+        // A touch screen has no F2 or F9: its menu items save and load.
+        if (_page != Page.Main || _ui.Window.HasTouchScreen)
         {
             return;
         }

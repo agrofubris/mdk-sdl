@@ -120,6 +120,21 @@ public class DevConsoleTests
         Assert.False(input.WasPressed(RawKey.Grave));
     }
 
+    /// <summary>A phone's Back button (no Escape key there) closes the open console.</summary>
+    [Fact]
+    public void BackClosesTheConsole()
+    {
+        var console = NewConsole(new LogRing(10), out _);
+        console.Toggle();
+        var input = new Input();
+        input.BeginFrame();
+        input.SetKey(SDL_Scancode.SDL_SCANCODE_AC_BACK, Input.State.Down, Repeat.No);
+
+        console.Update(input, 0f);
+
+        Assert.Equal(ConsoleState.Closed, console.State);
+    }
+
     /// <summary>Any screen: while the console is open (and on the frame Grave opens it) the screen
     /// gets no keys, typing, clicks or mouse; keys held by tests stay. Closed, input passes.</summary>
     [Fact]
