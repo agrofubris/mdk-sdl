@@ -397,14 +397,20 @@ city needs T + 4 to reach the top of `ARENA_4`); the sniper key puts the helmet 
 1.0+ GPU (arm64; x64 for emulators); depth clamping and clip distances, which some (Mali-G52)
 lack, aren't needed. Install it by allowing installs from unknown sources. The game files
 aren't in it: copy your MDK folder (the one with `TRAVERSE`, `MISC`, `FALL3D`, `STREAM`) to the
-phone, e.g. into `Download/MDK`. On first start the app asks for that folder (Android's folder
-picker; `Download` itself can't be picked, a folder in it can) and copies its game files (about
-170 MB) into its own folder, `Android/data/io.github.nemo22.mdk/files/mdk`, once. Settings and
-saves live next to it, in `files`.
+phone, e.g. into `MDK` on the internal storage. On first start the app asks for All files
+access: allowed, you pick that folder (Android's folder picker) and the game plays from it in
+place, its settings, saves, mods and `mdk.log` there; if the folder goes or the access is
+switched off, the app says so and asks again. Declined (or a store build, `-p:StoreBuild=true`),
+it copies the folder's game files (about 170 MB) into its own folder,
+`Android/data/io.github.nemo22.mdk/files/mdk`, once (`Download` itself can't be picked, a folder
+in it can); settings and saves live next to it, in `files`. An app that copied before keeps its
+copy; Options, Mods, "Import from folder" can switch it to the folder in place (settings and
+saves copied there, from the next start).
 
 Mods and HD textures: make them on a PC ([above](#hd-textures)), copy the `mods` folder (next to
-`mdk_sdl.exe`) into the phone's MDK folder, then Options, Mods, "Import from folder" and pick it again: new
-or changed files are copied, `mods` too (an older `textures-hd` becomes the HD textures mod).
+`mdk_sdl.exe`) into the phone's MDK folder; played in place, they're there; copied, Options,
+Mods, "Import from folder" and pick it again: new or changed files are copied, `mods` too (an
+older `textures-hd` becomes the HD textures mod).
 Options, Mods then switches them (enhanced look).
 
 Touch controls in play: the left part of the screen is a stick where the finger lands (walk,
@@ -416,7 +422,8 @@ Not yet: typing save names (no on-screen keyboard), the console. Tested on the
 Android emulator and one phone.
 
 The APK is signed with a debug key until a release key is set: to update, uninstall the old one
-first (that deletes its copy of the game files and the saves; the first start imports again).
+first (that deletes its copy of the game files and the saves, not a folder played in place;
+the first start asks again).
 
 Building it needs the Android workload (`dotnet workload install android`), JDK 21 and the
 Android SDK's API 36 platform, and SPIR-V shaders (`-p:DxcSpirv=...`):

@@ -8,8 +8,9 @@ using Org.Libsdl.App;
 namespace Mdk.Android;
 
 /// <summary>The app: SDL's activity (its Java side comes with ppy.SDL3-CS) running the game on
-/// SDL's thread, from the main menu, with the files imported on first start (<see cref="DataSetup"/>).
-/// Settings and saves live in the app's external files folder.</summary>
+/// SDL's thread, from the main menu, with the files found on first start (<see cref="DataSetup"/>).
+/// Settings and saves live in the MDK folder played from in place, else in the app's external
+/// files folder.</summary>
 [Activity(
     Label = "MDK",
     MainLauncher = true,
@@ -42,15 +43,14 @@ public sealed class MainActivity : SDLActivity
         _setup = setup;
         try
         {
-            var data = setup.Get();
-            if (data == null)
+            if (setup.Get() is not { } found)
             {
                 return;
             }
 
-            Environment.SetEnvironmentVariable(UserFolderVariable, files);
+            Environment.SetEnvironmentVariable(UserFolderVariable, found.UserFolder);
             var level = new ViewerOptions(DefaultLevel, null, null, 0f, SoundMode.On);
-            using var game = new Mdk.Game.Flow.Game(data, new GameOptions(Start.Menu, level) { Splash = true, Import = setup.Reimport });
+            using var game = new Mdk.Game.Flow.Game(found.Data, new GameOptions(Start.Menu, level) { Splash = true, Import = setup.Reimport });
             game.Run();
         }
         catch (Exception e)
@@ -69,5 +69,11 @@ public sealed class MainActivity : SDLActivity
         }
 
         base.OnActivityResult(requestCode, resultCode, data);
+    }
+
+    public override void OnRequestPermissionsResult(int requestCode, string[] permissions, Permission[] grantResults)
+    {
+        base.OnRequestPermissionsResult(requestCode, permissions, grantResults);
+        _setup?.OnPermissions(requestCode);
     }
 }

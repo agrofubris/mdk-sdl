@@ -80,15 +80,31 @@ projects are built without a runtime identifier for it (`GlobalPropertiesToRemov
 Vulkan with the SPIR-V shaders.
 
 ```
- first start ─► MdkData.Imported? ─no─► dialog ─► ACTION_OPEN_DOCUMENT_TREE ─► DocumentTree (IDataTree)
-                       │                                                         │ MdkData.FindIn
-                       │yes                       app files/mdk ◄─MdkData.Import─┘ (TRAVERSE, FALL3D, STREAM, MISC + stamp)
-                       ▼
-              Game (MDK_USER_DIR = app files: settings, saves)
+ start ─► StorageChoice.Plan ─InPlace─► Game (data and MDK_USER_DIR = the chosen folder)
+   │  (app files/data-folder.txt,
+   │   AllFilesAccess, MdkData.Imported)
+   ├─Lost─► "can't read it" ─► forget ─► plan again
+   ├─Copied─► Game (data: app files/mdk; MDK_USER_DIR = app files)
+   ├─AskAccess─► dialog ─allow─► All files access ─► ACTION_OPEN_DOCUMENT_TREE ─► TreePaths.Resolve
+   │                │declined, refused, backed out       MdkData.At, writable ─► data-folder.txt ─► InPlace
+   │                ▼
+   └─CopyFlow─► ACTION_OPEN_DOCUMENT_TREE ─► DocumentTree (IDataTree) ─MdkData.FindIn
+                     app files/mdk ◄─MdkData.Import─┘ (TRAVERSE, FALL3D, STREAM, MISC + stamp) ─► Copied
 ```
 
-- Shared storage has no paths the game could open, so the picked folder is read through content
-  URIs and copied once; `.imported` is written last (an interrupted copy starts over).
+- In place (the default APK): with All files access (`MANAGE_EXTERNAL_STORAGE`, Android 11 on;
+  the storage permission and `requestLegacyExternalStorage` before) the picked folder's tree URI
+  becomes a path (`TreePaths`: `primary:MDK` ─► `/storage/emulated/0/MDK`, SD cards, raw
+  Downloads; clouds have none) and the game reads it as on a PC, its settings, saves, mods and
+  `mdk.log` there. `app files/data-folder.txt` remembers it; each start checks the access, the
+  game files and that the folder can be written, else says so, forgets it and plans again (the
+  copy if there is one, else asks again).
+- Copied (declined, a store build, an install from before): shared storage is read through
+  content URIs and copied once; `.imported` is written last (an interrupted copy starts over).
+  An earlier copy keeps being played. Options, "Import from folder" copies again, or switches to
+  a folder in place from the next start (settings and saves copied there, files there kept).
+- Store build: `-p:StoreBuild=true` defines `STORE_BUILD`: no storage permissions in the manifest,
+  `AllFilesAccess` says `Unavailable`, the files are always copied.
 - `Window` on Android: landscape, full screen, back button trapped (Esc; the manifest turns
   predictive back off), no text input (it would open the keyboard). While the mouse is captured
   (play), fingers drive `TouchControls` (`Input.Touch`: keys of their own, which tests' holds

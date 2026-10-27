@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The rest comes from MainActivity's attributes. Predictive back (on by default from API 36)
-     would skip SDL's onBackPressed: the back button must reach the game as Esc. -->
+<!-- The rest comes from MainActivity's attributes (storage permissions: AllFilesAccess's).
+     Predictive back (on by default from API 36) would skip SDL's onBackPressed: the back button
+     must reach the game as Esc. Android 10 reads the MDK folder by path with legacy storage. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <uses-feature android:name="android.hardware.vulkan.version" android:version="0x400000" android:required="true" />
-  <application android:enableOnBackInvokedCallback="false" />
+  <application android:enableOnBackInvokedCallback="false" android:requestLegacyExternalStorage="true" />
 </manifest>

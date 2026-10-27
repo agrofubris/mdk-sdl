@@ -181,9 +181,10 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
-  # The Android app (src/Mdk.Android): arm64 and x64 in one APK. Signed with the
-  # ANDROID_KEYSTORE secrets when they're set (updates install over each other), else with a
-  # debug key made for this run.
+  # The Android app (src/Mdk.Android): arm64 and x64 in one APK, with All files access (plays
+  # the MDK folder in place); -p:StoreBuild=true would leave it out (files always copied, for a
+  # store). Signed with the ANDROID_KEYSTORE secrets when they're set (updates install over each
+  # other), else with a debug key made for this run.
   android:
     runs-on: ubuntu-latest
     env:

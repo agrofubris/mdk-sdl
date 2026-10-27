@@ -11,6 +11,11 @@
     <RuntimeIdentifiers>android-arm64;android-x64</RuntimeIdentifiers>
     <AndroidPackageFormat>apk</AndroidPackageFormat>
   </PropertyGroup>
+  <!-- A store build (-p:StoreBuild=true): no All files access in the manifest (stores reject
+       it for a game); the game files are always copied into the app (DataSetup). -->
+  <PropertyGroup Condition="'$(StoreBuild)' == 'true'">
+    <DefineConstants>$(DefineConstants);STORE_BUILD</DefineConstants>
+  </PropertyGroup>
   <ItemGroup>
     <!-- The desktop projects take the program's runtime (SDL3 next to the executable); the APK
          gets SDL3 from the package's Android flavour, so they build without one
