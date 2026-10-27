@@ -7,6 +7,13 @@ float4 ps_main(VertexOut input) : SV_Target
 {
     // The sky (nothing in the depth buffer) has no occlusion.
     float2 uv = input.uv;
+
+    // At half the frame's sides (occlusion.w 2) a texel's centre is between four pixels: the one
+    // below right's centre instead, as the depth buffer holds it.
+    if (occlusion.w > 1.0)
+    {
+        uv = (floor(uv * screen.xy) + 0.5) * screen.zw;
+    }
     if (depth_at(uv) >= FAR)
     {
         return float4(1.0, 1.0, 1.0, 1.0);

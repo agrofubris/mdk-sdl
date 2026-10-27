@@ -52,7 +52,8 @@ cbuffer PostUniforms : register(b0, space3)
     float4x4 view_to_clip;
     // xy: the frame's size in pixels; zw: one pixel in uv.
     float4 screen;
-    // x: radius (units); y: strength; z: the haze's density per unit.
+    // x: radius (units); y: strength; z: the haze's density per unit; w: pixels per side of an
+    // occlusion texel (post.hlsl).
     float4 occlusion;
     // x: bloom (all colours); y: threshold (bright colours); z: intensity; w: the blurred mips.
     float4 glow;

@@ -32,6 +32,10 @@ public enum Shadows { Off, On }
 /// light from the sky above and from the ground below (linear colours, blended by a face's
 /// up component), the exposure scaling it all, the sun's shadows and how far they reach, the glow,
 /// and the haze (its colour, its density per unit).</summary>
+/// <summary>How much the enhanced look's passes cost: Full (desktops), or Mobile (Android: a
+/// 1024² shadow map, the ambient occlusion at half the frame's sides; the post pass blurs it up).</summary>
+public enum EffectQuality { Full, Mobile }
+
 public sealed record Lighting(Vector3 SunDirection, Vector3 Sun, Vector3 Sky, Vector3 Ground, float Exposure,
     Shadows Shadows, float ShadowDistance, float Glow, Vector4 HazeColour, float HazeDensity);
 
@@ -44,6 +48,42 @@ public sealed record Lighting(Vector3 SunDirection, Vector3 Sun, Vector3 Sky, Ve
 public sealed unsafe partial class Renderer
 {
     private const uint ShadowSize = 2048;
+    private const uint MobileShadowSize = 1024;
+    /// <summary>The ambient occlusion's pixels per side of one of its texels, by quality.</summary>
+    private const uint FullOcclusion = 1;
+    private const uint MobileOcclusion = 2;
+
+    private EffectQuality _quality = OperatingSystem.IsAndroid() ? EffectQuality.Mobile : EffectQuality.Full;
+
+    /// <summary>The enhanced look's cost (Android's default: Mobile); a change makes the shadow map
+    /// and the occlusion's target again.</summary>
+    public EffectQuality Quality
+    {
+        get => _quality;
+        set
+        {
+            if (value == _quality)
+            {
+                return;
+            }
+
+            _quality = value;
+            ReleaseShadowMap();
+            _shadowMap = null;
+            if (_occlusion != null)
+            {
+                SDL_ReleaseGPUTexture(_device, _occlusion);
+                _occlusion = null;
+            }
+        }
+    }
+
+    private uint ShadowSide => _quality == EffectQuality.Mobile ? MobileShadowSize : ShadowSize;
+    private uint OcclusionStep => _quality == EffectQuality.Mobile ? MobileOcclusion : FullOcclusion;
+
+    /// <summary>The occlusion target's side for a frame's: whole texels of <paramref name="step"/>
+    /// pixels, the last one partly off the frame (1801 / 2 ─► 901).</summary>
+    internal static uint OcclusionSide(uint side, uint step) => (side + step - 1) / step;
     /// <summary>Shadow acne: the sun's depth is pushed back by the surface's slope, the receiver's
     /// point moved off its surface, and compared a little nearer (units).</summary>
     private const float ShadowSlopeBias = 2f;
@@ -305,7 +345,13 @@ public sealed unsafe partial class Renderer
     {
         if (_shadowMap == null)
         {
-            _shadowMap = CreateTexture(_sampledDepthFormat, ShadowSize, ShadowSize, SampledDepthUsage);
+            _shadowMap = CreateTexture(_sampledDepthFormat, ShadowSide, ShadowSide, SampledDepthUsage);
+        }
+
+        if (_occlusion == null)
+        {
+            _occlusion = CreateTexture(ColourFormat, OcclusionSide(_targetWidth, OcclusionStep), OcclusionSide(_targetHeight, OcclusionStep),
+                SDL_GPUTextureUsageFlags.SDL_GPU_TEXTUREUSAGE_COLOR_TARGET | SDL_GPUTextureUsageFlags.SDL_GPU_TEXTUREUSAGE_SAMPLER);
         }
 
         if (_scene != null)
@@ -318,8 +364,6 @@ public sealed unsafe partial class Renderer
         _scene = CreateTexture(ColourFormat, _targetWidth, _targetHeight,
             SDL_GPUTextureUsageFlags.SDL_GPU_TEXTUREUSAGE_COLOR_TARGET | SDL_GPUTextureUsageFlags.SDL_GPU_TEXTUREUSAGE_SAMPLER, mips);
         _viewDepth = CreateTexture(_sampledDepthFormat, _targetWidth, _targetHeight, SampledDepthUsage);
-        _occlusion = CreateTexture(ColourFormat, _targetWidth, _targetHeight,
-            SDL_GPUTextureUsageFlags.SDL_GPU_TEXTUREUSAGE_COLOR_TARGET | SDL_GPUTextureUsageFlags.SDL_GPU_TEXTUREUSAGE_SAMPLER);
     }
 
     private const SDL_GPUTextureUsageFlags SampledDepthUsage =
@@ -330,7 +374,7 @@ public sealed unsafe partial class Renderer
         EnsureEnhanced();
         if (lighting.Shadows == Shadows.On)
         {
-            _sunMatrix = SunShadow.Matrix(lighting.SunDirection, view.Position, lighting.ShadowDistance, ShadowSize);
+            _sunMatrix = SunShadow.Matrix(lighting.SunDirection, view.Position, lighting.ShadowDistance, ShadowSide);
             RenderDepth(ref commands, _shadowMap, _sunMatrix.Value, Output.Shadow);
         }
 
@@ -461,7 +505,7 @@ public sealed unsafe partial class Renderer
             Ground = new Vector4(ground, 0f),
             Camera = new Vector4(view.Position, 0f),
             Haze = lighting == null ? Vector4.Zero : lighting.HazeColour with { W = lighting.HazeDensity },
-            Shadow = new Vector4(ShadowSize, ShadowDepthBias / (2f * SunShadow.Reach), ShadowNormalOffset, shadowed ? 1f : 0f),
+            Shadow = new Vector4(ShadowSide, ShadowDepthBias / (2f * SunShadow.Reach), ShadowNormalOffset, shadowed ? 1f : 0f),
         };
         SDL_PushGPUFragmentUniformData(commands, 0, (IntPtr)(&uniforms), (uint)sizeof(EnhancedUniforms));
         DrawPrimitives(pass, command.Count, command.First, command.Primitive);
@@ -477,7 +521,7 @@ public sealed unsafe partial class Renderer
             ClipToView = view.ClipToDirection,
             ViewToClip = viewToClip,
             Screen = new Vector4(_targetWidth, _targetHeight, 1f / _targetWidth, 1f / _targetHeight),
-            Occlusion = new Vector4(OcclusionRadius, OcclusionStrength, lighting.HazeDensity, 0f),
+            Occlusion = new Vector4(OcclusionRadius, OcclusionStrength, lighting.HazeDensity, OcclusionStep),
             Glow = new Vector4(lighting.Glow, GlowThreshold, GlowIntensity, GlowMip),
         };
 

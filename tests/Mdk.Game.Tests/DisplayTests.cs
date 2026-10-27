@@ -188,6 +188,16 @@ public class DisplayTests
         Assert.Equal(percent, Renderer.AutoPercent(width, height));
     }
 
+    [Theory]
+    [InlineData(1800u, 1u, 1800u)]
+    [InlineData(1800u, 2u, 900u)]
+    [InlineData(1801u, 2u, 901u)]
+    public void MobileOcclusionHasHalfTheSides(uint side, uint step, uint occlusion)
+    {
+        // Whole texels: the last one partly off an odd frame.
+        Assert.Equal(occlusion, Renderer.OcclusionSide(side, step));
+    }
+
     [Fact]
     public void AutoRenderScaleIsSaved()
     {

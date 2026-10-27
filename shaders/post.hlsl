@@ -14,14 +14,16 @@
 COMBINED_SAMPLER(2) Texture2D<float4> occlusion_texture : register(t2, space2);
 COMBINED_SAMPLER(2) SamplerState occlusion_sampler : register(s2, space2);
 
-// The occlusion averaged over the 4 x 4 pixels around (one of each noise turn), leaving out those
-// off p's plane (another surface: no shade across edges).
+// The occlusion averaged over the 4 x 4 of its texels around (one of each noise turn), leaving out
+// those off p's plane (another surface: no shade across edges). A texel is occlusion.w pixels a
+// side: 1, or 2 (EffectQuality.Mobile: drawn at half the frame's sides).
 float blurred_occlusion(float2 uv, float3 p, float2 pixel)
 {
     float3 n = normal_at(uv, p);
     float reach = SAME_SURFACE * length(p);
-    int2 at = int2(pixel);
-    int2 last = int2(screen.xy) - 1;
+    int step = max(int(occlusion.w), 1);
+    int2 at = int2(pixel) / step;
+    int2 last = (int2(screen.xy) + step - 1) / step - 1;
     float sum = 0.0;
     float count = 0.0;
     [unroll] for (int y = -NOISE_TILE / 2; y < NOISE_TILE / 2; y++)
@@ -29,7 +31,7 @@ float blurred_occlusion(float2 uv, float3 p, float2 pixel)
         [unroll] for (int x = -NOISE_TILE / 2; x < NOISE_TILE / 2; x++)
         {
             int2 q = clamp(at + int2(x, y), int2(0, 0), last);
-            float2 quv = (float2(q) + 0.5) * screen.zw;
+            float2 quv = (float2(q) + 0.5) * screen.zw * step;
             if (depth_at(quv) >= FAR || abs(dot(point_at(quv) - p, n)) > reach)
             {
                 continue;

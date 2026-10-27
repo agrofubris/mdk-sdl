@@ -190,6 +190,12 @@ light, exposure, shadows, glow, haze in the colour below the sky panorama) and t
   samples turned in a 4 x 4 ordered pattern, into its own target (`screen.hlsli` shared).
 - `post.hlsl`: the occlusion blurred over 4 x 4 pixels of the same plane (no grain, no shade
   across edges); glow from the scene's blurred mips, screen-blended; dithered.
+- Cost (`EffectQuality`, Android's Mobile; `--quality`): Mobile draws a 1024² shadow map and the
+  occlusion at half the frame's sides (texel centres snapped to pixels), blurred over 4 x 4 of
+  its texels. Measured (RTX 4050, level 3, HD textures, frame / GPU wait ms): 2880 x 1800 Full
+  11.4 / 5.1, Mobile 7.3 / 3.2; 1814 x 1134 (Auto's 63 %) Full 4.0 / 2.0, Mobile 3.3 / 1.4. At
+  2880 x 1800 the occlusion is half the GPU's time (its samples spread over more pixels), the
+  camera's depth pass 2.5 ms, post 1, the scene 1.5, shadows 0.5, mips 0.3.
 
 ## HD textures
 

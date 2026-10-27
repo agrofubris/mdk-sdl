@@ -37,6 +37,7 @@ using Mdk.Game.Scripts;
 //                           intr, tab, tabr, vr (--stereo-separation=, --stereo-convergence=; tests)
 //   --bloodyes, --nobloodno gore on or off instead of the settings' (the original's -bloodyes, -nobloodno)
 //   --gamma=0.5-2           the display's gamma instead of the settings' (tests)
+//   --quality=full|mobile   the enhanced look's cost instead of the OS's (Android: mobile; tests)
 //   --gpu=d3d12|vulkan|metal the GPU backend instead of the settings' (tests; not saved)
 //   --hidden                no window, frames drawn off screen (tests; also MDK_HIDDEN=1)
 //   --size=WxH              the hidden frame's size instead of 1280x960 (tests, videos)
@@ -254,6 +255,7 @@ using var game = new Game(data, new GameOptions(start, viewer)
     StereoSeparation = stereoSeparation,
     StereoConvergence = stereoConvergence,
     Gamma = options.TryGetValue("gamma", out var gammaText) ? float.Parse(gammaText, CultureInfo.InvariantCulture) : null,
+    Quality = options.TryGetValue("quality", out var qualityText) ? Enum.Parse<EffectQuality>(qualityText, ignoreCase: true) : null,
     Presses = options.TryGetValue("press", out var presses) ? TestPresses.Parse(presses) : null,
     Mods = options.TryGetValue("mod", out var mods) ? mods.Split(',', StringSplitOptions.RemoveEmptyEntries) : null,
     Gpu = options.GetValueOrDefault("gpu"),
