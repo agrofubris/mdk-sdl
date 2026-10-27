@@ -15,11 +15,12 @@ namespace Mdk.Game.Objects;
 ///   eye ●────────────────────╱── floor
 ///                     board ▭  (under the floor at a corner) ─► pulled in front of it
 /// </code></summary>
-public static class FloorPull
+internal static class FloorPull
 {
     /// <summary>Floors count where the rays cross them inside the box or this far under it.</summary>
     private const float FloorBelow = 1f;
     private const int Corners = 8;
+    private const float MinDepth = 1e-3f;
 
     /// <summary>The board's <paramref name="transform"/> scaled towards the <paramref name="eye"/>
     /// looking along <paramref name="forward"/>.</summary>
@@ -47,7 +48,13 @@ public static class FloorPull
                 continue;
             }
 
+            // A corner on the eye's plane has no depth to pull to.
             var depth = Vector3.Dot(corner - eye, forward);
+            if (depth <= MinDepth)
+            {
+                continue;
+            }
+
             scale = MathF.Min(scale, KurtSprite.InFront(depth, Vector3.Dot(floor.Point - eye, forward)));
         }
 

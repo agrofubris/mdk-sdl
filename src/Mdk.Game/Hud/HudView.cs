@@ -83,7 +83,7 @@ public sealed class HudView
     private float _timerAngle;
     // A mod's panel (RGBA, any size): the stamped pixels take SC_BSTAT's colours over it.
     private readonly HdImage? _modPanel;
-    private readonly byte[] _modTimerPanel = [];
+    private readonly byte[] _modTimerPanel;
     /// <summary>The ring is stamped again once the time gone moved this far (0x420830: a degree).</summary>
     private const float TimerStep = MathF.PI / 180f;
 
@@ -284,7 +284,7 @@ public sealed class HudView
                     continue;
                 }
 
-                Array.Copy(_colours.Rgba, _timerPanel[at] * 4, _modTimerPanel, pixel, 4);
+                Array.Copy((_arenaColours ?? _colours).Rgba, _timerPanel[at] * 4, _modTimerPanel, pixel, 4);
             }
         }
 

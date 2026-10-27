@@ -254,8 +254,9 @@ public sealed partial class ScriptRuntime
     /// <summary>Ticks left before the minecrawler flattens the town (0x574270); none on the last level.</summary>
     public int TownTicks;
     /// <summary>The time left for the town (0x574270 over 0x574274), 1 without one.</summary>
-    public float TownTimeLeft => _townTotal == 0 ? 1f : (float)TownTicks / _townTotal;
-    private readonly int _townTotal;
+    public float TownTimeLeft => _townTotal == 0 ? 1f : Math.Clamp((float)TownTicks / _townTotal, 0f, 1f);
+    /// <summary>The town's whole time; saved, since saves have no difficulty.</summary>
+    private int _townTotal;
     public string CurrentArena = "";
     /// <summary>The second arena (0x573a68): behind an open door, the one Kurt just left, or one loaded
     /// ahead; when active (0x573a6c) its objects and script run too.</summary>

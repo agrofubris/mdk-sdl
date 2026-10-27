@@ -52,6 +52,7 @@ public sealed partial class ScriptRuntime
             ["sky_mode"] = SkyMode,
             ["option"] = Option,
             ["town_ticks"] = TownTicks,
+            ["town_total"] = _townTotal,
             ["current_arena"] = CurrentArena,
             ["second_arena"] = SecondArena,
             ["second_active"] = SecondActive,
@@ -141,6 +142,8 @@ public sealed partial class ScriptRuntime
         SkyMode = data["sky_mode"]!.GetValue<int>();
         Option = data["option"]!.GetValue<int>();
         TownTicks = data["town_ticks"]!.GetValue<int>();
+        // Saves before 1.2.3 have no total: the current difficulty's.
+        _townTotal = data["town_total"]?.GetValue<int>() ?? _townTotal;
         CurrentArena = data["current_arena"]!.GetValue<string>();
         SecondArena = data["second_arena"]!.GetValue<string>();
         SecondActive = data["second_active"]!.GetValue<bool>();

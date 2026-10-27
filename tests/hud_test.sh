@@ -90,6 +90,34 @@ timer_shot mdk_hud_timer_early.bmp 53900
 timer_shot mdk_hud_timer_late.bmp 13500
 timer_emptied mdk_hud_timer_late.bmp mdk_hud_timer_early.bmp; check "timer ring emptied" $?
 
+# A save keeps its own total (saves have no difficulty): an Easy save with 1/4 of its 81000
+# ticks gone, loaded on Hard (36000), shows the right quarter gone, not a full ring.
+echo "difficulty=Easy" > "$MDK_USER_DIR/settings.cfg"
+timer_shot mdk_hud_timer_full.bmp 80990
+timer_shot mdk_hud_timer_quarter.bmp 60750
+echo "difficulty=Hard" > "$MDK_USER_DIR/settings.cfg"
+rm -f "$DIR/mdk_hud_timer_quarter.bmp"
+timeout 60 "$MDK" --load=TIMER --mute --wait=1 --screenshot="$DIR/mdk_hud_timer_quarter.bmp" > /dev/null 2>&1
+rm -f "$MDK_USER_DIR/settings.cfg"
+python - "$DIR/mdk_hud_timer_quarter.bmp" "$DIR/mdk_hud_timer_full.bmp" <<'EOF'
+import sys
+from PIL import Image, ImageChops, ImageStat
+late = Image.open(sys.argv[1]).convert("L")
+early = Image.open(sys.argv[2]).convert("L")
+w, h = late.size
+s = h / 360
+left, top, right, bottom = w - 100 * s, h - 73 * s, w - 16 * s, h - 10 * s
+mid_x, mid_y = (left + right) / 2, (top + bottom) / 2
+def diff(box):
+	box = tuple(int(v) for v in box)
+	return ImageStat.Stat(ImageChops.difference(late.crop(box), early.crop(box))).mean[0]
+emptied = diff((mid_x, top, right, mid_y))
+kept = diff((left, mid_y, mid_x, bottom))
+print("  timer: top right difference %.1f, bottom left %.1f" % (emptied, kept))
+sys.exit(0 if emptied > 5 and kept < 1 else 1)
+EOF
+check "timer ring of a save made on another difficulty" $?
+
 MOD="$MDK_USER_DIR/mods/panel"
 mkdir -p "$MOD/images"
 printf 'name=Panel\npriority=0\n' > "$MOD/mod.txt"
