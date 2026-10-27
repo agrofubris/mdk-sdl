@@ -64,6 +64,8 @@ public sealed record GameOptions(Start Start, ViewerOptions Level)
     public string? Gpu { get; init; }
     /// <summary>A hidden window's frame size instead of 1280 x 960 (--size; tests, videos).</summary>
     public Resolution? HiddenSize { get; init; }
+    /// <summary>A hidden window's frames through its swapchain too (--swapchain; tests).</summary>
+    public HiddenFrames HiddenFrames { get; init; }
     /// <summary>The sound mixed from the start saved as this WAV (--record-audio; with --mute, in step with --frames).</summary>
     public string? RecordAudio { get; init; }
     /// <summary>The platform's import of the game files again (Android: the folder picked again,
@@ -202,6 +204,8 @@ public sealed class Game : IDisposable
         {
             _renderer.HiddenSize = hiddenSize;
         }
+
+        _renderer.HiddenFrames = options.HiddenFrames;
 
         _audio = new AudioDevice(options.Level.Sound == SoundMode.Muted ? Output.Muted : Output.Speakers);
         if (options.RecordAudio is { } recording)

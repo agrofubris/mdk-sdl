@@ -146,6 +146,10 @@ public readonly record struct RenderStats(int DrawCalls, int Triangles, float Gp
 /// <summary>Whether a frame returns once submitted, or waits until the GPU has drawn it (measures).</summary>
 public enum GpuSync { Async, Wait }
 
+/// <summary>Where a hidden window's frames go: off screen only, or also through its swapchain as a
+/// shown window's do (tests).</summary>
+public enum HiddenFrames { Offscreen, Swapchain }
+
 /// <summary>Draws paletted triangle meshes with SDL_GPU.
 /// <code>
 ///  game ──► Renderer ──► offscreen colour + depth ──blit──► swapchain
@@ -841,8 +845,8 @@ public sealed unsafe partial class Renderer : IDisposable
         SDL_GPUTexture* swapchain = null;
         uint width = (uint)HiddenSize.Width, height = (uint)HiddenSize.Height;
 
-        // A hidden window has no swapchain to show: the frame stays in the offscreen target.
-        var shown = _window.Visibility == Visibility.Shown;
+        // A hidden window has no swapchain to show (unless tests ask): the frame stays in the offscreen target.
+        var shown = _window.Visibility == Visibility.Shown || HiddenFrames == HiddenFrames.Swapchain;
         var waitStart = Stopwatch.GetTimestamp();
         if (shown && (!SDL_WaitAndAcquireGPUSwapchainTexture(commands, _window.Handle, &swapchain, &width, &height) || swapchain == null))
         {
@@ -854,6 +858,15 @@ public sealed unsafe partial class Renderer : IDisposable
         }
 
         var wait = Stopwatch.GetElapsedTime(waitStart);
+        // The swapchain's command buffer presents when submitted: on Direct3D 12, where the draws may
+        // submit theirs mid-frame (Reserve), they get their own, and the swapchain's only blits at the end.
+        var presenting = commands;
+        if (swapchain != null && HeapBound)
+        {
+            commands = SDL_AcquireGPUCommandBuffer(_device);
+        }
+
+        _presenting = swapchain != null ? presenting : null;
         EnsureTargets(shown ? Scaled(width) : width, shown ? Scaled(height) : height);
         QueueCanvas();
         QueueStream();
@@ -879,6 +892,13 @@ public sealed unsafe partial class Renderer : IDisposable
         ApplyGamma(commands);
         if (swapchain != null)
         {
+            // The draws first, then the swapchain's blit and present.
+            if (commands != presenting)
+            {
+                SDL_SubmitGPUCommandBuffer(commands);
+                commands = presenting;
+            }
+
             Blit(commands, swapchain, width, height);
         }
 
@@ -1022,6 +1042,9 @@ public sealed unsafe partial class Renderer : IDisposable
 
     /// <summary>The frame size of a hidden window (--size; tests, videos).</summary>
     public Resolution HiddenSize { get; set; } = DefaultHiddenSize;
+
+    /// <summary>A hidden window's frames through its swapchain too (--swapchain; tests).</summary>
+    public HiddenFrames HiddenFrames { get; set; }
 
     /// <summary>The cameras' and the canvas' aspect: the frame's, or an eye's half in full side by side.</summary>
     public float AspectRatio => StereoModes.EyeAspect(StereoMode, _targetHeight == 0 ? 4f / 3f : (float)_targetWidth / _targetHeight);

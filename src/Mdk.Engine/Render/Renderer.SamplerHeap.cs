@@ -35,6 +35,8 @@ public sealed unsafe partial class Renderer
     private int _samplersBound;
     /// <summary>The frame's point lights, pushed again into a new command buffer.</summary>
     private LightUniforms _lightUniforms;
+    /// <summary>The frame's command buffer holding the swapchain texture (null: none): presents at its submit.</summary>
+    private SDL_GPUCommandBuffer* _presenting;
 
     /// <summary>Only Direct3D 12 has the bug.</summary>
     private bool HeapBound => Gpu.Backend == GpuBackend.Direct3D12;
@@ -77,6 +79,12 @@ public sealed unsafe partial class Renderer
         if (_samplersBound + OtherSamplers <= SamplerHeap)
         {
             return;
+        }
+
+        // Submitting the swapchain's command buffer presents it: the frame shown unfinished.
+        if (commands == _presenting)
+        {
+            throw new InvalidOperationException("The swapchain's command buffer submitted before the frame's end");
         }
 
         SDL_EndGPURenderPass(pass);

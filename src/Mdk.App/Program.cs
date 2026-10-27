@@ -40,6 +40,7 @@ using Mdk.Game.Scripts;
 //   --gpu=d3d12|vulkan|metal the GPU backend instead of the settings' (tests; not saved)
 //   --hidden                no window, frames drawn off screen (tests; also MDK_HIDDEN=1)
 //   --size=WxH              the hidden frame's size instead of 1280x960 (tests, videos)
+//   --swapchain             a hidden window's frames through its swapchain too, as when shown (tests)
 //   --record-audio=file.wav the sound from the start as a WAV (with --mute, in step with --frames; videos)
 //   --screenshot=file.bmp   save a frame after --wait seconds of game time, print Kurt, quit (tests)
 //   --wait=seconds          game time before the screenshot
@@ -258,6 +259,7 @@ using var game = new Game(data, new GameOptions(start, viewer)
     Gpu = options.GetValueOrDefault("gpu"),
     RecordAudio = options.GetValueOrDefault("record-audio"),
     HiddenSize = options.TryGetValue("size", out var sizeText) && Resolution.TryParse(sizeText, out var hiddenSize) ? hiddenSize : null,
+    HiddenFrames = options.ContainsKey("swapchain") ? HiddenFrames.Swapchain : HiddenFrames.Offscreen,
     Perf = options.TryGetValue("perf", out var perf) ? (perf.Length != 0 ? float.Parse(perf, CultureInfo.InvariantCulture) : DefaultWarmup) : null,
 });
 game.Run();

@@ -95,6 +95,18 @@ sys.exit(0 if mean < -4 else 1)
 EOF
 check "no seam around the enhanced view" $?
 
+# LEVEL4's start through the scope (about 600 draws with the insets) runs past Direct3D 12's sampler
+# heap: the draws go on in a new command buffer, and the swapchain's, which presents when submitted,
+# waits for the frame's end (sniper mode crashed on D3D12 in 1.2.2). --swapchain: the hidden window's
+# frames through its swapchain, as a shown one's.
+case "$(uname -s)" in
+MINGW* | MSYS* | CYGWIN*)
+	OUT=$(timeout 60 "$MDK" --level=4 --mute --gpu=d3d12 --swapchain --screenshot="$SHOT" --sniper=1,0 \
+		--sniper-fire --wait=3 2>&1)
+	echo "$OUT" | grep -q "^Saved "; check "D3D12 presents the scope's frame whole" $?
+	;;
+esac
+
 [ $FAILED = 0 ] && echo PASSED && exit 0
 echo FAILED
 exit 1
