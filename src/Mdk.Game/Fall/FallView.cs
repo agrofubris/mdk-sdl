@@ -324,15 +324,11 @@ public sealed class FallView
         }
 
         // Explosions grow and play their texture's frames, over everything (sorted at camera z + 5).
-        // The star model is flattened onto the screen plane (the 2D fall renderer's look): its depth
-        // (±7 units, 2x at the end) reaches past the camera 10 units above Kurt, and the near plane
-        // then cuts it into huge mangled triangles.
         foreach (var explosion in sim.Explosions)
         {
             var frame = (int)explosion.Ticks;
             var scale = MathF.Max(ExplosionGrowth * frame / FallSim.ExplosionTicks, ExplosionMinScale);
-            var world = Matrix4x4.CreateScale(1f, 1f, 0f) * Matrix4x4.CreateScale(scale)
-                * Matrix4x4.CreateRotationZ(explosion.Yaw) * Matrix4x4.CreateTranslation(explosion.Position);
+            var world = Matrix4x4.CreateScale(scale) * Matrix4x4.CreateRotationZ(explosion.Yaw) * Matrix4x4.CreateTranslation(explosion.Position);
             Models.Draw("EXPLODE", world, textureFrame: frame, pass: Pass.OnTop);
         }
     }
