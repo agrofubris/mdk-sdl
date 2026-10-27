@@ -64,8 +64,6 @@ public sealed unsafe partial class Renderer
         RenderInsets(commands, InsetLayer.UnderCanvas);
         RenderCanvas(commands);
         RenderInsets(commands, InsetLayer.OverCanvas);
-
-        ClearInsets();
     }
 
     private void RenderInsets(SDL_GPUCommandBuffer* commands, InsetLayer layer)

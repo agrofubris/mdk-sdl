@@ -849,6 +849,9 @@ public sealed unsafe partial class Renderer : IDisposable
             RenderScene(commands, view, clearColour);
         }
 
+        // The insets belong to the frame, not to one eye: both eyes draw them (their views offset
+        // per eye), so they're cleared only once the frame is drawn.
+        ClearInsets();
         SDL_GPUTexture* presented;
         uint presentWidth;
         uint presentHeight;
