@@ -526,6 +526,11 @@ public sealed class Viewer : IScreen
                 _music.Update(Step);
             }
 
+            if (_level.ArenaNamed(_scripts.CurrentArena) is { } arena)
+            {
+                _hud.Enter(_level.PaletteOf(arena));
+            }
+
             if (CutsceneCamera.Active(_scripts))
             {
                 _cutscene.Update(_scripts);

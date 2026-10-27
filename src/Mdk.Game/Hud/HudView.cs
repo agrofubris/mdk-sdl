@@ -66,6 +66,7 @@ public sealed class HudView
     private readonly Renderer _renderer;
     private readonly int _palette;
     private readonly Palette _colours;
+    private Palette? _arenaColours;
     private readonly ModImages? _mods;
     private readonly Image _panel;
     private readonly Image _skull;
@@ -152,6 +153,19 @@ public sealed class HudView
 
     private static Vector4 Colour(Palette palette, int index) =>
         new Vector4(palette.Rgba[index * 4], palette.Rgba[index * 4 + 1], palette.Rgba[index * 4 + 2], byte.MaxValue) / byte.MaxValue;
+
+    /// <summary>Kurt's arena's palette: the HUD's sprites take its colours (0x4709d8 sets them in the
+    /// table 0x581c28 they're drawn through), as the dog's icon needs (its 64-175 are magenta in the DTI).</summary>
+    public void Enter(Palette arena)
+    {
+        if (arena == _arenaColours)
+        {
+            return;
+        }
+
+        _arenaColours = arena;
+        _renderer.UpdateTexture(_palette, Palette.Size, 1, arena.Rgba);
+    }
 
     /// <summary>Once a tick: the blink.</summary>
     public void Tick(HudState state)

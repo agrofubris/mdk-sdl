@@ -39,6 +39,14 @@ for LOOK in original enhanced; do
 	no_magenta "$SHOT"; check "$LOOK grenade icon without magenta" $?
 done
 
+# The dog's icon (PICKUPS frame 8) uses arena colours (64-175), the DTI's magenta there: the HUD
+# draws with the current arena's (0x4709d8 sets them in the table 0x581c28 its sprites use).
+SHOT="$DIR/mdk_palette_dog.bmp"
+rm -f "$SHOT"
+timeout 60 "$MDK" --level=3 --mute --wait=3 --give=SW_SBONE --screenshot="$SHOT" > /dev/null 2>&1
+[ -s "$SHOT" ]; check "dog screenshot" $?
+no_magenta "$SHOT"; check "dog icon without magenta" $?
+
 rm -rf "$MDK_USER_DIR"
 [ $FAILED = 0 ] && echo PASSED && exit 0
 echo FAILED
