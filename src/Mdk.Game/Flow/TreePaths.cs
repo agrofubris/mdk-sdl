@@ -22,9 +22,25 @@ public static class TreePaths
     private const string AppData = "/Android/data/";
     private const char VolumeSeparator = ':';
     private const char Separator = '/';
+    private const string Up = "..";
+    private const string Here = ".";
 
     /// <summary>The picked folder's path; null when it has none (a cloud, a Downloads list entry).</summary>
-    public static string? Resolve(string authority, string documentId, string primaryRoot)
+    public static string? Resolve(string authority, string documentId, string primaryRoot) =>
+        Contained(PathOf(authority, documentId, primaryRoot));
+
+    /// <summary>A path on the storage volumes only, with no .. or . part to climb out of them.</summary>
+    private static string? Contained(string? path)
+    {
+        if (path == null || !path.StartsWith(Volumes + Separator, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        return path.Split(Separator).Any(part => part is Up or Here) ? null : path;
+    }
+
+    private static string? PathOf(string authority, string documentId, string primaryRoot)
     {
         if (authority == Downloads && documentId.StartsWith(Raw, StringComparison.Ordinal))
         {

@@ -41,6 +41,11 @@ public sealed class StorageChoiceTests : IDisposable
     [InlineData(TreePaths.Downloads, "msf:42")]
     [InlineData("com.google.android.apps.docs.storage", "acc=1;doc=2")]
     [InlineData(TreePaths.ExternalStorage, "MDK")]
+    // Only folders on the storage volumes, never climbing out of them.
+    [InlineData(TreePaths.Downloads, "raw:/data/data/io.github.nemo22.mdk")]
+    [InlineData(TreePaths.Downloads, "raw:/storage/emulated/0/../../../data")]
+    [InlineData(TreePaths.ExternalStorage, "primary:MDK/../../..")]
+    [InlineData(TreePaths.ExternalStorage, "../data:MDK")]
     public void OtherFoldersHaveNoPath(string authority, string document) =>
         Assert.Null(TreePaths.Resolve(authority, document, Primary));
 
