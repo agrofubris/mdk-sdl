@@ -220,6 +220,9 @@ the game decides what and how.
 
 - The key hashes the size, frames, indices and the colours of the used indices: arenas whose
   palettes differ elsewhere share an image; changed game files find none (the original is used).
+- A level's `ModImages` forgets its decoded files once the level is made (`Trim`), and after its
+  first frame one compacting collection frees them (`Viewer.Settle`): level 3 with HD textures,
+  GC heap 331 ─► 127 MB, live 315 ─► 100 MB. The menus' images stay decoded (screens remake them).
 - `Renderer.Replace` keeps the image until it's on the GPU, then only its size; a texture or
   palette change (a bullet hole) drops it and expands the original again. UVs are unchanged (same
   aspect).

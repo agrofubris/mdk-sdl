@@ -162,6 +162,10 @@ public sealed class ModImages
         Decode([.. paths]);
     }
 
+    /// <summary>Forgets the decoded files (a level's load is done: the renderer holds what it was
+    /// given until it's on the GPU, then drops it). A later lookup decodes its file again.</summary>
+    public void Trim() => _decoded.Clear();
+
     /// <summary>A texture's first file to try (the exact view, the level's, all levels').</summary>
     private string? FirstFile(string name, Texture texture, Palette palette)
     {

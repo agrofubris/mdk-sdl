@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Numerics;
+using System.Runtime;
 using System.Runtime.CompilerServices;
 using System.Text;
 using Mdk.Engine.Audio;
@@ -278,6 +279,9 @@ public sealed class Viewer : IScreen
             Console.WriteLine($"Mods: {_mods.Summary}; textures {surfaces.ModFound} of {surfaces.ModLooked}, colour textures {renderer.ColourBytes >> 20} MB");
         }
 
+        // The HD images are the renderer's now: hundreds of MB the level's lookups no longer need.
+        mods?.Trim();
+
         _test = options.Screenshot != null || options.Frames != null;
         _blending = _test && options.FrameRate == null ? Blending.Off : Blending.On;
         _blend = new FrameBlend(_blending);
@@ -360,6 +364,24 @@ public sealed class Viewer : IScreen
 
         _kurt.SetHealth(carry.Health);
         Console.WriteLine($"Level starts with the fall's health {carry.Health} and pickups {string.Join(",", carry.Pickups)}");
+    }
+
+    /// <summary>Whether the load's garbage was collected (<see cref="Settle"/>).</summary>
+    private bool _settled;
+
+    /// <summary>After the first frame (the HD images are on the GPU, the renderer dropped them):
+    /// one compacting collection gives the load's large arrays back at once, not over play's
+    /// collections (Android: 36 full ones, a 627 MB heap).</summary>
+    private void Settle()
+    {
+        if (_settled)
+        {
+            return;
+        }
+
+        _settled = true;
+        GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
+        GC.Collect();
     }
 
     public Event Frame(float elapsed, string? screenshot)
@@ -470,6 +492,8 @@ public sealed class Viewer : IScreen
         {
             _renderer.Present(camera, Background(), save);
         }
+
+        Settle();
 
         if (save == null)
         {
